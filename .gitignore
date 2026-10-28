@@ -1,0 +1,27 @@
+# --- Secrets: never commit ---
+.uplift-keys/
+*.key
+.env
+.env.*
+
+# --- Budget guard ledgers and run logs ---
+meta/
+baseten/
+fireworks/
+budget_state.json
+budget_log.csv
+runs/
+
+# --- Uplift working data (large, regenerable) ---
+.uplift/
+data/cache/
+workspaces/
+
+# --- Python ---
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+*.egg-info/
+dist/
+build/
