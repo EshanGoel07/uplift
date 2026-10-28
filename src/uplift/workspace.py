@@ -24,6 +24,9 @@ def _sh(cwd: Path, *cmd: str, timeout: int = 1800) -> subprocess.CompletedProces
 
 def create(clone: Path, commit: str, dest: Path) -> Path:
     """Fresh, history-free repo at `dest` containing the tree of `commit`."""
+    # Absolute paths: later steps run commands from INSIDE the workspace, where a
+    # relative path like `.uplift/workspaces/...` would point somewhere else.
+    clone, dest = Path(clone).resolve(), Path(dest).resolve()
     if not gitutil.ensure_commit(clone, commit):
         raise gitutil.GitError(f"commit {commit} not available in {clone}")
     if dest.exists():

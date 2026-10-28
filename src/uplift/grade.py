@@ -38,11 +38,23 @@ class Grade:
 
 
 def parse_pytest(output: str) -> dict[str, str]:
-    """Map test node id -> outcome from `pytest -rA` short summary lines."""
+    """Map test node id -> outcome from `pytest -rA` short summary lines.
+
+    Sub-tests (unittest `subTest`, used heavily by sqlglot): newer pytest reports a failing
+    sub-test on its own `SUBFAILED[<msg>] <nodeid>` line and STILL prints `PASSED <nodeid>`
+    for the parent. Any failing sub-test therefore marks its parent test as FAILED.
+    """
     out: dict[str, str] = {}
     for status, nodeid in _RESULT.findall(output):
         nodeid = nodeid.split(" - ")[0]
         out[nodeid] = status
+    for line in output.splitlines():
+        if not line.startswith("SUBFAILED"):
+            continue
+        head = line.split(" - ")[0] if "] " not in line else line
+        ids = [tok for tok in head.split() if "::" in tok]
+        if ids:
+            out[ids[-1].split(" - ")[0]] = "FAILED"
     return out
 
 
@@ -92,6 +104,7 @@ def grade(workspace: Path, python: Path, base_commit: str, test_patch: str, test
                      error="hidden test patch did not apply")
     results, text = run_tests(workspace, python, fail_to_pass + pass_to_pass)
     if log_path:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
         log_path.write_text(text)
     f2p_ok = [t for t in fail_to_pass if _passed(results.get(t))]
     f2p_bad = [t for t in fail_to_pass if not _passed(results.get(t))]

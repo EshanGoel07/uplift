@@ -60,8 +60,12 @@ def validate(task: Task, clone: Path, ws_root: Path, repeats: int = 3, python_ve
     for i in range(repeats):
         gitutil.git(ws, "reset", "-q", "--hard", start)
         gitutil.git(ws, "clean", "-qfd")
-        g0 = grade_mod.grade(ws, py, start, task.test_patch, task.test_files, task.fail_to_pass, task.pass_to_pass)
+        g0 = grade_mod.grade(ws, py, start, task.test_patch, task.test_files, task.fail_to_pass,
+                             task.pass_to_pass, log_path=ws / ".uplift-run" / f"before-{i}.txt")
         before_ok.append(g0.test_patch_applied and bool(g0.f2p_failed))
+        if not before_ok[-1]:
+            notes.append(f"before fix: test patch applied={g0.test_patch_applied}; "
+                         f"F2P already passing={g0.f2p_passed[:3]} {g0.error}")
         gitutil.git(ws, "reset", "-q", "--hard", start)
         gitutil.git(ws, "clean", "-qfd")
         if not workspace.apply_patch(ws, task.patch):

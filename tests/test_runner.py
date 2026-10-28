@@ -102,6 +102,27 @@ def test_setup_is_installed_and_not_counted_as_agent_change(calc, tmp_path):
     assert res.resolved and "AGENTS.md" not in patch and "calc.py" in patch
 
 
+def test_relative_workdir_paths(calc, tmp_path, monkeypatch):
+    """Regression: the CLI's default workdir is relative (.uplift/...)."""
+    repo, task = calc
+    monkeypatch.chdir(tmp_path)
+    out = runner.validate(task, repo, Path(".uplift/workspaces"), repeats=1)
+    assert out["valid"], out
+
+
+def test_parse_pytest_subtests():
+    """Regression (sqlglot-3855): newer pytest prints PASSED for the parent even when a
+    sub-test failed. The parent must count as FAILED."""
+    out = ("PASSED tests/dialects/test_spark.py::TestSpark::test_hint\n"
+           "PASSED tests/dialects/test_spark.py::TestSpark::test_spark\n"
+           "SUBFAILED[SELECT DATE_FORMAT(DATE '2020-01-01', 'EEEE') AS weekday -> presto] "
+           "tests/dialects/test_spark.py::TestSpark::test_spark\n"
+           "SUBPASSED[ok case] tests/dialects/test_spark.py::TestSpark::test_hint\n")
+    r = grade.parse_pytest(out)
+    assert r["tests/dialects/test_spark.py::TestSpark::test_spark"] == "FAILED"
+    assert r["tests/dialects/test_spark.py::TestSpark::test_hint"] == "PASSED"
+
+
 def test_parse_pytest():
     out = "PASSED tests/a.py::test_x\nFAILED tests/a.py::test_y - assert 1 == 2\nERROR tests/b.py::T::t[1-2]\n"
     assert grade.parse_pytest(out) == {"tests/a.py::test_x": "PASSED", "tests/a.py::test_y": "FAILED",
