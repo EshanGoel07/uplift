@@ -110,6 +110,48 @@ def test_relative_workdir_paths(calc, tmp_path, monkeypatch):
     assert out["valid"], out
 
 
+def test_guard_path_with_relative_run_dir(calc, tmp_path, monkeypatch):
+    """Regression (sqlglot-3855 paid run): a relative run_dir made the guard (run with
+    cwd=workspace) write guard_summary.json into the workspace, so cost_usd was null and
+    the guard logs ended up in agent.patch."""
+    repo, task = calc
+    guard = tmp_path / "fake_guard.py"
+    guard.write_text(
+        "import json, pathlib, sys\n"
+        "args = sys.argv[1:]\n"
+        "log_dir = pathlib.Path(args[args.index('--log-dir') + 1])\n"
+        "log_dir.mkdir(parents=True, exist_ok=True)\n"
+        "(log_dir / 'stdout.jsonl').write_text('{}\\n')\n"
+        "(log_dir / 'guard_summary.json').write_text(json.dumps(\n"
+        "    {'exit_code': 0, 'parsed_cost_usd': 0.0123, 'tokens': {'input': 100, 'cached': 40, 'output': 7}}))\n"
+        "p = pathlib.Path('calc.py')\n"
+        "p.write_text(p.read_text().replace('a - b', 'a + b'))\n")
+    monkeypatch.chdir(tmp_path)
+    run_dir = Path(".uplift/runs/baseline/calc-1-s1")
+    res = runner.attempt(task, repo, Path(".uplift/workspaces"), run_dir, arm="baseline", setup_dir=None,
+                         seed=1, guard=guard)
+    assert res.resolved
+    result = json.loads((tmp_path / run_dir / "result.json").read_text())
+    assert result["cost_usd"] == 0.0123
+    assert result["tokens"] == {"input": 100, "cached": 40, "output": 7}
+    assert (tmp_path / run_dir / "guard_summary.json").exists()
+    patch = (tmp_path / run_dir / "agent.patch").read_text()
+    assert "calc.py" in patch
+    assert "guard_summary.json" not in patch and "stdout.jsonl" not in patch
+
+
+def test_stray_guard_logs_excluded_from_agent_diff(calc, tmp_path):
+    repo, task = calc
+    ws = workspace.create(repo, task.base_commit, tmp_path / "ws")
+    for name in ("guard_summary.json", "stdout.jsonl", "stderr_trace.log"):
+        (ws / "sub" / name).parent.mkdir(exist_ok=True)
+        (ws / "sub" / name).write_text("{}")
+    (ws / "calc.py").write_text(FIXED)
+    patch = workspace.agent_diff(ws)
+    assert "calc.py" in patch
+    assert not any(n in patch for n in ("guard_summary.json", "stdout.jsonl", "stderr_trace.log"))
+
+
 def test_parse_pytest_subtests():
     """Regression (sqlglot-3855): newer pytest prints PASSED for the parent even when a
     sub-test failed. The parent must count as FAILED."""

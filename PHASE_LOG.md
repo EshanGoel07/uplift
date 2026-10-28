@@ -43,3 +43,12 @@ Built for the Meta Global AI Developer Hackathon (Oct 26 – Nov 4, 2026).
   grading, so edited tests can't fake a pass.
 - Caught in testing: stale Python bytecode can make a same-size edit run the old code,
   so grading now clears `__pycache__` and disables bytecode writing.
+- First paid run (sqlglot-3855, baseline, seed 1): **resolved**, 0 regressions, $0.035,
+  254 s; the agent's fix was one line in `sqlglot/dialects/mysql.py` (`%W` → `%A`).
+- Caught in that run: `result.json` had `cost_usd: null` and an `agent.patch` of 987 lines.
+  The CLI's run_dir is relative (`.uplift/...`) but the guard runs with cwd=workspace, so it
+  wrote `guard_summary.json` and `stdout.jsonl` inside the workspace: cost was lost, the logs
+  were counted as agent changes, and the agent could see its own trace mid-run. Grading was
+  unaffected (real tests; the only source change was mysql.py). Fix: `attempt()` resolves
+  run_dir and ws_root to absolute paths; guard log names are also in the workspace git
+  excludes. A new test drives the guard path with a relative run_dir (fails before the fix).

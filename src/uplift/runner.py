@@ -86,6 +86,9 @@ def attempt(task: Task, clone: Path, ws_root: Path, run_dir: Path, *, arm: str, 
             python_version: str = "3.12", agent_cmd: str | None = None) -> RunResult:
     """One agent attempt. Muse Code runs through guarded_muse.py (budget cap enforced).
     `agent_cmd` replaces the agent for tests only."""
+    # Absolute paths: the agent/guard runs with cwd=ws, where a relative run_dir would
+    # make the guard write its logs (and cost summary) inside the workspace instead.
+    run_dir, ws_root = Path(run_dir).resolve(), Path(ws_root).resolve()
     run_dir.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
     ws, py, start = prepare(task, clone, ws_root, f"{arm}-s{seed}", python_version)
