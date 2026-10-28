@@ -70,6 +70,45 @@ def cmd_risk(a) -> int:
     return 0
 
 
+DEFAULT_GUARD = Path(__file__).resolve().parents[2] / "tools" / "budget_guard" / "guarded_muse.py"
+
+
+def _task(a) -> "tasks_mod.Task":
+    d = repo_dir(a.workdir, a.repo)
+    by_id = {t.id: t for t in tasks_mod.read_tasks(d / "tasks.jsonl")}
+    if a.task not in by_id:
+        raise SystemExit(f"unknown task {a.task}")
+    return by_id[a.task]
+
+
+def cmd_validate(a) -> int:
+    from . import runner
+    t = _task(a)
+    out = runner.validate(t, a.clone, a.workdir / "workspaces", repeats=a.repeats, python_version=a.python)
+    d = repo_dir(a.workdir, a.repo) / "validation"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / f"{t.id}.json").write_text(json.dumps(out, indent=2))
+    print(json.dumps(out))
+    return 0 if out["valid"] else 1
+
+
+def cmd_run_one(a) -> int:
+    from . import runner
+    t = _task(a)
+    setup = Path(a.setup) if a.setup else None
+    arm = a.arm or (setup.name if setup else "baseline")
+    run_dir = repo_dir(a.workdir, a.repo) / "runs" / arm / f"{t.id}-s{a.seed}"
+    res = runner.attempt(t, a.clone, a.workdir / "workspaces", run_dir, arm=arm, setup_dir=setup,
+                         seed=a.seed, guard=a.guard, max_steps=a.max_steps, timeout=a.timeout,
+                         trust_usage=not a.strict_cost, python_version=a.python, agent_cmd=a.agent_cmd)
+    g = res.grade or {}
+    print(json.dumps({"task": t.id, "arm": arm, "resolved": res.resolved,
+                      "f2p_failed": len(g.get("f2p_failed", [])), "regressions": len(g.get("p2p_failed", [])),
+                      "cost_usd": res.cost_usd, "seconds": res.seconds, "agent_exit": res.agent_exit,
+                      "error": res.error, "run_dir": str(run_dir)}))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="uplift", description=__doc__.split("\n\n")[0])
     ap.add_argument("--workdir", type=Path, default=Path(".uplift"))
@@ -96,6 +135,29 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--test-prefix", default="tests/")
     r.add_argument("--szz", type=int, default=200, help="newest N fix commits to blame (0 = off)")
     r.set_defaults(func=cmd_risk)
+
+    v = sub.add_parser("validate", help="prove a task is real: fails before the fix, passes after (repeated)")
+    v.add_argument("--repo", required=True)
+    v.add_argument("--clone", type=Path, required=True)
+    v.add_argument("--task", required=True)
+    v.add_argument("--repeats", type=int, default=3)
+    v.add_argument("--python", default="3.12")
+    v.set_defaults(func=cmd_validate)
+
+    o = sub.add_parser("run-one", help="one agent attempt on one task, graded by the real tests")
+    o.add_argument("--repo", required=True)
+    o.add_argument("--clone", type=Path, required=True)
+    o.add_argument("--task", required=True)
+    o.add_argument("--setup", help="folder with a setup to install (AGENTS.md, .muse/hooks.json, ...); omit for baseline")
+    o.add_argument("--arm", help="name for this configuration (default: setup folder name or 'baseline')")
+    o.add_argument("--seed", type=int, default=1)
+    o.add_argument("--max-steps", type=int, default=40)
+    o.add_argument("--timeout", type=int, default=1800)
+    o.add_argument("--python", default="3.12")
+    o.add_argument("--guard", type=Path, default=DEFAULT_GUARD)
+    o.add_argument("--strict-cost", action="store_true", help="charge worst case instead of parsed cost")
+    o.add_argument("--agent-cmd", help=argparse.SUPPRESS)  # tests only: replaces the agent
+    o.set_defaults(func=cmd_run_one)
 
     a = ap.parse_args(argv)
     return a.func(a)

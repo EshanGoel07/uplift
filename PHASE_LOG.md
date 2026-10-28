@@ -27,3 +27,19 @@ Built for the Meta Global AI Developer Hackathon (Oct 26 – Nov 4, 2026).
   test-period fixes (88%) were in the map's top-20% risk set. Caveat: sqlglot's
   changes concentrate in a few core files; compare against an edit-count baseline
   before claiming this.
+
+## Phase 1b: one-task runner and validator (Oct 29)
+
+- Phase 0 results on the real Mac: `muse exec` runs on `muse-spark-1.3-contributor`; the
+  guard reads Muse Code's real usage (Responses API format), so a trivial run costs
+  ~$0.005–0.008; `--trust-workspace` loads project rules and hooks with the sandbox still
+  on; the `.muse/hooks.json` format is an object keyed by event (SessionStart and
+  PostToolUse confirmed).
+- `uplift validate`: a task is valid only if, on every repeat, a FAIL_TO_PASS test fails
+  before the real fix and all FAIL_TO_PASS + PASS_TO_PASS tests pass after it.
+- `uplift run-one`: one Muse Code attempt (through the budget guard), graded by the
+  hidden tests. Task workspaces contain only the starting snapshot, with **no git
+  history**, so the agent can't look up the future fix. Test files are reset before
+  grading, so edited tests can't fake a pass.
+- Caught in testing: stale Python bytecode can make a same-size edit run the old code,
+  so grading now clears `__pycache__` and disables bytecode writing.

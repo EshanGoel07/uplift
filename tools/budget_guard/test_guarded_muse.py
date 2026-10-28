@@ -21,6 +21,20 @@ import json, os, sys, time
 mode = os.environ.get("FAKE_MODE", "ok")
 if mode == "hang":
     time.sleep(30)
+if mode == "responses":
+    # Real Muse Code 1.4.14 trace format (OpenAI Responses API over SSE, literal "\n" in the line).
+    # created/in_progress events carry no usage; each completed event carries one call's usage.
+    for i in range(3):
+        print("SSE RESPONSE: event: response.created\\ndata: " + json.dumps(
+            {"response": {"id": f"r{i}", "status": "in_progress", "usage": None}}), file=sys.stderr)
+        print("SSE RESPONSE: event: response.completed\\ndata: " + json.dumps({"response": {
+            "id": f"r{i}", "status": "completed", "model": "muse-spark-1.3-contributor",
+            "usage": {"input_tokens": 100000, "input_tokens_details": {"cached_tokens": 90000},
+                      "output_tokens": 2000, "output_tokens_details": {"reasoning_tokens": 1500},
+                      "total_tokens": 102000}}}), file=sys.stderr)
+        print("SSE RESPONSE: data: [DONE]", file=sys.stderr)
+    print(json.dumps({"payload": {"kind": "run_finished"}}))
+    sys.exit(0)
 # transport trace: one provider response per model call (OpenAI-style usage)
 for i in range(3):
     print("TRACE response " + json.dumps({"id": i, "usage": {"prompt_tokens": 100000,
@@ -86,6 +100,15 @@ def main():
         assert abs(status()["spent_usd"] - before - real) < 1e-3, status()
         assert status()["reserved_usd"] == 0
         print("ok  --trust-usage charges parsed real cost")
+
+        # 2b. Real Muse Code trace format (Responses API): same tokens, so same real cost
+        before = status()["spent_usd"]
+        r = run_guard(fake, os.path.join(tmp, "r2b"), "--trust-usage", env={"FAKE_MODE": "responses"})
+        assert r.returncode == 0, r.stderr
+        s = json.load(open(os.path.join(tmp, "r2b", "guard_summary.json")))
+        assert s["usage_records"] == 3 and s["tokens"] == {"input": 300000, "cached": 270000, "output": 6000}, s
+        assert abs(status()["spent_usd"] - before - real) < 1e-3, status()
+        print("ok  Muse Code Responses-format trace parsed (3 calls, cached tokens priced as cached)")
 
         # 3. No usage in output: full worst case even with --trust-usage
         before = status()["spent_usd"]

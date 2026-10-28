@@ -88,7 +88,8 @@ def cost_usd(model, inp, cached, out):
 
 
 class Usage:
-    """Collects usage from OpenAI-style or Anthropic-style payloads (incl. stream chunks)."""
+    """Collects usage from OpenAI Chat Completions, OpenAI Responses (used by Muse Code)
+    and Anthropic-style payloads, including stream chunks."""
 
     def __init__(self):
         self.inp = self.cached = self.out = 0
@@ -98,19 +99,27 @@ class Usage:
         if not isinstance(obj, dict):
             return
         u = obj.get("usage")
-        if u is None and isinstance(obj.get("message"), dict):  # Anthropic message_start
-            u = obj["message"].get("usage")
+        for wrapper in ("message", "response"):  # Anthropic message_start / Responses API events
+            if u is None and isinstance(obj.get(wrapper), dict):
+                u = obj[wrapper].get("usage")
         if not isinstance(u, dict):
             return
         self.found = True
-        # OpenAI style
+        # OpenAI Chat Completions style
         if "prompt_tokens" in u or "completion_tokens" in u:
             self.inp = max(self.inp, int(u.get("prompt_tokens") or 0))
             self.out = max(self.out, int(u.get("completion_tokens") or 0))
             det = u.get("prompt_tokens_details") or {}
             self.cached = max(self.cached, int(det.get("cached_tokens") or 0))
+        # OpenAI Responses style: input_tokens INCLUDES cached tokens, reported separately in
+        # input_tokens_details.cached_tokens; output_tokens includes reasoning tokens.
+        elif ("input_tokens" in u or "output_tokens" in u) and "input_tokens_details" in u:
+            det = u.get("input_tokens_details") or {}
+            self.inp = max(self.inp, int(u.get("input_tokens") or 0))
+            self.cached = max(self.cached, int(det.get("cached_tokens") or 0))
+            self.out = max(self.out, int(u.get("output_tokens") or 0))
         # Anthropic style (input_tokens excludes cache reads/writes there)
-        if "input_tokens" in u or "output_tokens" in u:
+        elif "input_tokens" in u or "output_tokens" in u:
             cache_read = int(u.get("cache_read_input_tokens") or 0)
             cache_write = int(u.get("cache_creation_input_tokens") or 0)
             total_in = int(u.get("input_tokens") or 0) + cache_read + cache_write
@@ -190,8 +199,8 @@ class Budget:
 
     def status(self):
         with self.lock:
-            return {"spent_usd": round(self.spent, 4), "reserved_usd": round(self.reserved, 4),
-                    "cap_usd": self.cap, "remaining_usd": round(max(self.cap - self.spent, 0), 4),
+            return {"spent_usd": round(self.spent, 6), "reserved_usd": round(self.reserved, 6),
+                    "cap_usd": self.cap, "remaining_usd": round(max(self.cap - self.spent, 0), 6),
                     "requests": self.requests, "blocked": self.spent >= self.cap}
 
 
