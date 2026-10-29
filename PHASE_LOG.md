@@ -155,3 +155,7 @@ Built for the Meta Global AI Developer Hackathon (Oct 26 – Nov 4, 2026).
   untouched. The real Phase 2 calls were logged all along: probe-hooks 19:50:34Z ($0.007633),
   probe-hooks --wrapped 19:58:55Z ($0.010448), generate 20:02:39Z ($0.004068, ran out of tokens),
   generate 20:06:36Z ($0.001114), each matched to a proxy ledger row.
+- verify-only re-run (sqlglot-4109, seed 1): resolved, $0.033193, 209 s, no API stall (72 model
+  requests, no re-sends, longest gap between responses 21 s). The verify hook ran once at Stop (5
+  related test files) and did not fire: the tests passed, so no block. All 8 smoke arms now resolved
+  this task; Phase 2 smoke total $0.247 for 8 runs (plus the stopped partial run, unmetered).
