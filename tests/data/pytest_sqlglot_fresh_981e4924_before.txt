@@ -1,0 +1,172 @@
+============================= test session starts ==============================
+collected 34 items
+
+tests/dialects/test_clickhouse.py ................F. [ 52%]
+................                                                         [100%]
+
+=================================== FAILURES ===================================
+E   AssertionError: 'SELE[15 chars]a JOIN s AS b ON a.id = b.id GLOBAL JOIN u AS c ON a.id = c.id' != 'SELE[15 chars]a JOIN s AS b ON a.id = b.id JOIN u AS c ON a.id = c.id'
+    - SELECT * FROM t AS a JOIN s AS b ON a.id = b.id GLOBAL JOIN u AS c ON a.id = c.id
+    ?                                                 -------
+    + SELECT * FROM t AS a JOIN s AS b ON a.id = b.id JOIN u AS c ON a.id = c.id
+/home/user/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/unittest/case.py:715: AssertionError: 'SELE[15 chars]a JOIN s AS b ON a.id = b.id GLOBAL JOIN u AS c ON a.id = c.id' != 'SELE[15 chars]a JOIN s AS b ON a.id = b.id JOIN u AS c ON a.id = c.id'
+E   AssertionError: 'SELE[28 chars] ON a.id = b.id AND b.id > 0 GLOBAL JOIN u AS c ON a.id = c.id' != 'SELE[28 chars] ON a.id = b.id AND b.id > 0 JOIN u AS c ON a.id = c.id'
+    - SELECT * FROM t AS a JOIN s AS b ON a.id = b.id AND b.id > 0 GLOBAL JOIN u AS c ON a.id = c.id
+    ?                                                             -------
+    + SELECT * FROM t AS a JOIN s AS b ON a.id = b.id AND b.id > 0 JOIN u AS c ON a.id = c.id
+/home/user/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/unittest/case.py:715: AssertionError: 'SELE[28 chars] ON a.id = b.id AND b.id > 0 GLOBAL JOIN u AS c ON a.id = c.id' != 'SELE[28 chars] ON a.id = b.id AND b.id > 0 JOIN u AS c ON a.id = c.id'
+E   AssertionError: 'SELE[45 chars]ND b.id GLOBAL IN (SELECT 1) GLOBAL JOIN u AS c ON a.id = c.id' != 'SELE[45 chars]ND b.id GLOBAL IN (SELECT 1) JOIN u AS c ON a.id = c.id'
+    - SELECT * FROM t AS a JOIN s AS b ON a.id = b.id AND b.id GLOBAL IN (SELECT 1) GLOBAL JOIN u AS c ON a.id = c.id
+    ?                                                                              -------
+    + SELECT * FROM t AS a JOIN s AS b ON a.id = b.id AND b.id GLOBAL IN (SELECT 1) JOIN u AS c ON a.id = c.id
+/home/user/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/unittest/case.py:715: AssertionError: 'SELE[45 chars]ND b.id GLOBAL IN (SELECT 1) GLOBAL JOIN u AS c ON a.id = c.id' != 'SELE[45 chars]ND b.id GLOBAL IN (SELECT 1) JOIN u AS c ON a.id = c.id'
+E   AssertionError: 'SELE[49 chars].id GLOBAL NOT IN (SELECT 2) GLOBAL JOIN u AS c ON a.id = c.id' != 'SELE[49 chars].id GLOBAL NOT IN (SELECT 2) JOIN u AS c ON a.id = c.id'
+    - SELECT * FROM t AS a JOIN s AS b ON a.id = b.id AND b.id GLOBAL NOT IN (SELECT 2) GLOBAL JOIN u AS c ON a.id = c.id
+    ?                                                                                  -------
+    + SELECT * FROM t AS a JOIN s AS b ON a.id = b.id AND b.id GLOBAL NOT IN (SELECT 2) JOIN u AS c ON a.id = c.id
+/home/user/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/unittest/case.py:715: AssertionError: 'SELE[49 chars].id GLOBAL NOT IN (SELECT 2) GLOBAL JOIN u AS c ON a.id = c.id' != 'SELE[49 chars].id GLOBAL NOT IN (SELECT 2) JOIN u AS c ON a.id = c.id'
+E   AssertionError: 'SELE[20 chars]N s AS b ON a.id = b.id GLOBAL LEFT JOIN u AS c ON a.id = c.id' != 'SELE[20 chars]N s AS b ON a.id = b.id LEFT JOIN u AS c ON a.id = c.id'
+    - SELECT * FROM t AS a JOIN s AS b ON a.id = b.id GLOBAL LEFT JOIN u AS c ON a.id = c.id
+    ?                                                 -------
+    + SELECT * FROM t AS a JOIN s AS b ON a.id = b.id LEFT JOIN u AS c ON a.id = c.id
+/home/user/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/unittest/case.py:715: AssertionError: 'SELE[20 chars]N s AS b ON a.id = b.id GLOBAL LEFT JOIN u AS c ON a.id = c.id' != 'SELE[20 chars]N s AS b ON a.id = b.id LEFT JOIN u AS c ON a.id = c.id'
+E   AssertionError: 'SELE[33 chars].id = b.id AND b.id > 0 GLOBAL LEFT JOIN u AS c ON a.id = c.id' != 'SELE[33 chars].id = b.id AND b.id > 0 LEFT JOIN u AS c ON a.id = c.id'
+    - SELECT * FROM t AS a JOIN s AS b ON a.id = b.id AND b.id > 0 GLOBAL LEFT JOIN u AS c ON a.id = c.id
+    ?                                                             -------
+    + SELECT * FROM t AS a JOIN s AS b ON a.id = b.id AND b.id > 0 LEFT JOIN u AS c ON a.id = c.id
+/home/user/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/unittest/case.py:715: AssertionError: 'SELE[33 chars].id = b.id AND b.id > 0 GLOBAL LEFT JOIN u AS c ON a.id = c.id' != 'SELE[33 chars].id = b.id AND b.id > 0 LEFT JOIN u AS c ON a.id = c.id'
+E   AssertionError: 'SELE[50 chars]id GLOBAL IN (SELECT 1) GLOBAL LEFT JOIN u AS c ON a.id = c.id' != 'SELE[50 chars]id GLOBAL IN (SELECT 1) LEFT JOIN u AS c ON a.id = c.id'
+    - SELECT * FROM t AS a JOIN s AS b ON a.id = b.id AND b.id GLOBAL IN (SELECT 1) GLOBAL LEFT JOIN u AS c ON a.id = c.id
+    ?                                                                              -------
+    + SELECT * FROM t AS a JOIN s AS b ON a.id = b.id AND b.id GLOBAL IN (SELECT 1) LEFT JOIN u AS c ON a.id = c.id
+/home/user/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/unittest/case.py:715: AssertionError: 'SELE[50 chars]id GLOBAL IN (SELECT 1) GLOBAL LEFT JOIN u AS c ON a.id = c.id' != 'SELE[50 chars]id GLOBAL IN (SELECT 1) LEFT JOIN u AS c ON a.id = c.id'
+E   AssertionError: 'SELE[54 chars]LOBAL NOT IN (SELECT 2) GLOBAL LEFT JOIN u AS c ON a.id = c.id' != 'SELE[54 chars]LOBAL NOT IN (SELECT 2) LEFT JOIN u AS c ON a.id = c.id'
+    - SELECT * FROM t AS a JOIN s AS b ON a.id = b.id AND b.id GLOBAL NOT IN (SELECT 2) GLOBAL LEFT JOIN u AS c ON a.id = c.id
+    ?                                                                                  -------
+    + SELECT * FROM t AS a JOIN s AS b ON a.id = b.id AND b.id GLOBAL NOT IN (SELECT 2) LEFT JOIN u AS c ON a.id = c.id
+/home/user/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/unittest/case.py:715: AssertionError: 'SELE[54 chars]LOBAL NOT IN (SELECT 2) GLOBAL LEFT JOIN u AS c ON a.id = c.id' != 'SELE[54 chars]LOBAL NOT IN (SELECT 2) LEFT JOIN u AS c ON a.id = c.id'
+E   AssertionError: 'SELE[21 chars] s AS b ON a.id = b.id GLOBAL INNER JOIN u AS c ON a.id = c.id' != 'SELE[21 chars] s AS b ON a.id = b.id INNER JOIN u AS c ON a.id = c.id'
+    - SELECT * FROM t AS a JOIN s AS b ON a.id = b.id GLOBAL INNER JOIN u AS c ON a.id = c.id
+    ?                                                -------
+    + SELECT * FROM t AS a JOIN s AS b ON a.id = b.id INNER JOIN u AS c ON a.id = c.id
+/home/user/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/unittest/case.py:715: AssertionError: 'SELE[21 chars] s AS b ON a.id = b.id GLOBAL INNER JOIN u AS c ON a.id = c.id' != 'SELE[21 chars] s AS b ON a.id = b.id INNER JOIN u AS c ON a.id = c.id'
+E   AssertionError: 'SELE[34 chars]id = b.id AND b.id > 0 GLOBAL INNER JOIN u AS c ON a.id = c.id' != 'SELE[34 chars]id = b.id AND b.id > 0 INNER JOIN u AS c ON a.id = c.id'
+    - SELECT * FROM t AS a JOIN s AS b ON a.id = b.id AND b.id > 0 GLOBAL INNER JOIN u AS c ON a.id = c.id
+    ?                                                             -------
+    + SELECT * FROM t AS a JOIN s AS b ON a.id = b.id AND b.id > 0 INNER JOIN u AS c ON a.id = c.id
+/home/user/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/unittest/case.py:715: AssertionError: 'SELE[34 chars]id = b.id AND b.id > 0 GLOBAL INNER JOIN u AS c ON a.id = c.id' != 'SELE[34 chars]id = b.id AND b.id > 0 INNER JOIN u AS c ON a.id = c.id'
+E   AssertionError: 'SELE[51 chars]d GLOBAL IN (SELECT 1) GLOBAL INNER JOIN u AS c ON a.id = c.id' != 'SELE[51 chars]d GLOBAL IN (SELECT 1) INNER JOIN u AS c ON a.id = c.id'
+    - SELECT * FROM t AS a JOIN s AS b ON a.id = b.id AND b.id GLOBAL IN (SELECT 1) GLOBAL INNER JOIN u AS c ON a.id = c.id
+    ?                                                                              -------
+    + SELECT * FROM t AS a JOIN s AS b ON a.id = b.id AND b.id GLOBAL IN (SELECT 1) INNER JOIN u AS c ON a.id = c.id
+/home/user/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/unittest/case.py:715: AssertionError: 'SELE[51 chars]d GLOBAL IN (SELECT 1) GLOBAL INNER JOIN u AS c ON a.id = c.id' != 'SELE[51 chars]d GLOBAL IN (SELECT 1) INNER JOIN u AS c ON a.id = c.id'
+E   AssertionError: 'SELE[55 chars]OBAL NOT IN (SELECT 2) GLOBAL INNER JOIN u AS c ON a.id = c.id' != 'SELE[55 chars]OBAL NOT IN (SELECT 2) INNER JOIN u AS c ON a.id = c.id'
+    - SELECT * FROM t AS a JOIN s AS b ON a.id = b.id AND b.id GLOBAL NOT IN (SELECT 2) GLOBAL INNER JOIN u AS c ON a.id = c.id
+    ?                                                                                  -------
+    + SELECT * FROM t AS a JOIN s AS b ON a.id = b.id AND b.id GLOBAL NOT IN (SELECT 2) INNER JOIN u AS c ON a.id = c.id
+/home/user/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/unittest/case.py:715: AssertionError: 'SELE[55 chars]OBAL NOT IN (SELECT 2) GLOBAL INNER JOIN u AS c ON a.id = c.id' != 'SELE[55 chars]OBAL NOT IN (SELECT 2) INNER JOIN u AS c ON a.id = c.id'
+E   AssertionError: 'SELE[24 chars]AS b ON a.id = b.id GLOBAL LEFT ANY JOIN u AS c ON a.id = c.id' != 'SELE[24 chars]AS b ON a.id = b.id LEFT ANY JOIN u AS c ON a.id = c.id'
+    - SELECT * FROM t AS a JOIN s AS b ON a.id = b.id GLOBAL LEFT ANY JOIN u AS c ON a.id = c.id
+    ?                                                 -------
+    + SELECT * FROM t AS a JOIN s AS b ON a.id = b.id LEFT ANY JOIN u AS c ON a.id = c.id
+/home/user/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/unittest/case.py:715: AssertionError: 'SELE[24 chars]AS b ON a.id = b.id GLOBAL LEFT ANY JOIN u AS c ON a.id = c.id' != 'SELE[24 chars]AS b ON a.id = b.id LEFT ANY JOIN u AS c ON a.id = c.id'
+E   AssertionError: 'SELE[37 chars]= b.id AND b.id > 0 GLOBAL LEFT ANY JOIN u AS c ON a.id = c.id' != 'SELE[37 chars]= b.id AND b.id > 0 LEFT ANY JOIN u AS c ON a.id = c.id'
+    - SELECT * FROM t AS a JOIN s AS b ON a.id = b.id AND b.id > 0 GLOBAL LEFT ANY JOIN u AS c ON a.id = c.id
+    ?                                                             -------
+    + SELECT * FROM t AS a JOIN s AS b ON a.id = b.id AND b.id > 0 LEFT ANY JOIN u AS c ON a.id = c.id
+/home/user/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/unittest/case.py:715: AssertionError: 'SELE[37 chars]= b.id AND b.id > 0 GLOBAL LEFT ANY JOIN u AS c ON a.id = c.id' != 'SELE[37 chars]= b.id AND b.id > 0 LEFT ANY JOIN u AS c ON a.id = c.id'
+E   AssertionError: 'SELE[54 chars]LOBAL IN (SELECT 1) GLOBAL LEFT ANY JOIN u AS c ON a.id = c.id' != 'SELE[54 chars]LOBAL IN (SELECT 1) LEFT ANY JOIN u AS c ON a.id = c.id'
+    - SELECT * FROM t AS a JOIN s AS b ON a.id = b.id AND b.id GLOBAL IN (SELECT 1) GLOBAL LEFT ANY JOIN u AS c ON a.id = c.id
+    ?                                                                              -------
+    + SELECT * FROM t AS a JOIN s AS b ON a.id = b.id AND b.id GLOBAL IN (SELECT 1) LEFT ANY JOIN u AS c ON a.id = c.id
+/home/user/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/unittest/case.py:715: AssertionError: 'SELE[54 chars]LOBAL IN (SELECT 1) GLOBAL LEFT ANY JOIN u AS c ON a.id = c.id' != 'SELE[54 chars]LOBAL IN (SELECT 1) LEFT ANY JOIN u AS c ON a.id = c.id'
+E   AssertionError: 'SELE[58 chars]L NOT IN (SELECT 2) GLOBAL LEFT ANY JOIN u AS c ON a.id = c.id' != 'SELE[58 chars]L NOT IN (SELECT 2) LEFT ANY JOIN u AS c ON a.id = c.id'
+    - SELECT * FROM t AS a JOIN s AS b ON a.id = b.id AND b.id GLOBAL NOT IN (SELECT 2) GLOBAL LEFT ANY JOIN u AS c ON a.id = c.id
+    ?                                                                                  -------
+    + SELECT * FROM t AS a JOIN s AS b ON a.id = b.id AND b.id GLOBAL NOT IN (SELECT 2) LEFT ANY JOIN u AS c ON a.id = c.id
+/home/user/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/unittest/case.py:715: AssertionError: 'SELE[58 chars]L NOT IN (SELECT 2) GLOBAL LEFT ANY JOIN u AS c ON a.id = c.id' != 'SELE[58 chars]L NOT IN (SELECT 2) LEFT ANY JOIN u AS c ON a.id = c.id'
+E   AssertionError: 'SELE[26 chars] b ON a.id = b.id GLOBAL FULL OUTER JOIN u AS c ON a.id = c.id' != 'SELE[26 chars] b ON a.id = b.id FULL OUTER JOIN u AS c ON a.id = c.id'
+    - SELECT * FROM t AS a JOIN s AS b ON a.id = b.id GLOBAL FULL OUTER JOIN u AS c ON a.id = c.id
+    ?                                                 -------
+    + SELECT * FROM t AS a JOIN s AS b ON a.id = b.id FULL OUTER JOIN u AS c ON a.id = c.id
+/home/user/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/unittest/case.py:715: AssertionError: 'SELE[26 chars] b ON a.id = b.id GLOBAL FULL OUTER JOIN u AS c ON a.id = c.id' != 'SELE[26 chars] b ON a.id = b.id FULL OUTER JOIN u AS c ON a.id = c.id'
+E   AssertionError: 'SELE[39 chars]b.id AND b.id > 0 GLOBAL FULL OUTER JOIN u AS c ON a.id = c.id' != 'SELE[39 chars]b.id AND b.id > 0 FULL OUTER JOIN u AS c ON a.id = c.id'
+    - SELECT * FROM t AS a JOIN s AS b ON a.id = b.id AND b.id > 0 GLOBAL FULL OUTER JOIN u AS c ON a.id = c.id
+    ?                                                             -------
+    + SELECT * FROM t AS a JOIN s AS b ON a.id = b.id AND b.id > 0 FULL OUTER JOIN u AS c ON a.id = c.id
+/home/user/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/unittest/case.py:715: AssertionError: 'SELE[39 chars]b.id AND b.id > 0 GLOBAL FULL OUTER JOIN u AS c ON a.id = c.id' != 'SELE[39 chars]b.id AND b.id > 0 FULL OUTER JOIN u AS c ON a.id = c.id'
+E   AssertionError: 'SELE[56 chars]BAL IN (SELECT 1) GLOBAL FULL OUTER JOIN u AS c ON a.id = c.id' != 'SELE[56 chars]BAL IN (SELECT 1) FULL OUTER JOIN u AS c ON a.id = c.id'
+    - SELECT * FROM t AS a JOIN s AS b ON a.id = b.id AND b.id GLOBAL IN (SELECT 1) GLOBAL FULL OUTER JOIN u AS c ON a.id = c.id
+    ?                                                                              -------
+    + SELECT * FROM t AS a JOIN s AS b ON a.id = b.id AND b.id GLOBAL IN (SELECT 1) FULL OUTER JOIN u AS c ON a.id = c.id
+/home/user/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/unittest/case.py:715: AssertionError: 'SELE[56 chars]BAL IN (SELECT 1) GLOBAL FULL OUTER JOIN u AS c ON a.id = c.id' != 'SELE[56 chars]BAL IN (SELECT 1) FULL OUTER JOIN u AS c ON a.id = c.id'
+E   AssertionError: 'SELE[60 chars]NOT IN (SELECT 2) GLOBAL FULL OUTER JOIN u AS c ON a.id = c.id' != 'SELE[60 chars]NOT IN (SELECT 2) FULL OUTER JOIN u AS c ON a.id = c.id'
+    - SELECT * FROM t AS a JOIN s AS b ON a.id = b.id AND b.id GLOBAL NOT IN (SELECT 2) GLOBAL FULL OUTER JOIN u AS c ON a.id = c.id
+    ?                                                                                  -------
+    + SELECT * FROM t AS a JOIN s AS b ON a.id = b.id AND b.id GLOBAL NOT IN (SELECT 2) FULL OUTER JOIN u AS c ON a.id = c.id
+/home/user/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/unittest/case.py:715: AssertionError: 'SELE[60 chars]NOT IN (SELECT 2) GLOBAL FULL OUTER JOIN u AS c ON a.id = c.id' != 'SELE[60 chars]NOT IN (SELECT 2) FULL OUTER JOIN u AS c ON a.id = c.id'
+E   AssertionError: 'SELE[24 chars]AS b ON a.id = b.id GLOBAL LEFT ANY JOIN u AS c ON a.id = c.id' != 'SELE[24 chars]AS b ON a.id = b.id LEFT ANY JOIN u AS c ON a.id = c.id'
+    - SELECT * FROM t AS a JOIN s AS b ON a.id = b.id GLOBAL LEFT ANY JOIN u AS c ON a.id = c.id
+    ?                                                 -------
+    + SELECT * FROM t AS a JOIN s AS b ON a.id = b.id LEFT ANY JOIN u AS c ON a.id = c.id
+----------------------------- Captured stdout call -----------------------------
+uuuuuuuuuuuuuuuuuuuu
+/home/user/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/unittest/case.py:715: AssertionError: 'SELE[24 chars]AS b ON a.id = b.id GLOBAL LEFT ANY JOIN u AS c ON a.id = c.id' != 'SELE[24 chars]AS b ON a.id = b.id LEFT ANY JOIN u AS c ON a.id = c.id'
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED tests/dialects/test_clickhouse.py::TestClickhouse::test_agg_functions
+PASSED tests/dialects/test_clickhouse.py::TestClickhouse::test_agg_functions_multiple_suffixes
+PASSED tests/dialects/test_clickhouse.py::TestClickhouse::test_aggregate_function_column_with_any_keyword
+PASSED tests/dialects/test_clickhouse.py::TestClickhouse::test_array_join
+PASSED tests/dialects/test_clickhouse.py::TestClickhouse::test_array_offset
+PASSED tests/dialects/test_clickhouse.py::TestClickhouse::test_clickhouse
+PASSED tests/dialects/test_clickhouse.py::TestClickhouse::test_clickhouse_values
+PASSED tests/dialects/test_clickhouse.py::TestClickhouse::test_convert
+PASSED tests/dialects/test_clickhouse.py::TestClickhouse::test_create_table_as_alias
+PASSED tests/dialects/test_clickhouse.py::TestClickhouse::test_cte
+PASSED tests/dialects/test_clickhouse.py::TestClickhouse::test_datetime_funcs
+PASSED tests/dialects/test_clickhouse.py::TestClickhouse::test_ddl
+PASSED tests/dialects/test_clickhouse.py::TestClickhouse::test_detach
+PASSED tests/dialects/test_clickhouse.py::TestClickhouse::test_drop_on_cluster
+PASSED tests/dialects/test_clickhouse.py::TestClickhouse::test_functions
+PASSED tests/dialects/test_clickhouse.py::TestClickhouse::test_geom_types
+PASSED tests/dialects/test_clickhouse.py::TestClickhouse::test_grant
+PASSED tests/dialects/test_clickhouse.py::TestClickhouse::test_groupconcat
+PASSED tests/dialects/test_clickhouse.py::TestClickhouse::test_json_type
+PASSED tests/dialects/test_clickhouse.py::TestClickhouse::test_nothing_type
+PASSED tests/dialects/test_clickhouse.py::TestClickhouse::test_parameterization
+PASSED tests/dialects/test_clickhouse.py::TestClickhouse::test_refreshable_materialized_view
+PASSED tests/dialects/test_clickhouse.py::TestClickhouse::test_revoke
+PASSED tests/dialects/test_clickhouse.py::TestClickhouse::test_safe_div
+PASSED tests/dialects/test_clickhouse.py::TestClickhouse::test_signed_and_unsigned_types
+PASSED tests/dialects/test_clickhouse.py::TestClickhouse::test_sql_security
+PASSED tests/dialects/test_clickhouse.py::TestClickhouse::test_string_split
+PASSED tests/dialects/test_clickhouse.py::TestClickhouse::test_table_functions
+PASSED tests/dialects/test_clickhouse.py::TestClickhouse::test_ternary
+PASSED tests/dialects/test_clickhouse.py::TestClickhouse::test_timestr_to_time
+PASSED tests/dialects/test_clickhouse.py::TestClickhouse::test_to_start_of
+PASSED tests/dialects/test_clickhouse.py::TestClickhouse::test_traverse_scope
+PASSED tests/dialects/test_clickhouse.py::TestClickhouse::test_window_functions
+SUBFAILED(sql='SELECT * FROM t AS a JOIN s AS b ON a.id = b.id GLOBAL JOIN u AS c ON a.id = c.id') tests/dialects/test_clickhouse.py::TestClickhouse::test_global_join
+SUBFAILED(sql='SELECT * FROM t AS a JOIN s AS b ON a.id = b.id AND b.id > 0 GLOBAL JOIN u AS c ON a.id = c.id') tests/dialects/test_clickhouse.py::TestClickhouse::test_global_join
+SUBFAILED(sql='SELECT * FROM t AS a JOIN s AS b ON a.id = b.id AND b.id GLOBAL IN (SELECT 1) GLOBAL JOIN u AS c ON a.id = c.id') tests/dialects/test_clickhouse.py::TestClickhouse::test_global_join
+SUBFAILED(sql='SELECT * FROM t AS a JOIN s AS b ON a.id = b.id AND b.id GLOBAL NOT IN (SELECT 2) GLOBAL JOIN u AS c ON a.id = c.id') tests/dialects/test_clickhouse.py::TestClickhouse::test_global_join
+SUBFAILED(sql='SELECT * FROM t AS a JOIN s AS b ON a.id = b.id GLOBAL LEFT JOIN u AS c ON a.id = c.id') tests/dialects/test_clickhouse.py::TestClickhouse::test_global_join
+SUBFAILED(sql='SELECT * FROM t AS a JOIN s AS b ON a.id = b.id AND b.id > 0 GLOBAL LEFT JOIN u AS c ON a.id = c.id') tests/dialects/test_clickhouse.py::TestClickhouse::test_global_join
+SUBFAILED(sql='SELECT * FROM t AS a JOIN s AS b ON a.id = b.id AND b.id GLOBAL IN (SELECT 1) GLOBAL LEFT JOIN u AS c ON a.id = c.id') tests/dialects/test_clickhouse.py::TestClickhouse::test_global_join
+SUBFAILED(sql='SELECT * FROM t AS a JOIN s AS b ON a.id = b.id AND b.id GLOBAL NOT IN (SELECT 2) GLOBAL LEFT JOIN u AS c ON a.id = c.id') tests/dialects/test_clickhouse.py::TestClickhouse::test_global_join
+SUBFAILED(sql='SELECT * FROM t AS a JOIN s AS b ON a.id = b.id GLOBAL INNER JOIN u AS c ON a.id = c.id') tests/dialects/test_clickhouse.py::TestClickhouse::test_global_join
+SUBFAILED(sql='SELECT * FROM t AS a JOIN s AS b ON a.id = b.id AND b.id > 0 GLOBAL INNER JOIN u AS c ON a.id = c.id') tests/dialects/test_clickhouse.py::TestClickhouse::test_global_join
+SUBFAILED(sql='SELECT * FROM t AS a JOIN s AS b ON a.id = b.id AND b.id GLOBAL IN (SELECT 1) GLOBAL INNER JOIN u AS c ON a.id = c.id') tests/dialects/test_clickhouse.py::TestClickhouse::test_global_join
+SUBFAILED(sql='SELECT * FROM t AS a JOIN s AS b ON a.id = b.id AND b.id GLOBAL NOT IN (SELECT 2) GLOBAL INNER JOIN u AS c ON a.id = c.id') tests/dialects/test_clickhouse.py::TestClickhouse::test_global_join
+SUBFAILED(sql='SELECT * FROM t AS a JOIN s AS b ON a.id = b.id GLOBAL LEFT ANY JOIN u AS c ON a.id = c.id') tests/dialects/test_clickhouse.py::TestClickhouse::test_global_join
+SUBFAILED(sql='SELECT * FROM t AS a JOIN s AS b ON a.id = b.id AND b.id > 0 GLOBAL LEFT ANY JOIN u AS c ON a.id = c.id') tests/dialects/test_clickhouse.py::TestClickhouse::test_global_join
+SUBFAILED(sql='SELECT * FROM t AS a JOIN s AS b ON a.id = b.id AND b.id GLOBAL IN (SELECT 1) GLOBAL LEFT ANY JOIN u AS c ON a.id = c.id') tests/dialects/test_clickhouse.py::TestClickhouse::test_global_join
+SUBFAILED(sql='SELECT * FROM t AS a JOIN s AS b ON a.id = b.id AND b.id GLOBAL NOT IN (SELECT 2) GLOBAL LEFT ANY JOIN u AS c ON a.id = c.id') tests/dialects/test_clickhouse.py::TestClickhouse::test_global_join
+SUBFAILED(sql='SELECT * FROM t AS a JOIN s AS b ON a.id = b.id GLOBAL FULL OUTER JOIN u AS c ON a.id = c.id') tests/dialects/test_clickhouse.py::TestClickhouse::test_global_join
+SUBFAILED(sql='SELECT * FROM t AS a JOIN s AS b ON a.id = b.id AND b.id > 0 GLOBAL FULL OUTER JOIN u AS c ON a.id = c.id') tests/dialects/test_clickhouse.py::TestClickhouse::test_global_join
+SUBFAILED(sql='SELECT * FROM t AS a JOIN s AS b ON a.id = b.id AND b.id GLOBAL IN (SELECT 1) GLOBAL FULL OUTER JOIN u AS c ON a.id = c.id') tests/dialects/test_clickhouse.py::TestClickhouse::test_global_join
+SUBFAILED(sql='SELECT * FROM t AS a JOIN s AS b ON a.id = b.id AND b.id GLOBAL NOT IN (SELECT 2) GLOBAL FULL OUTER JOIN u AS c ON a.id = c.id') tests/dialects/test_clickhouse.py::TestClickhouse::test_global_join
+FAILED tests/dialects/test_clickhouse.py::TestClickhouse::test_global_join - ...
+======================== 21 failed, 33 passed in 0.84s =========================
+

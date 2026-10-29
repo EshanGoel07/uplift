@@ -83,3 +83,15 @@ Built for the Meta Global AI Developer Hackathon (Oct 26 – Nov 4, 2026).
 - Known gap: the 3 commits dropped by the miner for "no FAIL_TO_PASS test" were measured with the
   old parser and were not re-checked. A missed before-fix sub-test failure could have hidden a real
   F2P test, so one of them might have qualified. That affects which 40 tasks were picked, not grading.
+- Re-validation with the fixed parser (raw logs kept, 8 workers, sequential prefetch): test 40/40
+  valid (3 repeats), fresh 39/40 (3 repeats), dev 38/40 (1 repeat). No fetch crashes. Validity
+  recomputed offline from the 560 raw logs agrees with every stored result; every F2P test fails
+  before the fix in every repeat.
+- The fail-closed check caught a third sub-test format on its first real run: sub-tests labelled
+  by keyword arguments print `SUBFAILED(sql='...') <id>` (parentheses). 4 fresh tasks were
+  reported invalid (count mismatch, so no grade, never a false pass); parser now handles both forms.
+- Invalid, all environment (newer DuckDB than the dataset's Docker image), each failing before AND
+  after the real fix: dev 4004 and 4172 (`test_qualify_columns`, a DuckDB `(execute)` sub-test), and
+  fresh-1dae76b5 (`test_optimized_tpch`, DuckDB "Deprecated lambda arrow"). For 1dae76b5 the old
+  parser hid that multi-line sub-test failure, so the miner put the test in P2P; recomputing fresh
+  F2P/P2P from the validation logs changes only this task (P2P minus that test).

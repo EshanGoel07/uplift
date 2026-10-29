@@ -37,11 +37,13 @@ class Grade:
         return asdict(self)
 
 
-# A sub-test entry: `SUB<STATUS>[<label>] <path>.py::<test> ...`. The label can span many
-# lines (sqlglot labels sub-tests with multi-line SQL), so the node id may be lines further
-# down. The label ends at the first `] <path>.py::...`, and never runs into the next entry.
-_SUB = re.compile(r"^SUB(\w+)\[(?:(?!^SUB\w+\[).)*?\]\s+(\S+\.py::\S+)[^\n]*", re.M | re.S)
-_SUB_START = re.compile(r"^SUB\w+\[", re.M)
+# A sub-test entry: `SUB<STATUS>[<msg>] <path>.py::<test> ...`, or `SUB<STATUS>(<k>=<v>, ...)`
+# when the sub-test is labelled by keyword arguments (or both: `[<msg>] (<k>=<v>)`). The label
+# can span many lines (sqlglot labels sub-tests with multi-line SQL), so the node id may be lines
+# further down. The label ends at the first `] <path>.py::...` / `) <path>.py::...`, and never
+# runs into the next entry.
+_SUB = re.compile(r"^SUB(\w+)[\[(](?:(?!^SUB\w+[\[(]).)*?[\])]\s+(\S+\.py::\S+)[^\n]*", re.M | re.S)
+_SUB_START = re.compile(r"^SUB\w+[\[(]", re.M)
 _SUMMARY = re.compile(r"^=+ (.*?) in [\d.]+s(?: \([^)]*\))? =+$", re.M)
 
 

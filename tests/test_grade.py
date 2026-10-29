@@ -20,7 +20,18 @@ def test_multiline_subfailed_real_sqlglot_4505():
     assert grade.check_output(out) == ""
 
 
-SUMMARY_OK = "PASSED tests/a.py::test_x\nFAILED tests/a.py::test_y - boom\n=== 1 failed, 1 passed in 0.10s ===\n"
+def test_kwargs_subfailed_real_sqlglot_fresh_981e4924():
+    """Regression: a sub-test labelled by keyword arguments prints `SUBFAILED(sql='...') <id>`
+    (parentheses, not brackets). pytest says `21 failed`: 20 sub-tests + the parent."""
+    out = (DATA / "pytest_sqlglot_fresh_981e4924_before.txt").read_text()
+    assert grade.parse_pytest(out)["tests/dialects/test_clickhouse.py::TestClickhouse::test_global_join"] == "FAILED"
+    assert grade.check_output(out) == ""
+    both = ("PASSED tests/a.py::T::t\nSUBFAILED[msg (with parens)] (i=1) tests/a.py::T::t - x\n"
+            "=== 1 failed, 1 passed in 0.1s ===\n")
+    assert grade.parse_pytest(both) == {"tests/a.py::T::t": "FAILED"} and grade.check_output(both) == ""
+
+
+SUMMARY_OK ="PASSED tests/a.py::test_x\nFAILED tests/a.py::test_y - boom\n=== 1 failed, 1 passed in 0.10s ===\n"
 
 
 def test_check_output_agrees():
