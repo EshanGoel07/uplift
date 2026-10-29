@@ -37,25 +37,74 @@ class Grade:
         return asdict(self)
 
 
+# A sub-test entry: `SUB<STATUS>[<label>] <path>.py::<test> ...`. The label can span many
+# lines (sqlglot labels sub-tests with multi-line SQL), so the node id may be lines further
+# down. The label ends at the first `] <path>.py::...`, and never runs into the next entry.
+_SUB = re.compile(r"^SUB(\w+)\[(?:(?!^SUB\w+\[).)*?\]\s+(\S+\.py::\S+)[^\n]*", re.M | re.S)
+_SUB_START = re.compile(r"^SUB\w+\[", re.M)
+_SUMMARY = re.compile(r"^=+ (.*?) in [\d.]+s(?: \([^)]*\))? =+$", re.M)
+
+
+def _scan(output: str) -> tuple[dict[str, str], dict[str, int], int]:
+    """(results, counts of each status line, number of sub-test entries left unparsed)."""
+    subs = _SUB.findall(output)
+    unparsed = len(_SUB_START.findall(output)) - len(subs)
+    rest = _SUB.sub("", output)            # so label text can't be read as a result line
+    out: dict[str, str] = {}
+    counts: dict[str, int] = {}
+    for status, nodeid in _RESULT.findall(rest):
+        out[nodeid.split(" - ")[0]] = status
+        counts[status] = counts.get(status, 0) + 1
+    for status, nodeid in subs:
+        counts["SUB" + status] = counts.get("SUB" + status, 0) + 1
+        if status == "FAILED":
+            out[nodeid] = "FAILED"
+    return out, counts, unparsed
+
+
 def parse_pytest(output: str) -> dict[str, str]:
     """Map test node id -> outcome from `pytest -rA` short summary lines.
 
     Sub-tests (unittest `subTest`, used heavily by sqlglot): newer pytest reports a failing
-    sub-test on its own `SUBFAILED[<msg>] <nodeid>` line and STILL prints `PASSED <nodeid>`
+    sub-test on its own `SUBFAILED[<msg>] <nodeid>` entry and STILL prints `PASSED <nodeid>`
     for the parent. Any failing sub-test therefore marks its parent test as FAILED.
     """
-    out: dict[str, str] = {}
-    for status, nodeid in _RESULT.findall(output):
-        nodeid = nodeid.split(" - ")[0]
-        out[nodeid] = status
-    for line in output.splitlines():
-        if not line.startswith("SUBFAILED"):
-            continue
-        head = line.split(" - ")[0] if "] " not in line else line
-        ids = [tok for tok in head.split() if "::" in tok]
-        if ids:
-            out[ids[-1].split(" - ")[0]] = "FAILED"
-    return out
+    return _scan(output)[0]
+
+
+def summary_counts(output: str) -> dict[str, int] | None:
+    """Counts from pytest's final `=== 1 failed, 38 passed in 1.05s ===` line, or None."""
+    lines = _SUMMARY.findall(output)
+    if not lines:
+        return None
+    counts: dict[str, int] = {}
+    for part in lines[-1].split(","):
+        m = re.match(r"\s*(\d+) ([a-z][a-z ]*?)\s*$", part)
+        if m:
+            counts[m.group(2)] = counts.get(m.group(2), 0) + int(m.group(1))
+    return counts
+
+
+def check_output(output: str) -> str:
+    """Cross-check the parsed result lines against pytest's own summary. Returns a problem
+    description, or "" if they agree. Any problem means the run can't be graded (fail closed):
+    a mis-parse must never turn a failure into a pass."""
+    summary = summary_counts(output)
+    if summary is None:
+        return "no pytest summary line (crash or timeout?)"
+    _, n, unparsed = _scan(output)
+    if unparsed:
+        return f"{unparsed} sub-test entr{'y' if unparsed == 1 else 'ies'} without a test id"
+    if "subtests failed" in summary:       # some pytest versions count sub-test failures apart
+        failed = [(n.get("FAILED", 0), summary.get("failed", 0)),
+                  (n.get("SUBFAILED", 0), summary["subtests failed"])]
+    else:                                  # pytest 9: each failing sub-test counts in `failed`
+        failed = [(n.get("FAILED", 0) + n.get("SUBFAILED", 0), summary.get("failed", 0))]
+    checks = failed + [(n.get("ERROR", 0), summary.get("error", 0) + summary.get("errors", 0)),
+                       (n.get("PASSED", 0), summary.get("passed", 0))]
+    if any(parsed != reported for parsed, reported in checks):
+        return f"parsed {n} disagrees with pytest summary {summary}"
+    return ""
 
 
 def _passed(status: str | None) -> bool:
@@ -71,16 +120,38 @@ def clear_bytecode(workspace: Path) -> None:
             shutil.rmtree(d, ignore_errors=True)
 
 
+_CONFIGS = [("pytest.ini", None), (".pytest.ini", None), ("pyproject.toml", ("[tool.pytest.ini_options]", "[tool.pytest]")),
+            ("tox.ini", ("[pytest]",)), ("setup.cfg", ("[tool:pytest]",))]
+
+
+def pytest_config(workspace: Path) -> str:
+    """The workspace's own pytest config file (pytest's lookup order), else an empty one."""
+    for name, sections in _CONFIGS:
+        p = workspace / name
+        if p.is_file() and (sections is None or any(s in p.read_text(errors="replace") for s in sections)):
+            return str(p)
+    return os.devnull
+
+
 def run_tests(workspace: Path, python: Path, test_ids: list[str], timeout: int = 900) -> tuple[dict[str, str], str]:
     """Run the given pytest node ids with the workspace's own interpreter."""
     if not test_ids:
         return {}, ""
     files = sorted({t.split("::")[0] for t in test_ids})
     clear_bytecode(workspace)
+    # Workspace only: pytest would otherwise walk up from the workspace and pick up a parent
+    # directory's config (uplift's own pyproject.toml) and conftest.py files.
+    ws = str(Path(workspace).resolve())
     cmd = [str(python), "-m", "pytest", "-rA", "--no-header", "--tb=line", "--color=no",
-           "-p", "no:cacheprovider", "-W", "ignore::DeprecationWarning", *files]
+           "-p", "no:cacheprovider", "-W", "ignore::DeprecationWarning",
+           f"--rootdir={ws}", "-c", pytest_config(Path(ws)), f"--confcutdir={ws}", *files]
     env = dict(os.environ, PYTHONDONTWRITEBYTECODE="1")  # stale .pyc can mask a code change
-    proc = subprocess.run(cmd, cwd=workspace, capture_output=True, text=True, timeout=timeout, env=env)
+    try:
+        proc = subprocess.run(cmd, cwd=workspace, capture_output=True, text=True, timeout=timeout, env=env)
+    except subprocess.TimeoutExpired as e:  # no summary line, so check_output fails it
+        out = e.stdout.decode(errors="replace") if isinstance(e.stdout, bytes) else (e.stdout or "")
+        text = out + f"\nUPLIFT: pytest timed out after {timeout}s\n"
+        return parse_pytest(text), text
     text = proc.stdout + "\n" + proc.stderr
     return parse_pytest(text), text
 
@@ -106,6 +177,10 @@ def grade(workspace: Path, python: Path, base_commit: str, test_patch: str, test
     if log_path:
         log_path.parent.mkdir(parents=True, exist_ok=True)
         log_path.write_text(text)
+    problem = check_output(text)
+    if problem:  # ERROR, never PASS: nothing counts as passed when the output can't be trusted
+        return Grade(resolved=False, f2p_failed=list(fail_to_pass), p2p_failed=list(pass_to_pass),
+                     p2p_total=len(pass_to_pass), error=f"pytest output check failed: {problem}")
     f2p_ok = [t for t in fail_to_pass if _passed(results.get(t))]
     f2p_bad = [t for t in fail_to_pass if not _passed(results.get(t))]
     p2p_bad = [t for t in pass_to_pass if not _passed(results.get(t))]

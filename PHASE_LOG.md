@@ -52,3 +52,34 @@ Built for the Meta Global AI Developer Hackathon (Oct 26 – Nov 4, 2026).
   unaffected (real tests; the only source change was mysql.py). Fix: `attempt()` resolves
   run_dir and ws_root to absolute paths; guard log names are also in the workspace git
   excludes. A new test drives the guard path with a relative run_dir (fails before the fix).
+
+## Phase 1c: validate-batch, fresh tasks, grading fix (Oct 29)
+
+- `uplift validate-batch`: one `uplift validate` subprocess per task, N workers; skips finished
+  results (crashed ones are retried), deletes workspaces, writes `validation/summary.json`.
+  Raw pytest output for every repeat is now kept in `validation/logs/<id>/{before,after}-<i>.txt`.
+- `uplift mine-fresh`: 40 fresh tasks from 1,201 commits since 2026-01-01 (2026-04-20 .. 10-28).
+  Statement = the linked GitHub issue only. Fresh snapshot `7660486c4cc6` (2026-04-17): leakage
+  0/40; positive control at HEAD detects 30/40. Original test snapshot re-checked: 0/40 (dev control 24/40).
+- Caught: `gh issue view N` also answers for PR numbers and returns the PR body, which describes
+  the fix. Now requires an `/issues/` URL.
+- Caught: a fork's squashed PR said "Fixes #54" (the fork's issue); upstream #54 is an unrelated 2021
+  issue, so the task got a wrong statement. The issue must now be closed by the commit's PR, or
+  opened before and closed within [-1, +7] days of the commit. Found by eyeballing an outlier issue number.
+- Caught: parallel per-commit `git fetch`es into the clone (PR-branch base commits) failed and crashed
+  15 validations. validate-batch now fetches missing base commits sequentially first.
+- **Grading bug caught (sqlglot-4505):** a sub-test labelled with multi-line SQL prints its id ~20
+  lines below `SUBFAILED[`; the parser only looked on the first line, so the failure was dropped and
+  the parent's `PASSED` won (pytest itself said `1 failed`). Fix: parse multi-line sub-test blocks,
+  and fail closed: parsed FAILED+SUBFAILED / ERROR / PASSED counts must equal pytest's summary line,
+  and a missing summary (crash/timeout) is an error; such a grade is never resolved. Found because
+  the task came out "F2P already passing before the fix", contradicting the dataset.
+  The paid 3855 run re-grades identically. 4172's P2P failure is not this bug: a DuckDB `(execute)`
+  sub-test fails before and after the fix (newer DuckDB than the dataset's image).
+- Caught: workspaces live under the uplift repo, so pytest's rootdir/ini discovery reached uplift's
+  own `pyproject.toml` (`[tool.pytest.ini_options]`), and a probe showed a parent `conftest.py` would
+  load too. Workspace pytest now runs with `--rootdir=<ws> -c <ws's own config or /dev/null>
+  --confcutdir=<ws>`; a test puts a breaking config and conftest above a workspace.
+- Known gap: the 3 commits dropped by the miner for "no FAIL_TO_PASS test" were measured with the
+  old parser and were not re-checked. A missed before-fix sub-test failure could have hidden a real
+  F2P test, so one of them might have qualified. That affects which 40 tasks were picked, not grading.

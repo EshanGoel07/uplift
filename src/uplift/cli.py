@@ -3,6 +3,8 @@
     uplift tasks load  --repo tobymao/sqlglot
     uplift tasks split --repo tobymao/sqlglot --clone ../sqlglot
     uplift risk        --repo tobymao/sqlglot --clone ../sqlglot
+    uplift mine-fresh  --repo tobymao/sqlglot --clone ../sqlglot --since 2026-01-01 --limit 40
+    uplift validate-batch --repo tobymao/sqlglot --clone ../sqlglot --ids dev,test,fresh --workers 4
 
 Working data lives in .uplift/<owner>__<name>/ (git-ignored).
 """
@@ -84,12 +86,85 @@ def _task(a) -> "tasks_mod.Task":
 def cmd_validate(a) -> int:
     from . import runner
     t = _task(a)
-    out = runner.validate(t, a.clone, a.workdir / "workspaces", repeats=a.repeats, python_version=a.python)
     d = repo_dir(a.workdir, a.repo) / "validation"
+    out = runner.validate(t, a.clone, a.workdir / "workspaces", repeats=a.repeats, python_version=a.python,
+                          log_dir=d / "logs" / t.id)
     d.mkdir(parents=True, exist_ok=True)
     (d / f"{t.id}.json").write_text(json.dumps(out, indent=2))
     print(json.dumps(out))
     return 0 if out["valid"] else 1
+
+
+def cmd_validate_batch(a) -> int:
+    from . import batch
+    d = repo_dir(a.workdir, a.repo)
+    s = split_mod.Split.load(d / "split.json")
+    names = [n.strip() for n in a.ids.split(",") if n.strip()]
+    unknown = [n for n in names if n not in batch.LISTS]
+    if unknown:
+        raise SystemExit(f"unknown list(s) {unknown}; choose from {sorted(batch.LISTS)}")
+    lists = {n: getattr(s, batch.LISTS[n]) for n in names}
+    workdir, clone = a.workdir.resolve(), a.clone.resolve()
+    # Base commits on PR branches need a fetch. Do it here, one at a time: parallel
+    # `git fetch`es into the same clone fail on its locks and crash the workers.
+    from . import gitutil
+    by_id = {t.id: t for t in tasks_mod.read_tasks(d / "tasks.jsonl")}
+    wanted = {i for ids in lists.values() for i in ids}
+    missing = [i for i in sorted(wanted) if not gitutil.ensure_commit(clone, by_id[i].base_commit)]
+    if missing:
+        print(f"warning: base commit not fetchable for {len(missing)} task(s): {missing}")
+
+    def one(tid):
+        return batch.validate_subprocess(tid, repo=a.repo, clone=clone, workdir=workdir,
+                                         repeats=a.repeats, python=a.python)
+
+    summary = batch.run_batch(lists, out_dir=d / "validation", ws_root=workdir / "workspaces",
+                              workers=a.workers, force=a.force, keep_workspaces=a.keep_workspaces,
+                              validate_one=one)
+    last = summary["last_run"]
+    print(f"validated {len(last['validated'])}, skipped {len(last['skipped_existing'])} (already done)")
+    print(f"{'list':<8}{'total':>7}{'valid':>7}{'invalid':>9}")
+    for n in names:
+        r = summary["lists"][n]
+        print(f"{n:<8}{r['total']:>7}{r['valid']:>7}{r['invalid']:>9}")
+        for why, k in r["invalid_by_reason"].items():
+            print(f"{'':<10}{k:>3}  {why}")
+    return 0
+
+
+def cmd_mine_fresh(a) -> int:
+    from . import gitutil, mine
+    d = repo_dir(a.workdir, a.repo)
+    if not a.no_pull:
+        gitutil.git(a.clone, "pull", "--ff-only", "--quiet")
+    lib_prefix = a.lib_prefix or a.repo.split("/")[1] + "/"
+    fresh, stats = mine.mine(a.repo, a.clone, a.since, a.limit, a.workdir / "workspaces", workers=a.workers,
+                             lib_prefix=lib_prefix, test_prefix=a.test_prefix, max_lib_files=a.max_lib_files,
+                             install=a.install, python_version=a.python, log_root=d / "mine_logs")
+    # Re-mining replaces earlier mined tasks rather than appending duplicates.
+    kept = [t for t in tasks_mod.read_tasks(d / "tasks.jsonl") if t.source != "mined"]
+    tasks_mod.save_tasks(kept + fresh, d / "tasks.jsonl")
+    s = split_mod.Split.load(d / "split.json")
+    s = split_mod.attach_fresh(s, fresh, a.clone, a.workdir / "worktrees", margin_days=a.margin_days)
+    s.save(d / "split.json")
+    (d / "mine_fresh.json").write_text(json.dumps({"since": a.since, "limit": a.limit, **stats.to_dict()}, indent=2))
+
+    print(f"scanned {stats.scanned} commits: accepted {stats.accepted}, skipped {sum(stats.skipped.values())}")
+    for why, k in stats.skipped.most_common():
+        print(f"  {k:>4}  {why}")
+    if not fresh:
+        return 1
+    dates = sorted(t.created_at for t in fresh)
+    print(f"fresh tasks: {dates[0][:10]} .. {dates[-1][:10]}")
+    print(f"fresh snapshot: {s.fresh_snapshot_commit[:12]} ({s.fresh_snapshot_date})")
+    leaks = {k: v for k, v in s.fresh_leakage.items() if v}
+    if leaks:
+        print(f"LEAKAGE in {len(leaks)} fresh task(s):")
+        for k, v in leaks.items():
+            print(f"  {k}: {'; '.join(v)}")
+        return 1
+    print("fresh leakage check: PASS (no fresh fix or test is present in the fresh snapshot)")
+    return 0
 
 
 def cmd_run_one(a) -> int:
@@ -143,6 +218,32 @@ def main(argv: list[str] | None = None) -> int:
     v.add_argument("--repeats", type=int, default=3)
     v.add_argument("--python", default="3.12")
     v.set_defaults(func=cmd_validate)
+
+    vb = sub.add_parser("validate-batch", help="validate every task in some split lists, in parallel")
+    vb.add_argument("--repo", required=True)
+    vb.add_argument("--clone", type=Path, required=True)
+    vb.add_argument("--ids", default="dev,test", help="comma-separated split lists: dev,test,fresh,unused")
+    vb.add_argument("--workers", type=int, default=4)
+    vb.add_argument("--repeats", type=int, default=3)
+    vb.add_argument("--python", default="3.12")
+    vb.add_argument("--force", action="store_true", help="re-validate tasks that already have a result")
+    vb.add_argument("--keep-workspaces", action="store_true", help="don't delete workspaces afterwards")
+    vb.set_defaults(func=cmd_validate_batch)
+
+    mf = sub.add_parser("mine-fresh", help="mine recent fix commits with a linked issue into fresh tasks")
+    mf.add_argument("--repo", required=True)
+    mf.add_argument("--clone", type=Path, required=True)
+    mf.add_argument("--since", required=True, help="only commits on or after this date (YYYY-MM-DD)")
+    mf.add_argument("--limit", type=int, default=40, help="stop after this many accepted tasks")
+    mf.add_argument("--workers", type=int, default=4)
+    mf.add_argument("--lib-prefix", help="library directory (default: <repo name>/)")
+    mf.add_argument("--test-prefix", default="tests/")
+    mf.add_argument("--max-lib-files", type=int, default=5)
+    mf.add_argument("--install", default="pip install -e .[dev]")
+    mf.add_argument("--python", default="3.12")
+    mf.add_argument("--margin-days", type=int, default=1)
+    mf.add_argument("--no-pull", action="store_true", help="don't `git pull` the clone first")
+    mf.set_defaults(func=cmd_mine_fresh)
 
     o = sub.add_parser("run-one", help="one agent attempt on one task, graded by the real tests")
     o.add_argument("--repo", required=True)

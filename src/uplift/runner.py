@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import shlex
+import shutil
 import subprocess
 import sys
 import time
@@ -52,17 +53,22 @@ def prepare(task: Task, clone: Path, ws_root: Path, name: str, python_version: s
     return ws, py, _start_ref(ws)
 
 
-def validate(task: Task, clone: Path, ws_root: Path, repeats: int = 3, python_version: str = "3.12") -> dict:
+def validate(task: Task, clone: Path, ws_root: Path, repeats: int = 3, python_version: str = "3.12",
+             log_dir: Path | None = None) -> dict:
     """A task is valid if, on every repeat: before the fix, at least one FAIL_TO_PASS test fails;
-    after applying the real fix, all FAIL_TO_PASS and PASS_TO_PASS tests pass."""
+    after applying the real fix, all FAIL_TO_PASS and PASS_TO_PASS tests pass. Output that fails
+    the pytest cross-check counts as neither. Raw pytest output goes to `log_dir` (kept after
+    the workspace is deleted, so results can be re-parsed offline)."""
     before_ok, after_ok, notes = [], [], []
     ws, py, start = prepare(task, clone, ws_root, "validate", python_version)
+    log_dir = Path(log_dir) if log_dir else ws / ".uplift-run"
+    shutil.rmtree(log_dir, ignore_errors=True)  # no stale logs from an earlier run with more repeats
     for i in range(repeats):
         gitutil.git(ws, "reset", "-q", "--hard", start)
         gitutil.git(ws, "clean", "-qfd")
         g0 = grade_mod.grade(ws, py, start, task.test_patch, task.test_files, task.fail_to_pass,
-                             task.pass_to_pass, log_path=ws / ".uplift-run" / f"before-{i}.txt")
-        before_ok.append(g0.test_patch_applied and bool(g0.f2p_failed))
+                             task.pass_to_pass, log_path=log_dir / f"before-{i}.txt")
+        before_ok.append(g0.test_patch_applied and not g0.error and bool(g0.f2p_failed))
         if not before_ok[-1]:
             notes.append(f"before fix: test patch applied={g0.test_patch_applied}; "
                          f"F2P already passing={g0.f2p_passed[:3]} {g0.error}")
@@ -72,7 +78,8 @@ def validate(task: Task, clone: Path, ws_root: Path, repeats: int = 3, python_ve
             notes.append("real fix did not apply")
             after_ok.append(False)
             continue
-        g1 = grade_mod.grade(ws, py, start, task.test_patch, task.test_files, task.fail_to_pass, task.pass_to_pass)
+        g1 = grade_mod.grade(ws, py, start, task.test_patch, task.test_files, task.fail_to_pass,
+                             task.pass_to_pass, log_path=log_dir / f"after-{i}.txt")
         after_ok.append(g1.resolved)
         if not g1.resolved:
             notes.append(f"after fix: f2p_failed={g1.f2p_failed[:3]} p2p_failed={g1.p2p_failed[:3]} {g1.error}")

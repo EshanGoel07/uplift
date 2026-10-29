@@ -1,0 +1,119 @@
+============================= test session starts ==============================
+collected 38 items
+
+tests/dialects/test_snowflake.py ...................................... [100%]
+
+=================================== FAILURES ===================================
+E   AssertionError: "SELE[865 chars]T => INPUT => PARSE_JSON(flags))) AS _u_2(seq,[225 chars]n  )" != "SELE[865 chars]T => PARSE_JSON(flags))) AS _u_2(seq, key, pat[216 chars]n  )"
+      SELECT
+        uc.user_id,
+        uc.start_ts AS ts,
+        CASE
+          WHEN CAST(uc.start_ts AS DATE) >= '2023-01-01'
+          AND uc.country_code IN ('US')
+          AND uc.user_id <> ALL (
+            SELECT DISTINCT
+              _id
+            FROM users, LATERAL IFF(_u.pos = _u_2.pos_2, _u_2.entity, NULL) AS datasource(SEQ, KEY, PATH, INDEX, VALUE, THIS)
+            WHERE
+              GET_PATH(datasource.value, 'name') = 'something'
+          )
+          THEN 'Sample1'
+          ELSE 'Sample2'
+        END AS entity
+      FROM user_countries AS uc
+      LEFT JOIN (
+        SELECT
+          user_id,
+          MAX(IFF(service_entity IS NULL, 1, 0)) AS le_null
+        FROM accepted_user_agreements
+        GROUP BY
+          1
+      ) AS aua
+        ON uc.user_id = aua.user_id
+      CROSS JOIN TABLE(FLATTEN(INPUT => ARRAY_GENERATE_RANGE(0, (
+        GREATEST(ARRAY_SIZE(INPUT => PARSE_JSON(flags))) - 1
+      ) + 1))) AS _u(seq, key, path, index, pos, this)
+    - CROSS JOIN TABLE(FLATTEN(INPUT => INPUT => PARSE_JSON(flags))) AS _u_2(seq, key, path, pos_2, entity, this)
+    ?                                  ---------
+    + CROSS JOIN TABLE(FLATTEN(INPUT => PARSE_JSON(flags))) AS _u_2(seq, key, path, pos_2, entity, this)
+      WHERE
+        _u.pos = _u_2.pos_2
+        OR (
+          _u.pos > (
+            ARRAY_SIZE(INPUT => PARSE_JSON(flags)) - 1
+          )
+          AND _u_2.pos_2 = (
+            ARRAY_SIZE(INPUT => PARSE_JSON(flags)) - 1
+          )
+        )
+/home/user/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/unittest/case.py:715: AssertionError: "SELE[865 chars]T => INPUT => PARSE_JSON(flags))) AS _u_2(seq,[225 chars]n  )" != "SELE[865 chars]T => PARSE_JSON(flags))) AS _u_2(seq, key, pat[216 chars]n  )"
+==================================== PASSES ====================================
+__________________________ TestSnowflake.test_flatten __________________________
+----------------------------- Captured stdout call -----------------------------
+u
+=========================== short test summary info ============================
+PASSED tests/dialects/test_snowflake.py::TestSnowflake::test_alter_set_unset
+PASSED tests/dialects/test_snowflake.py::TestSnowflake::test_copy
+PASSED tests/dialects/test_snowflake.py::TestSnowflake::test_ddl
+PASSED tests/dialects/test_snowflake.py::TestSnowflake::test_describe_table
+PASSED tests/dialects/test_snowflake.py::TestSnowflake::test_flatten
+PASSED tests/dialects/test_snowflake.py::TestSnowflake::test_from_changes
+PASSED tests/dialects/test_snowflake.py::TestSnowflake::test_grant
+PASSED tests/dialects/test_snowflake.py::TestSnowflake::test_historical_data
+PASSED tests/dialects/test_snowflake.py::TestSnowflake::test_match_recognize
+PASSED tests/dialects/test_snowflake.py::TestSnowflake::test_minus
+PASSED tests/dialects/test_snowflake.py::TestSnowflake::test_null_treatment
+PASSED tests/dialects/test_snowflake.py::TestSnowflake::test_parse_like_any
+PASSED tests/dialects/test_snowflake.py::TestSnowflake::test_querying_semi_structured_data
+PASSED tests/dialects/test_snowflake.py::TestSnowflake::test_regexp_replace
+PASSED tests/dialects/test_snowflake.py::TestSnowflake::test_regexp_substr
+PASSED tests/dialects/test_snowflake.py::TestSnowflake::test_sample
+PASSED tests/dialects/test_snowflake.py::TestSnowflake::test_semi_structured_types
+PASSED tests/dialects/test_snowflake.py::TestSnowflake::test_show_columns
+PASSED tests/dialects/test_snowflake.py::TestSnowflake::test_show_imported_keys
+PASSED tests/dialects/test_snowflake.py::TestSnowflake::test_show_objects
+PASSED tests/dialects/test_snowflake.py::TestSnowflake::test_show_primary_keys
+PASSED tests/dialects/test_snowflake.py::TestSnowflake::test_show_schemas
+PASSED tests/dialects/test_snowflake.py::TestSnowflake::test_show_sequences
+PASSED tests/dialects/test_snowflake.py::TestSnowflake::test_show_tables
+PASSED tests/dialects/test_snowflake.py::TestSnowflake::test_show_unique_keys
+PASSED tests/dialects/test_snowflake.py::TestSnowflake::test_show_users
+PASSED tests/dialects/test_snowflake.py::TestSnowflake::test_show_views
+PASSED tests/dialects/test_snowflake.py::TestSnowflake::test_snowflake
+PASSED tests/dialects/test_snowflake.py::TestSnowflake::test_staged_files
+PASSED tests/dialects/test_snowflake.py::TestSnowflake::test_storage_integration
+PASSED tests/dialects/test_snowflake.py::TestSnowflake::test_stored_procedures
+PASSED tests/dialects/test_snowflake.py::TestSnowflake::test_swap
+PASSED tests/dialects/test_snowflake.py::TestSnowflake::test_table_literal
+PASSED tests/dialects/test_snowflake.py::TestSnowflake::test_timestamps
+PASSED tests/dialects/test_snowflake.py::TestSnowflake::test_try_cast
+PASSED tests/dialects/test_snowflake.py::TestSnowflake::test_user_defined_functions
+PASSED tests/dialects/test_snowflake.py::TestSnowflake::test_values
+PASSED tests/dialects/test_snowflake.py::TestSnowflake::test_window_function_arg
+SUBFAILED[
+            SELECT
+              uc.user_id,
+              uc.start_ts AS ts,
+              CASE
+                WHEN uc.start_ts::DATE >= '2023-01-01' AND uc.country_code IN ('US') AND uc.user_id NOT IN (
+                  SELECT DISTINCT
+                    _id
+                  FROM
+                    users,
+                    LATERAL FLATTEN(INPUT => PARSE_JSON(flags)) datasource
+                  WHERE datasource.value:name = 'something'
+                )
+                  THEN 'Sample1'
+                  ELSE 'Sample2'
+              END AS entity
+            FROM user_countries AS uc
+            LEFT JOIN (
+              SELECT user_id, MAX(IFF(service_entity IS NULL,1,0)) AS le_null
+              FROM accepted_user_agreements
+              GROUP BY 1
+            ) AS aua
+              ON uc.user_id = aua.user_id
+             -> snowflake] tests/dialects/test_snowflake.py::TestSnowflake::test_flatten - AssertionError: "SELE[865 chars]T => INPUT => PARSE_JSON(flags))) AS _u_2(s...
+========================= 1 failed, 38 passed in 1.05s =========================
+
