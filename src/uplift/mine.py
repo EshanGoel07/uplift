@@ -177,6 +177,52 @@ def f2p_p2p(before: dict[str, str], after: dict[str, str]) -> tuple[list[str], l
     return f2p, p2p
 
 
+def lists_from_logs(log_dir: Path) -> tuple[list[str], list[str], str]:
+    """(f2p, p2p, problem) recomputed with the current parser from kept raw pytest output:
+    `before*.txt` / `after*.txt` pairs (validation logs `before-<i>`, or mine logs `before`).
+    Every pair must pass the pytest cross-check and give the same lists."""
+    lists, problem = [], ""
+    for b in sorted(Path(log_dir).glob("before*.txt")):
+        a = b.with_name(b.name.replace("before", "after", 1))
+        if not a.exists():
+            return [], [], f"no {a.name} next to {b.name}"
+        bt, at = b.read_text(), a.read_text()
+        problem = grade_mod.check_output(bt) or grade_mod.check_output(at)
+        if problem:
+            return [], [], f"{b.name}: {problem}"
+        lists.append(f2p_p2p(grade_mod.parse_pytest(bt), grade_mod.parse_pytest(at)))
+    if not lists:
+        return [], [], f"no logs in {log_dir}"
+    if any(x != lists[0] for x in lists):
+        return [], [], "lists differ between repeats (flaky)"
+    if not lists[0][0]:
+        return [], [], "no FAIL_TO_PASS test"
+    return lists[0][0], lists[0][1], ""
+
+
+def recompute_lists(fresh: list[Task], log_dirs: list[Path]) -> tuple[dict[str, dict], dict[str, str]]:
+    """Recompute F2P/P2P for fresh tasks from the first log dir that has logs for each task
+    (rewrites the Task objects in place). Returns ({id: change}, {id: problem}); a task with a
+    problem is left as it was."""
+    changes, problems = {}, {}
+    for t in fresh:
+        dirs = [Path(d) / t.id for d in log_dirs if (Path(d) / t.id).is_dir()]
+        if not dirs:
+            problems[t.id] = "no logs"
+            continue
+        f2p, p2p, problem = lists_from_logs(dirs[0])
+        if problem:
+            problems[t.id] = problem
+            continue
+        if (f2p, p2p) != (sorted(t.fail_to_pass), sorted(t.pass_to_pass)):
+            changes[t.id] = {"f2p_added": sorted(set(f2p) - set(t.fail_to_pass)),
+                             "f2p_removed": sorted(set(t.fail_to_pass) - set(f2p)),
+                             "p2p_added": sorted(set(p2p) - set(t.pass_to_pass)),
+                             "p2p_removed": sorted(set(t.pass_to_pass) - set(p2p))}
+            t.fail_to_pass, t.pass_to_pass = f2p, p2p
+    return changes, problems
+
+
 def measure(clone: Path, base: str, patch: str, test_patch: str, ws_dir: Path,
             python_version: str = "3.12", extras: str | None = None,
             test_prefix: str = "tests/", log_dir: Path | None = None) -> tuple[list[str], list[str], str]:

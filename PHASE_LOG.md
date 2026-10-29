@@ -95,3 +95,6 @@ Built for the Meta Global AI Developer Hackathon (Oct 26 – Nov 4, 2026).
   fresh-1dae76b5 (`test_optimized_tpch`, DuckDB "Deprecated lambda arrow"). For 1dae76b5 the old
   parser hid that multi-line sub-test failure, so the miner put the test in P2P; recomputing fresh
   F2P/P2P from the validation logs changes only this task (P2P minus that test).
+- `uplift mine-fresh --recompute-from-logs` re-derives fresh F2P/P2P from the kept raw logs with the
+  current parser. Run on all 40: only fresh-1dae76b5 changed (`test_optimized_tpch` out of P2P);
+  re-validated 3/3, so fresh is now 40/40 valid.

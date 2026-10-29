@@ -160,6 +160,40 @@ def test_mine_drops_candidates_without_f2p_and_respects_limit(history, tmp_path)
     assert len(tasks) == 1 and "linked to a PR" in tasks[0].meta["subject"]  # newest first
 
 
+def _log(lines, failed):
+    return "".join(lines) + f"=== {failed} failed, {sum(l.startswith('PASSED') for l in lines)} passed in 0.1s ===\n"
+
+
+def test_recompute_lists_from_logs(tmp_path):
+    """Like sqlglot fresh-1dae76b5: a test that fails before AND after the fix (here hidden as a
+    multi-line sub-test failure under a PASSED parent) must not stay in PASS_TO_PASS."""
+    env_fail = "SUBFAILED[21, select\n    x\nfrom t] tests/test_e.py::T::test_env - DuckDB error\n"
+    before = _log(["FAILED tests/test_e.py::T::test_fix - bug\n", "PASSED tests/test_e.py::T::test_ok\n",
+                   "PASSED tests/test_e.py::T::test_env\n", env_fail], 2)
+    after = _log(["PASSED tests/test_e.py::T::test_fix\n", "PASSED tests/test_e.py::T::test_ok\n",
+                  "PASSED tests/test_e.py::T::test_env\n", env_fail], 1)
+    logs = tmp_path / "validation" / "logs"
+    for tid in ("f1", "f2"):
+        for i in range(2):
+            (logs / tid).mkdir(parents=True, exist_ok=True)
+            (logs / tid / f"before-{i}.txt").write_text(before)
+            (logs / tid / f"after-{i}.txt").write_text(after)
+    (logs / "f2" / "after-1.txt").write_text(before)      # repeats disagree: leave the task alone
+
+    def task(tid):
+        return mine.Task(id=tid, repo="o/r", source="mined", created_at="2026-01-05T00:00:00+00:00",
+                         base_commit="b", problem_statement="", patch="", test_patch="",
+                         fail_to_pass=["tests/test_e.py::T::test_fix"],
+                         pass_to_pass=["tests/test_e.py::T::test_env", "tests/test_e.py::T::test_ok"])
+    f1, f2, f3 = task("f1"), task("f2"), task("f3")
+    changes, problems = mine.recompute_lists([f1, f2, f3], [logs, tmp_path / "mine_logs"])
+    assert changes == {"f1": {"f2p_added": [], "f2p_removed": [], "p2p_added": [],
+                              "p2p_removed": ["tests/test_e.py::T::test_env"]}}
+    assert f1.fail_to_pass == ["tests/test_e.py::T::test_fix"] and f1.pass_to_pass == ["tests/test_e.py::T::test_ok"]
+    assert problems == {"f2": "lists differ between repeats (flaky)", "f3": "no logs"}
+    assert "tests/test_e.py::T::test_env" in f2.pass_to_pass, "a task with a problem is left as it was"
+
+
 def test_fresh_split_and_leakage(history, tmp_path):
     repo, base, good = history
     patch, test_patch = mine.split_patches(repo, base, good)

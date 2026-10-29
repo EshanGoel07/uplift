@@ -132,8 +132,32 @@ def cmd_validate_batch(a) -> int:
     return 0
 
 
+def cmd_recompute_fresh(a) -> int:
+    """Re-derive fresh F2P/P2P from kept raw pytest logs with the current parser (no test runs)."""
+    from . import mine
+    d = repo_dir(a.workdir, a.repo)
+    all_tasks = tasks_mod.read_tasks(d / "tasks.jsonl")
+    fresh_ids = set(split_mod.Split.load(d / "split.json").fresh_ids)
+    fresh = [t for t in all_tasks if t.id in fresh_ids]
+    # Validation logs come from the same test runs (base+tests, base+tests+fix), repeated.
+    changes, problems = mine.recompute_lists(fresh, [d / "validation" / "logs", d / "mine_logs"])
+    tasks_mod.save_tasks(all_tasks, d / "tasks.jsonl")
+    print(f"{len(fresh)} fresh tasks: {len(changes)} changed, {len(problems)} not recomputable (left as is)")
+    for tid, c in changes.items():
+        print(f"  changed {tid}: " + "; ".join(f"{k} {v}" for k, v in c.items() if v))
+    for tid, p in problems.items():
+        print(f"  problem {tid}: {p}")
+    if changes:
+        print("re-validate the changed tasks: their stored validation results used the old lists")
+    return 1 if problems else 0
+
+
 def cmd_mine_fresh(a) -> int:
     from . import gitutil, mine
+    if a.recompute_from_logs:
+        return cmd_recompute_fresh(a)
+    if not a.since:
+        raise SystemExit("--since is required (unless --recompute-from-logs)")
     d = repo_dir(a.workdir, a.repo)
     if not a.no_pull:
         gitutil.git(a.clone, "pull", "--ff-only", "--quiet")
@@ -233,7 +257,7 @@ def main(argv: list[str] | None = None) -> int:
     mf = sub.add_parser("mine-fresh", help="mine recent fix commits with a linked issue into fresh tasks")
     mf.add_argument("--repo", required=True)
     mf.add_argument("--clone", type=Path, required=True)
-    mf.add_argument("--since", required=True, help="only commits on or after this date (YYYY-MM-DD)")
+    mf.add_argument("--since", help="only commits on or after this date (YYYY-MM-DD)")
     mf.add_argument("--limit", type=int, default=40, help="stop after this many accepted tasks")
     mf.add_argument("--workers", type=int, default=4)
     mf.add_argument("--lib-prefix", help="library directory (default: <repo name>/)")
@@ -243,6 +267,8 @@ def main(argv: list[str] | None = None) -> int:
     mf.add_argument("--python", default="3.12")
     mf.add_argument("--margin-days", type=int, default=1)
     mf.add_argument("--no-pull", action="store_true", help="don't `git pull` the clone first")
+    mf.add_argument("--recompute-from-logs", action="store_true",
+                    help="don't mine: recompute fresh F2P/P2P from kept validation/mine logs and rewrite them")
     mf.set_defaults(func=cmd_mine_fresh)
 
     o = sub.add_parser("run-one", help="one agent attempt on one task, graded by the real tests")
