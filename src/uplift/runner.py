@@ -6,6 +6,7 @@ import json
 import os
 import shlex
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -41,6 +42,9 @@ class RunResult:
     tokens: dict = field(default_factory=dict)
     patch_lines: int = 0
     error: str = ""
+    arm_files: list = field(default_factory=list)      # copied into the workspace
+    stripped: list = field(default_factory=list)       # repo's own agent files removed first
+    hooks: dict = field(default_factory=dict)          # {check: {"runs": n, "fired": n}}
 
 
 def _start_ref(ws: Path) -> str:
@@ -88,19 +92,41 @@ def validate(task: Task, clone: Path, ws_root: Path, repeats: int = 3, python_ve
             "fails_before": before_ok, "passes_after": after_ok, "notes": notes[:5]}
 
 
+def hook_counts(log: Path) -> dict:
+    """{check: {"runs": n, "fired": n}} from the sensor hooks' log (empty if no hook ran)."""
+    out: dict = {}
+    if log.exists():
+        for line in log.read_text().splitlines():
+            try:
+                rec = json.loads(line)
+            except ValueError:
+                continue
+            c = out.setdefault(rec.get("check", "?"), {"runs": 0, "fired": 0})
+            c["runs"] += 1
+            c["fired"] += bool(rec.get("fired"))
+    return out
+
+
 def attempt(task: Task, clone: Path, ws_root: Path, run_dir: Path, *, arm: str, setup_dir: Path | None,
-            seed: int, guard: Path, max_steps: int = 40, timeout: int = 1800, trust_usage: bool = True,
-            python_version: str = "3.12", agent_cmd: str | None = None) -> RunResult:
+            seed: int, guard: Path, max_steps: int = 40, timeout: int = 2400, trust_usage: bool = True,
+            python_version: str = "3.12", agent_cmd: str | None = None, kill_grace: int = 180) -> RunResult:
     """One agent attempt. Muse Code runs through guarded_muse.py (budget cap enforced).
-    `agent_cmd` replaces the agent for tests only."""
+    `agent_cmd` replaces the agent for tests only.
+
+    Timeouts: the guard kills Muse after `timeout` s and still settles the real cost (exit 124).
+    As a backstop, the whole process group is killed `kill_grace` s later. Either way the run is
+    recorded as an error and never graded, so a timed-out run can't count as a pass."""
     # Absolute paths: the agent/guard runs with cwd=ws, where a relative run_dir would
     # make the guard write its logs (and cost summary) inside the workspace instead.
     run_dir, ws_root = Path(run_dir).resolve(), Path(ws_root).resolve()
     run_dir.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
     ws, py, start = prepare(task, clone, ws_root, f"{arm}-s{seed}", python_version)
-    if setup_dir:
-        workspace.install_setup(ws, setup_dir)
+    installed = workspace.install_arm(ws, setup_dir)
+    if setup_dir and (Path(setup_dir) / "MANIFEST.json").exists():
+        shutil.copy2(Path(setup_dir) / "MANIFEST.json", run_dir / "arm_manifest.json")
+    hook_log = run_dir / "hooks.jsonl"
+    hook_log.unlink(missing_ok=True)
     prompt = PROMPT.format(problem=task.problem_statement.strip())
     (run_dir / "prompt.txt").write_text(prompt)
 
@@ -110,23 +136,49 @@ def attempt(task: Task, clone: Path, ws_root: Path, run_dir: Path, *, arm: str, 
         cmd = [sys.executable, str(guard), "--log-dir", str(run_dir), "--max-steps", str(max_steps),
                "--timeout", str(timeout)] + (["--trust-usage"] if trust_usage else []) + \
               ["--", "--trust-workspace", "--disable-approval", prompt]
-    proc = subprocess.run(cmd, cwd=ws, capture_output=True, text=True, env=os.environ.copy())
-    (run_dir / "agent_stdout.txt").write_text(proc.stdout[-200_000:])
-    (run_dir / "agent_stderr.txt").write_text(proc.stderr[-200_000:])
+    proc = subprocess.Popen(cmd, cwd=ws, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                            env=dict(os.environ, UPLIFT_HOOK_LOG=str(hook_log)), start_new_session=True)
+    hard_killed = False
+    try:
+        out, err = proc.communicate(timeout=timeout + kill_grace)
+    except subprocess.TimeoutExpired:  # the guard itself didn't exit: kill guard + muse + hooks
+        hard_killed = True
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        out, err = proc.communicate()
+    (run_dir / "agent_stdout.txt").write_text((out or "")[-200_000:])
+    (run_dir / "agent_stderr.txt").write_text((err or "")[-200_000:])
+    rc = proc.returncode
 
-    if proc.returncode == 3:  # refused by the budget: the agent never ran
+    if rc == 3:  # refused by the budget: the agent never ran
         return RunResult(task.id, arm, seed, False, {}, agent_exit=3, error="refused by budget cap",
-                         seconds=round(time.time() - t0, 1))
+                         seconds=round(time.time() - t0, 1), arm_files=installed["copied"],
+                         stripped=installed["stripped"])
 
+    ws_log = ws / ".muse" / "uplift_hooks" / "fired.jsonl"
+    if not hook_log.exists() and ws_log.exists():  # Muse doesn't pass env to hooks (hook probe)
+        shutil.copy2(ws_log, hook_log)
     patch = workspace.agent_diff(ws)
     (run_dir / "agent.patch").write_text(patch)
-    g = grade_mod.grade(ws, py, start, task.test_patch, task.test_files, task.fail_to_pass,
-                        task.pass_to_pass, log_path=run_dir / "grade_pytest.txt")
     summary = {}
     if (run_dir / "guard_summary.json").exists():
         summary = json.loads((run_dir / "guard_summary.json").read_text())
-    res = RunResult(task.id, arm, seed, g.resolved, g.to_dict(), agent_exit=proc.returncode,
+    if hard_killed or rc == 124:  # timed out: an error, not graded (never a pass)
+        why = (f"hard-killed after {timeout + kill_grace}s (guard did not exit; cost not settled)" if hard_killed
+               else f"agent timed out after {timeout}s")
+        res = RunResult(task.id, arm, seed, False, {}, agent_exit=rc, error=why,
+                        seconds=round(time.time() - t0, 1), cost_usd=summary.get("parsed_cost_usd"),
+                        tokens=summary.get("tokens", {}), patch_lines=patch.count("\n"),
+                        arm_files=installed["copied"], stripped=installed["stripped"], hooks=hook_counts(hook_log))
+        (run_dir / "result.json").write_text(json.dumps(asdict(res), indent=2))
+        return res
+    g = grade_mod.grade(ws, py, start, task.test_patch, task.test_files, task.fail_to_pass,
+                        task.pass_to_pass, log_path=run_dir / "grade_pytest.txt")
+    res = RunResult(task.id, arm, seed, g.resolved, g.to_dict(), agent_exit=rc,
                     seconds=round(time.time() - t0, 1), cost_usd=summary.get("parsed_cost_usd"),
-                    tokens=summary.get("tokens", {}), patch_lines=patch.count("\n"))
+                    tokens=summary.get("tokens", {}), patch_lines=patch.count("\n"),
+                    arm_files=installed["copied"], stripped=installed["stripped"], hooks=hook_counts(hook_log))
     (run_dir / "result.json").write_text(json.dumps(asdict(res), indent=2))
     return res

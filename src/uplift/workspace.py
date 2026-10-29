@@ -71,27 +71,44 @@ def extras_from_install(install: str | None) -> str | None:
     return None
 
 
-def install_setup(ws: Path, setup_dir: Path) -> list[str]:
-    """Copy a generated setup (AGENTS.md, .muse/hooks.json, scripts) into the workspace and
-    commit it, so the agent's own changes can be diffed separately."""
+# Agent instruction/config files. The repo's own copies are removed before an arm is installed
+# (sqlglot added AGENTS.md / CLAUDE.md in 2026, so fresh tasks would otherwise start with them,
+# and "none" would not be none), and these paths never count as the agent's change.
+AGENT_PATHS = ["AGENTS.md", "CLAUDE.md", ".muse", ".claude", ".cursorrules", ".cursor",
+               ".github/copilot-instructions.md"]
+
+
+def install_arm(ws: Path, arm_dir: Path | None) -> dict:
+    """Strip the repo's own agent files, copy an arm's files (AGENTS.md, .muse/...) into the
+    workspace, fill in `{WORKSPACE}` in .muse/hooks.json, and commit, so the agent's own changes
+    can be diffed separately. `arm_dir` None = no files (the "none" arm)."""
+    ws = Path(ws).resolve()
+    stripped = [p for p in AGENT_PATHS if (ws / p).exists()]
+    for p in stripped:
+        shutil.rmtree(ws / p) if (ws / p).is_dir() else (ws / p).unlink()
     copied = []
-    for src in sorted(setup_dir.rglob("*")):
-        if src.is_file():
-            rel = src.relative_to(setup_dir)
-            dst = ws / rel
-            dst.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(src, dst)
-            copied.append(str(rel))
-    if copied:
-        gitutil.git(ws, "add", "-A")
-        gitutil.git(ws, "commit", "-q", "-m", "uplift setup")
-    return copied
+    for src in sorted(Path(arm_dir).rglob("*")) if arm_dir else []:
+        rel = src.relative_to(arm_dir)
+        if not src.is_file() or str(rel) == "MANIFEST.json":
+            continue
+        dst = ws / rel
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dst)
+        if str(rel) == ".muse/hooks.json":
+            dst.write_text(dst.read_text().replace("{WORKSPACE}", str(ws)))
+        copied.append(str(rel))
+    if copied or stripped:
+        gitutil.git(ws, "add", "-A", "-f", "--", *(stripped + copied))
+        gitutil.git(ws, "commit", "-q", "-m", "uplift arm")
+    return {"copied": copied, "stripped": stripped}
 
 
 def agent_diff(ws: Path) -> str:
-    """Everything changed since the last commit, including new files (setup files excluded)."""
+    """Everything changed since the last commit, including new files, except arm/agent files
+    (AGENTS.md, .muse/ hook state, ...), which are never part of the agent's patch."""
     gitutil.git(ws, "add", "-A")
-    return gitutil.git(ws, "diff", "--cached", "HEAD")
+    return gitutil.git(ws, "diff", "--cached", "HEAD", "--", ".",
+                       *[f":(exclude){p}" for p in AGENT_PATHS])
 
 
 def apply_patch(ws: Path, patch: str) -> bool:

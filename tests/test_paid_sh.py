@@ -57,9 +57,13 @@ def start_proxy(e, cap="10"):
     raise RuntimeError("proxy did not start")
 
 
+REAL_LOG = ROOT / "runs" / "paid.log"
+
+
 def run(e, *args, extra_env=None):
+    # UPLIFT_PAID_LOG_DIR: tests must never write into the real runs/paid.log
     env = dict(os.environ, UPLIFT_KEY_FILE=str(e["key"]), UPLIFT_PROXY=f"http://127.0.0.1:{e['port']}",
-               UPLIFT_BIN=str(e["fake"]), **(extra_env or {}))
+               UPLIFT_BIN=str(e["fake"]), UPLIFT_PAID_LOG_DIR=str(e["tmp"] / "logs"), **(extra_env or {}))
     env.pop("META_API_KEY", None)
     return subprocess.run(["bash", str(PAID), *args], capture_output=True, text=True, env=env)
 
@@ -85,8 +89,23 @@ def test_happy_path_passes_key_without_printing_it(env):
         assert got["args"] == ["run-one", "--task", "t1", "--seed", "2"]
         assert got["key_present"] and got["key_ok"]
         assert SECRET not in r.stdout + r.stderr
-        log = (ROOT / "runs" / "paid.log").read_text()
+        log = (env["tmp"] / "logs" / "paid.log").read_text()
         assert "run-one --task t1 --seed 2" in log and SECRET not in log
+    finally:
+        p.terminate()
+
+
+def test_generate_never_gets_the_key_and_probe_does(env):
+    p = start_proxy(env)
+    try:
+        r = run(env, "generate", "--repo", "o/r")
+        assert r.returncode == 0, r.stderr
+        got = json.loads(env["out"].read_text())
+        assert got["args"] == ["generate", "--repo", "o/r"] and not got["key_present"]
+        r = run(env, "probe-hooks")
+        assert r.returncode == 0, r.stderr
+        assert json.loads(env["out"].read_text())["key_ok"]
+        assert run(env, "generate", "--guard=/tmp/evil.py").returncode == 2
     finally:
         p.terminate()
 
@@ -108,3 +127,15 @@ def test_refuses_world_readable_key(env):
         assert r.returncode == 5 and "permissions" in r.stderr and not env["out"].exists()
     finally:
         p.terminate()
+
+
+def test_tests_never_touch_the_real_paid_log(env):
+    before = REAL_LOG.read_bytes() if REAL_LOG.exists() else None
+    p = start_proxy(env)
+    try:
+        for cmd in (["run-one", "--task", "t1"], ["generate", "--repo", "o/r"], ["probe-hooks"]):
+            assert run(env, *cmd).returncode == 0
+    finally:
+        p.terminate()
+    assert (REAL_LOG.read_bytes() if REAL_LOG.exists() else None) == before
+    assert len((env["tmp"] / "logs" / "paid.log").read_text().splitlines()) == 3

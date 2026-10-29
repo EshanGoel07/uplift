@@ -98,3 +98,60 @@ Built for the Meta Global AI Developer Hackathon (Oct 26 – Nov 4, 2026).
 - `uplift mine-fresh --recompute-from-logs` re-derives fresh F2P/P2P from the kept raw logs with the
   current parser. Run on all 40: only fresh-1dae76b5 changed (`test_optimized_tpch` out of P2P);
   re-validated 3/3, so fresh is now 40/40 valid.
+
+## Phase 2: setup generator, arms, hook probe (Oct 30)
+
+- **Hook probe** (`paid.sh probe-hooks`, 2 tiny Muse Code runs, $0.018): Muse loads `.muse/hooks.json`
+  only as `{"hooks": {<event>: [{"matcher"?, "hooks": [{"type": "command", "command", "timeout"}]}]}}`.
+  A bare event map is silently ignored (first probe: no hook fired; found the "hooks must be an
+  object" check in the binary). That also explains Phase 0's failed list-form variant.
+  - (a) blocking works: a PreToolUse `hookSpecificOutput.permissionDecision: "deny"` stopped the command.
+  - (b) feedback works both ways: PostToolUse `decision: "block"` + reason and `additionalContext` both
+    reached the agent (it repeated both secret words).
+  - Stop `decision: "block"` gives the agent another turn with the reason (2nd Stop had
+    `stop_hook_active: true`; the reason was in the next model request), but can't force an action: the
+    agent chose to follow the prompt's explicit "Stop." instead.
+  - The environment is NOT passed to hooks, so hook logs live in the workspace (`.muse/uplift_hooks/`);
+    the agent's sandbox keeps `.muse` read-only, so it can't edit hooks or their log.
+  - Payload: Claude-style (`hook_event_name`, `tool_name`, `tool_input`, `tool_response`, ...). Tools seen:
+    `bash`, `write_file`, and Muse's internal `submit_reminder_decision` (PostToolUse fires for it too).
+- **Generator** (`paid.sh generate`; the key is never given to it, the proxy adds it): one Muse Spark
+  call. Inputs: snapshot `e81789ee9a58` docs/tree, its last 150 commit subjects, the risk map, and 150
+  review comments (2024-09-02..10-21) from 40 PRs merged by the cutoff; every item dated and checked
+  (`assert_before`), saved under `.uplift/<repo>/generator/<run>/` (inputs, messages, response, spec, meta).
+  First call ran out of tokens (3.5K of 4K were hidden reasoning); default is now 16K. Second call: $0.0011
+  (prompt cached). Output: 13-line AGENTS.md citing review comments, 7 co-change rules (subset of the
+  risk map's), ruff flags from the repo's own pre-commit config, extra source->test mappings.
+- Hooks are rendered by Uplift, not written by the model, so their format is always valid: PostToolUse
+  lint (ruff check + format check on files edited since the last call) and co-change warnings
+  (`additionalContext`), Stop verify (related tests; `decision: block`, at most 2 blocks).
+- Path check against the fresh snapshot `7660486c4cc6`: only `sqlglot/expressions.py` no longer exists
+  (now a package); it appears in AGENTS.md, 3 co-change rules and a verify mapping. Reported, not fixed.
+  (A first version of the check flagged short paths like `dialects/x.py`; it now also resolves `sqlglot/`.)
+- Arms: none, prose, sensors, both, handwritten (generic blog-style AGENTS.md in `arms/`), and dev-only
+  ablations lint-only / cochange-only / verify-only. Before any arm is installed, the repo's own agent
+  files are removed: sqlglot added CLAUDE.md (2026-02) and AGENTS.md (2026-03), so every fresh task
+  would otherwise start with them and "none" would not be none. Arm files never count as the agent's patch.
+- **Smoke test** (dev task sqlglot-4109, seed 1, one run per arm): none, prose, sensors, both,
+  handwritten, lint-only and cochange-only all resolved, $0.025-0.034 each ($0.214 for 7). Hooks fired in
+  real runs: sensors lint 1/56, co-change 1/56, verify ran 1x (passed, no block); lint-only 0/62;
+  cochange-only 1/61. verify-only was stopped ~2 min in (on an instruction I later corrected) and must
+  be re-run.
+- Two runs were slow, not hung: cochange-only 1,466 s and handwritten 1,735 s (others ~190-230 s). Almost
+  all of it was waiting on the model API: in cochange-only one request got no reply, Muse re-sent the
+  identical request and the reply came 1,265 s after the previous one; handwritten (no hooks at all) had
+  a single 919 s wait. Not the hooks. A run dir with only prompt.txt mid-run is normal: the guard writes
+  stdout.jsonl / guard_summary.json when the run ends.
+- `run-one --timeout` now defaults to 2,400 s (40 min). The guard kills Muse at the timeout and still
+  settles the real cost (exit 124); the runner records that as an error and never grades it. Backstop:
+  the whole process group is hard-killed 180 s later if the guard itself doesn't exit.
+- Stopping verify-only killed the guard before it settled, leaving a stale $0.87 reservation on the
+  proxy (`reserved_usd`) and ~2 min of model calls unmetered (likely ~$0.01). The proxy is the user's;
+  only they release it.
+- runs/paid.log: every `run-one --task t1 --seed 2` / `generate --repo o/r` / bare `probe-hooks` line
+  (since 2026-10-28) was written by tests/test_paid_sh.py, which ran the real script against a throwaway
+  proxy and a fake `uplift` (no spend; no matching proxy ledger rows). Those lines are left in place.
+  paid.sh now honours UPLIFT_PAID_LOG_DIR and the tests use a temp dir; a test checks the real log is
+  untouched. The real Phase 2 calls were logged all along: probe-hooks 19:50:34Z ($0.007633),
+  probe-hooks --wrapped 19:58:55Z ($0.010448), generate 20:02:39Z ($0.004068, ran out of tokens),
+  generate 20:06:36Z ($0.001114), each matched to a proxy ledger row.

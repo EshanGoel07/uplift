@@ -191,11 +191,81 @@ def cmd_mine_fresh(a) -> int:
     return 0
 
 
+BUILTIN_ARMS = Path(__file__).resolve().parents[2] / "arms"
+
+
+def arm_dir(workdir: Path, repo: str, arm: str) -> Path | None:
+    """An arm's files: generated arms in .uplift/<repo>/arms/<arm>, hand-written ones in arms/<arm>.
+    "none" needs no files."""
+    for d in (repo_dir(workdir, repo) / "arms" / arm, BUILTIN_ARMS / arm):
+        if d.is_dir():
+            return d
+    if arm == "none":
+        return None
+    raise SystemExit(f"unknown arm {arm!r}: no {repo_dir(workdir, repo) / 'arms' / arm} or {BUILTIN_ARMS / arm}")
+
+
+def cmd_generate(a) -> int:
+    """One Muse Spark call (through the proxy) -> AGENTS.md + hook settings -> arm directories."""
+    from datetime import datetime, timezone
+    from . import generate as gen, gitutil
+    d = repo_dir(a.workdir, a.repo)
+    s = split_mod.Split.load(d / "split.json")
+    risk = json.loads((d / "risk.json").read_text())
+    run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    out = d / "generator" / run_id
+    out.mkdir(parents=True)
+    inputs = gen.collect_inputs(a.repo, a.clone, s.snapshot_commit, risk)
+    messages = gen.build_messages(inputs)
+    (out / "inputs.json").write_text(json.dumps(inputs, indent=2))
+    (out / "messages.json").write_text(json.dumps(messages, indent=2))
+    meta = {"run_id": run_id, "called_at": datetime.now(timezone.utc).isoformat(), "model": gen.MODEL,
+            "snapshot": s.snapshot_commit, "cutoff": inputs["snapshot"]["date"],
+            "fresh_snapshot": s.fresh_snapshot_commit, "inputs_sha256": gen.hashlib.sha256(
+                (out / "inputs.json").read_bytes()).hexdigest(), "filter_stats": inputs["filter_stats"]}
+    resp = gen.call_model(messages, max_tokens=a.max_tokens)
+    (out / "response.json").write_text(json.dumps(resp, indent=2))
+    text = resp["choices"][0]["message"]["content"]
+    spec, problems = gen.parse_spec(text, inputs)
+    (out / "spec.json").write_text(json.dumps(spec, indent=2))
+    meta.update({"usage": resp.get("usage"), "problems": problems})
+    if problems:
+        (out / "meta.json").write_text(json.dumps(meta, indent=2))
+        print(f"generator output rejected: {problems} (see {out})")
+        return 1
+    named = gen.paths_named(spec, risk)
+    pre = ("", a.repo.split("/")[1] + "/")
+    meta["missing_at_snapshot"] = {k: gen.check_paths(a.clone, s.snapshot_commit, v, pre) for k, v in named.items()}
+    meta["missing_at_fresh_snapshot"] = {k: gen.check_paths(a.clone, s.fresh_snapshot_commit, v, pre)
+                                         for k, v in named.items()} if s.fresh_snapshot_commit else {}
+    arms = gen.render_arms(spec, risk, d / "arms", feedback=a.feedback, generator_run=run_id)
+    meta["arms"] = arms
+    (out / "meta.json").write_text(json.dumps(meta, indent=2))
+    print(f"generator run {run_id}: usage {resp.get('usage')}")
+    print(f"AGENTS.md: {len(spec['agents_md'].splitlines())} lines; co-change rules kept: {len(spec['cochange'])}")
+    print(f"arms written to {d / 'arms'}: {', '.join(arms)}")
+    for k, v in meta["missing_at_snapshot"].items():
+        if v:
+            print(f"WARNING: {k} paths missing at the test snapshot: {v}")
+    for k, v in meta["missing_at_fresh_snapshot"].items():
+        if v:
+            print(f"fresh snapshot {s.fresh_snapshot_commit[:12]}: {len(v)} {k} path(s) no longer exist: {v}")
+    return 0
+
+
+def cmd_probe_hooks(a) -> int:
+    from . import probe
+    run_dir = a.workdir / "probes" / ("hooks-wrapped" if a.wrapped else "hooks")
+    res = probe.run(a.workdir / "workspaces", run_dir, a.guard, wrapped=a.wrapped, agent_cmd=a.agent_cmd)
+    print(json.dumps(res, indent=2))
+    return 0
+
+
 def cmd_run_one(a) -> int:
     from . import runner
     t = _task(a)
-    setup = Path(a.setup) if a.setup else None
-    arm = a.arm or (setup.name if setup else "baseline")
+    arm = a.arm or (Path(a.setup).name if a.setup else "none")
+    setup = Path(a.setup) if a.setup else arm_dir(a.workdir, a.repo, arm)
     run_dir = repo_dir(a.workdir, a.repo) / "runs" / arm / f"{t.id}-s{a.seed}"
     res = runner.attempt(t, a.clone, a.workdir / "workspaces", run_dir, arm=arm, setup_dir=setup,
                          seed=a.seed, guard=a.guard, max_steps=a.max_steps, timeout=a.timeout,
@@ -271,15 +341,33 @@ def main(argv: list[str] | None = None) -> int:
                     help="don't mine: recompute fresh F2P/P2P from kept validation/mine logs and rewrite them")
     mf.set_defaults(func=cmd_mine_fresh)
 
+    g = sub.add_parser("generate", help="Muse Spark writes the repo-specific setup (paid: via scripts/paid.sh)")
+    g.add_argument("--repo", required=True)
+    g.add_argument("--clone", type=Path, required=True)
+    g.add_argument("--max-tokens", type=int, default=16000,
+                   help="Muse Spark spends most of its budget on hidden reasoning (3.5K of 4K on the first run)")
+    g.add_argument("--feedback", choices=["block_reason", "additional_context"], default="additional_context",
+                   help="how PostToolUse sensor hooks report findings (both work, per the hook probe); "
+                        "the Stop hook always uses decision: block")
+    g.set_defaults(func=cmd_generate)
+
+    p = sub.add_parser("probe-hooks", help="can Muse hooks block / feed back? (paid: via scripts/paid.sh)")
+    p.add_argument("--wrapped", action="store_true", help='nest the event map under a "hooks" key')
+    p.add_argument("--guard", type=Path, default=DEFAULT_GUARD)
+    p.add_argument("--agent-cmd", help=argparse.SUPPRESS)  # tests only
+    p.set_defaults(func=cmd_probe_hooks)
+
     o = sub.add_parser("run-one", help="one agent attempt on one task, graded by the real tests")
     o.add_argument("--repo", required=True)
     o.add_argument("--clone", type=Path, required=True)
     o.add_argument("--task", required=True)
-    o.add_argument("--setup", help="folder with a setup to install (AGENTS.md, .muse/hooks.json, ...); omit for baseline")
-    o.add_argument("--arm", help="name for this configuration (default: setup folder name or 'baseline')")
+    o.add_argument("--arm", help="arm to install: none, prose, sensors, both, handwritten, lint-only, ... "
+                                 "(default: none)")
+    o.add_argument("--setup", help="explicit folder to install instead of a named arm (tests/debugging)")
     o.add_argument("--seed", type=int, default=1)
     o.add_argument("--max-steps", type=int, default=40)
-    o.add_argument("--timeout", type=int, default=1800)
+    o.add_argument("--timeout", type=int, default=2400,
+                   help="seconds before the agent is killed; a timed-out run is an error, never graded")
     o.add_argument("--python", default="3.12")
     o.add_argument("--guard", type=Path, default=DEFAULT_GUARD)
     o.add_argument("--strict-cost", action="store_true", help="charge worst case instead of parsed cost")

@@ -169,3 +169,38 @@ def test_parse_pytest():
     out = "PASSED tests/a.py::test_x\nFAILED tests/a.py::test_y - assert 1 == 2\nERROR tests/b.py::T::t[1-2]\n"
     assert grade.parse_pytest(out) == {"tests/a.py::test_x": "PASSED", "tests/a.py::test_y": "FAILED",
                                       "tests/b.py::T::t[1-2]": "ERROR"}
+
+
+def test_guard_timeout_is_an_error_never_a_pass(calc, tmp_path):
+    """The guard exits 124 when it kills a run that ran out of time. Even if the code happens to
+    be fixed by then, the run is an error and is not graded."""
+    repo, task = calc
+    agent = fake_agent(tmp_path, "pathlib.Path('calc.py').write_text(pathlib.Path('calc.py').read_text()"
+                                 ".replace('a - b','a + b'))\nsys.exit(124)\n")
+    res = runner.attempt(task, repo, tmp_path / "wsr", tmp_path / "run", arm="none", setup_dir=None,
+                         seed=1, guard=Path("unused"), agent_cmd=agent)
+    assert not res.resolved and res.grade == {} and "timed out" in res.error
+    r = json.loads((tmp_path / "run" / "result.json").read_text())
+    assert r["resolved"] is False and r["agent_exit"] == 124 and "timed out" in r["error"]
+
+
+def test_hung_run_is_hard_killed_with_its_children(calc, tmp_path):
+    repo, task = calc
+    pidfile = tmp_path / "child.pid"
+    agent = fake_agent(tmp_path, "import subprocess, time\n"
+                                 f"c = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(600)'])\n"
+                                 f"pathlib.Path({str(pidfile)!r}).write_text(str(c.pid))\n"
+                                 "time.sleep(600)\n")
+    t0 = __import__("time").time()
+    res = runner.attempt(task, repo, tmp_path / "wsr", tmp_path / "run", arm="none", setup_dir=None, seed=1,
+                         guard=Path("unused"), agent_cmd=agent, timeout=2, kill_grace=1)
+    assert __import__("time").time() - t0 < 60
+    assert not res.resolved and "hard-killed" in res.error
+    import os
+    child = int(pidfile.read_text())
+    try:
+        os.kill(child, 0)
+        alive = True
+    except ProcessLookupError:
+        alive = False
+    assert not alive, "the agent's child processes are killed too"
