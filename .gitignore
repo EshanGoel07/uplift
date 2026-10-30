@@ -28,3 +28,4 @@ build/
 .uplift/
 validation/logs/
 mine_logs/
+.DS_Store
