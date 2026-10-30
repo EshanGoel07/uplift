@@ -137,7 +137,8 @@ def attempt(task: Task, clone: Path, ws_root: Path, run_dir: Path, *, arm: str, 
                "--timeout", str(timeout)] + (["--trust-usage"] if trust_usage else []) + \
               ["--", "--trust-workspace", "--disable-approval", prompt]
     proc = subprocess.Popen(cmd, cwd=ws, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-                            env=dict(os.environ, UPLIFT_HOOK_LOG=str(hook_log)), start_new_session=True)
+                            env=dict(os.environ, UPLIFT_HOOK_LOG=str(hook_log), MUSE_NO_AUTO_UPDATE="1"),
+                            start_new_session=True)
     hard_killed = False
     try:
         out, err = proc.communicate(timeout=timeout + kill_grace)
@@ -152,8 +153,9 @@ def attempt(task: Task, clone: Path, ws_root: Path, run_dir: Path, *, arm: str, 
     (run_dir / "agent_stderr.txt").write_text((err or "")[-200_000:])
     rc = proc.returncode
 
-    if rc == 3:  # refused by the budget: the agent never ran
-        return RunResult(task.id, arm, seed, False, {}, agent_exit=3, error="refused by budget cap",
+    if rc in (3, 4):  # refused by the budget / proxy unreachable: the agent never ran, so no result.json
+        return RunResult(task.id, arm, seed, False, {}, agent_exit=rc,
+                         error="refused by budget cap" if rc == 3 else "budget proxy unreachable",
                          seconds=round(time.time() - t0, 1), arm_files=installed["copied"],
                          stripped=installed["stripped"])
 
@@ -165,9 +167,9 @@ def attempt(task: Task, clone: Path, ws_root: Path, run_dir: Path, *, arm: str, 
     summary = {}
     if (run_dir / "guard_summary.json").exists():
         summary = json.loads((run_dir / "guard_summary.json").read_text())
-    if hard_killed or rc == 124:  # timed out: an error, not graded (never a pass)
+    if hard_killed or rc != 0:  # timed out or crashed: an error, not graded (never a pass)
         why = (f"hard-killed after {timeout + kill_grace}s (guard did not exit; cost not settled)" if hard_killed
-               else f"agent timed out after {timeout}s")
+               else f"agent timed out after {timeout}s" if rc == 124 else f"agent exited {rc}")
         res = RunResult(task.id, arm, seed, False, {}, agent_exit=rc, error=why,
                         seconds=round(time.time() - t0, 1), cost_usd=summary.get("parsed_cost_usd"),
                         tokens=summary.get("tokens", {}), patch_lines=patch.count("\n"),

@@ -159,3 +159,28 @@ Built for the Meta Global AI Developer Hackathon (Oct 26 – Nov 4, 2026).
   requests, no re-sends, longest gap between responses 21 s). The verify hook ran once at Stop (5
   related test files) and did not fire: the tests passed, so no block. All 8 smoke arms now resolved
   this task; Phase 2 smoke total $0.247 for 8 runs (plus the stopped partial run, unmetered).
+
+## Phase 3: paid batch runner and pilot (Oct 30)
+
+- `uplift plan-batch` + `uplift run-batch` (paid: `paid.sh run-batch`, one approval per batch, one
+  --max-usd of at most $20). Plans list runs task by task, so a batch stopped early leaves whole tasks
+  to compare; ablation arms are refused on non-dev tasks at plan time and again at run time; tasks not
+  validated are left out. A run with a result.json is skipped, including an errored one (delete its
+  folder to retry). Workspaces are deleted and stderr_trace.log / stdout.jsonl gzipped after each run;
+  `<plan>.summary.json` is the status file. --max-usd is checked before each run starts, against spend
+  settled so far, so a batch can pass it by up to `workers` runs. It applies per invocation.
+- Runner: a non-zero agent exit is now an ungraded error (it used to be graded), and a proxy-unreachable
+  exit (4) leaves no result.json and stops the batch (it used to be graded as an ordinary failure,
+  with an empty patch). `MUSE_NO_AUTO_UPDATE=1` for agent runs: the launcher otherwise updates the
+  binary in the background, hourly, so one batch could span two Muse versions.
+- Pilot (dev 3987 and 3994 × 8 arms, 8 workers): 773 s wall, 16/16 finished, 0 errors, $0.550 (sum of
+  result.json costs matches the proxy's delta). Runs took 260-404 s, mean 336 s, about 1.6x the smoke
+  runs' usual ~200 s; no stall. Load peaked at 2.5 on 10 cores, no swap. A text search of the traces found no
+  rate-limit errors; the only hit was the words "429 chars truncated".
+- **0/16 resolved, in every arm: not a grading bug.** Each run failed exactly the F2P test(s) shown in
+  its grade log and 0 PASS_TO_PASS tests. 14 of 16 runs passed the F2P test for the issue; all 16 failed
+  a second F2P test for behaviour outside the issue text (3994: ClickHouse `CREATE SCHEMA ... ON CLUSTER`,
+  for an issue about DuckDB-to-Spark TABLESAMPLE; 3987: Spark `INSERT OVERWRITE TABLE a TABLE b`, for an
+  issue about MySQL JSON_VALUE). The dataset's F2P comes from the whole fix commit, so some tasks ask
+  for more than the statement says. No arm can gain on such a task (a floor), which would dilute any
+  difference between arms. How common this is across the 38 dev tasks is not known yet.

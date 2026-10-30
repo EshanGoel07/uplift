@@ -5,6 +5,8 @@
     uplift risk        --repo tobymao/sqlglot --clone ../sqlglot
     uplift mine-fresh  --repo tobymao/sqlglot --clone ../sqlglot --since 2026-01-01 --limit 40
     uplift validate-batch --repo tobymao/sqlglot --clone ../sqlglot --ids dev,test,fresh --workers 4
+    uplift plan-batch --repo tobymao/sqlglot --clone ../sqlglot --ids dev --out plan.json
+    scripts/paid.sh run-batch --plan plan.json --workers 8 --max-usd 2
 
 Working data lives in .uplift/<owner>__<name>/ (git-ignored).
 """
@@ -266,7 +268,8 @@ def cmd_run_one(a) -> int:
     t = _task(a)
     arm = a.arm or (Path(a.setup).name if a.setup else "none")
     setup = Path(a.setup) if a.setup else arm_dir(a.workdir, a.repo, arm)
-    run_dir = repo_dir(a.workdir, a.repo) / "runs" / arm / f"{t.id}-s{a.seed}"
+    from .batch import run_path
+    run_dir = run_path(repo_dir(a.workdir, a.repo) / "runs", {"task": t.id, "arm": arm, "seed": a.seed})
     res = runner.attempt(t, a.clone, a.workdir / "workspaces", run_dir, arm=arm, setup_dir=setup,
                          seed=a.seed, guard=a.guard, max_steps=a.max_steps, timeout=a.timeout,
                          trust_usage=not a.strict_cost, python_version=a.python, agent_cmd=a.agent_cmd)
@@ -276,6 +279,68 @@ def cmd_run_one(a) -> int:
                       "cost_usd": res.cost_usd, "seconds": res.seconds, "agent_exit": res.agent_exit,
                       "error": res.error, "run_dir": str(run_dir)}))
     return 0
+
+
+def cmd_plan_batch(a) -> int:
+    from . import batch
+    d = repo_dir(a.workdir, a.repo)
+    s = split_mod.Split.load(d / "split.json")
+    ids = [i for n in a.ids.split(",") for i in getattr(s, batch.LISTS[n])]
+    if a.tasks:
+        wanted = a.tasks.split(",")
+        if set(wanted) - set(ids):
+            raise SystemExit(f"not in --ids {a.ids}: {sorted(set(wanted) - set(ids))}")
+        ids = wanted
+
+    def valid(tid: str) -> bool:
+        p = d / "validation" / f"{tid}.json"
+        return p.exists() and bool(json.loads(p.read_text()).get("valid"))
+
+    dropped = [i for i in ids if not valid(i)]
+    arms = a.arms.split(",")
+    for arm in arms:
+        arm_dir(a.workdir, a.repo, arm)
+    plan = batch.build_plan(a.repo, a.clone.resolve(), [i for i in ids if i not in dropped], arms,
+                            [int(x) for x in a.seeds.split(",")], s.dev_ids)
+    a.out.parent.mkdir(parents=True, exist_ok=True)
+    a.out.write_text(json.dumps(plan, indent=2))
+    todo = sum(batch.read_result(batch.run_path(d / "runs", r)) is None for r in plan["runs"])
+    print(f"{plan['run_count']} runs ({todo} still to run), estimated ${todo * batch.EST_USD_PER_RUN:.2f} -> {a.out}")
+    if dropped:
+        print(f"left out {len(dropped)} task(s) not validated as valid: {dropped}")
+    return 0
+
+
+def cmd_run_batch(a) -> int:
+    """Paid: only through scripts/paid.sh."""
+    import os
+    import urllib.request
+    from . import batch, gitutil, runner
+    plan = json.loads(a.plan.read_text())
+    workdir = a.workdir.resolve()
+    d = repo_dir(workdir, plan["repo"])
+    batch.check_plan(plan["runs"], split_mod.Split.load(d / "split.json").dev_ids)
+    clone = Path(plan["clone"])
+    by_id = {t.id: t for t in tasks_mod.read_tasks(d / "tasks.jsonl")}
+    arms = {arm: arm_dir(workdir, plan["repo"], arm) for arm in {r["arm"] for r in plan["runs"]}}
+    # One at a time, as in validate-batch: parallel fetches into the clone fail on its locks.
+    for tid in sorted({r["task"] for r in plan["runs"]}):
+        gitutil.ensure_commit(clone, by_id[tid].base_commit)
+    proxy = os.environ.get("UPLIFT_PROXY", "http://127.0.0.1:8787")
+
+    def budget() -> dict:
+        with urllib.request.urlopen(f"{proxy}/__budget", timeout=5) as r:
+            return json.loads(r.read())
+
+    def one(r: dict):
+        return runner.attempt(by_id[r["task"]], clone, workdir / "workspaces", batch.run_path(d / "runs", r),
+                              arm=r["arm"], setup_dir=arms[r["arm"]], seed=r["seed"], guard=DEFAULT_GUARD)
+
+    out = batch.run_plan(plan["runs"], runs_root=d / "runs", ws_root=workdir / "workspaces",
+                         summary_path=a.plan.with_suffix(".summary.json"), run_one=one, budget=budget,
+                         max_usd=a.max_usd, workers=a.workers)
+    print(json.dumps(out, indent=2))
+    return 0 if out["status"] == "finished" else 1
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -373,6 +438,22 @@ def main(argv: list[str] | None = None) -> int:
     o.add_argument("--strict-cost", action="store_true", help="charge worst case instead of parsed cost")
     o.add_argument("--agent-cmd", help=argparse.SUPPRESS)  # tests only: replaces the agent
     o.set_defaults(func=cmd_run_one)
+
+    pb = sub.add_parser("plan-batch", help="write the list of (task, arm, seed) runs for run-batch")
+    pb.add_argument("--repo", required=True)
+    pb.add_argument("--clone", type=Path, required=True)
+    pb.add_argument("--ids", default="dev", help="comma-separated split lists: dev,test,fresh,unused")
+    pb.add_argument("--tasks", help="comma-separated task ids (default: every valid task in --ids)")
+    pb.add_argument("--arms", default="none,prose,sensors,both,handwritten,lint-only,cochange-only,verify-only")
+    pb.add_argument("--seeds", default="1")
+    pb.add_argument("--out", type=Path, required=True)
+    pb.set_defaults(func=cmd_plan_batch)
+
+    rb = sub.add_parser("run-batch", allow_abbrev=False, help="run a plan in parallel (paid: via scripts/paid.sh)")
+    rb.add_argument("--plan", type=Path, required=True)
+    rb.add_argument("--workers", type=int, default=4)
+    rb.add_argument("--max-usd", type=float, required=True, help="start no new run once this batch has spent this")
+    rb.set_defaults(func=cmd_run_batch)
 
     a = ap.parse_args(argv)
     return a.func(a)

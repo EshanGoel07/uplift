@@ -2,6 +2,8 @@
 
 import json
 
+import pytest
+
 from uplift import batch, cli, split, tasks
 
 from .test_runner import calc  # noqa: F401 (fixture)
@@ -82,3 +84,56 @@ def test_validate_batch_cli_end_to_end(calc, tmp_path):  # noqa: F811
     assert not (wd / "workspaces" / task.id).exists()
     logs = d / "validation" / "logs" / task.id   # raw pytest output outlives the workspace
     assert "1 failed" in (logs / "before-0.txt").read_text() and "2 passed" in (logs / "after-0.txt").read_text()
+
+
+def paid_plan(tmp_path, runs, *, spent=lambda started: 0.0, max_usd=5.0):
+    """run_plan with a fake agent run and a fake proxy. Returns (summary, runs started)."""
+    root, ws, started = tmp_path / "runs", tmp_path / "workspaces", []
+
+    def run_one(r):
+        started.append(r)
+        d = batch.run_path(root, r)
+        d.mkdir(parents=True, exist_ok=True)
+        (ws / r["task"] / f"{r['arm']}-s{r['seed']}").mkdir(parents=True, exist_ok=True)
+        (d / "stdout.jsonl").write_text("{}\n")
+        (d / "result.json").write_text(json.dumps({"task_id": r["task"], "resolved": True, "error": "", "grade": {}}))
+
+    def budget():
+        return {"spent_usd": spent(len(started)), "remaining_usd": 90.0, "blocked": False}
+
+    out = batch.run_plan(runs, runs_root=root, ws_root=ws, summary_path=tmp_path / "plan.summary.json",
+                         run_one=run_one, budget=budget, max_usd=max_usd, workers=1)
+    return out, started
+
+
+RUNS = [{"task": t, "arm": "none", "seed": 1} for t in ("a", "b", "c")]
+
+
+@pytest.mark.parametrize("task", ["test-1", "fresh-1"])
+def test_ablation_arms_refused_on_test_and_fresh(tmp_path, task):
+    with pytest.raises(SystemExit):
+        batch.build_plan("o/r", tmp_path, [task], ["none", "lint-only"], [1], dev_ids=["dev-1"])
+    assert batch.build_plan("o/r", tmp_path, [task], ["none", "tuned"], [1], dev_ids=["dev-1"])["run_count"] == 2
+    assert batch.build_plan("o/r", tmp_path, ["dev-1"], ["lint-only"], [1], dev_ids=["dev-1"])["run_count"] == 1
+    with pytest.raises(SystemExit):  # a hand-edited plan is caught when it is run, too
+        batch.check_plan([{"task": task, "arm": "verify-only", "seed": 1}], dev_ids=["dev-1"])
+
+
+def test_stopped_batch_resumes_and_skips_finished_runs(tmp_path):
+    done = batch.run_path(tmp_path / "runs", RUNS[0])
+    done.mkdir(parents=True)
+    (done / "result.json").write_text(json.dumps({"resolved": False, "error": "agent timed out", "grade": {}}))
+    out, started = paid_plan(tmp_path, RUNS)
+    assert started == RUNS[1:], "a run with a result, even an error, is not run again"
+    assert out["status"] == "finished" and out["done"] == 3 and out["errors"] == 1
+    assert out["per_arm"]["none"] == {"done": 3, "resolved": 2, "errors": 1}
+    run_dir = batch.run_path(tmp_path / "runs", RUNS[1])
+    assert (run_dir / "stdout.jsonl.gz").exists() and not (run_dir / "stdout.jsonl").exists()
+    assert not any((tmp_path / "workspaces").iterdir()), "workspaces are deleted"
+    assert json.loads((tmp_path / "plan.summary.json").read_text())["done"] == 3
+
+
+def test_max_usd_stops_new_runs(tmp_path):
+    out, started = paid_plan(tmp_path, RUNS, spent=lambda n: 10.0 + n, max_usd=2.0)
+    assert len(started) == 2 and out["status"] == "stopped" and "--max-usd" in out["stop_reason"]
+    assert out["spent_usd"] == 2.0
