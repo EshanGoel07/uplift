@@ -43,3 +43,7 @@ Hackathon: **every model the project calls at runtime must be a Meta (Muse) mode
 - `tools/budget_guard/`: spend cap proxy + guarded Muse runner (don't edit without asking)
 - `scripts/paid.sh`: the only paid entry point
 - `.uplift/`: working data (git-ignored): tasks, split, risk map, workspaces, runs
+
+## Submission
+
+- Before any README, writeup or demo work, read `SUBMISSION.md` (official rules, what must appear, findings to remember).
