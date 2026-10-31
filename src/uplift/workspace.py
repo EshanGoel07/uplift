@@ -8,6 +8,7 @@ because no later history exists there.
 from __future__ import annotations
 
 import io
+import os
 import shutil
 import subprocess
 import tarfile
@@ -83,9 +84,11 @@ def install_arm(ws: Path, arm_dir: Path | None) -> dict:
     workspace, fill in `{WORKSPACE}` in .muse/hooks.json, and commit, so the agent's own changes
     can be diffed separately. `arm_dir` None = no files (the "none" arm)."""
     ws = Path(ws).resolve()
-    stripped = [p for p in AGENT_PATHS if (ws / p).exists()]
+    # lexists: sqlglot's CLAUDE.md is a symlink to AGENTS.md, and a dangling one must go too
+    stripped = [p for p in AGENT_PATHS if os.path.lexists(ws / p)]
     for p in stripped:
-        shutil.rmtree(ws / p) if (ws / p).is_dir() else (ws / p).unlink()
+        path = ws / p
+        shutil.rmtree(path) if path.is_dir() and not path.is_symlink() else path.unlink()
     copied = []
     for src in sorted(Path(arm_dir).rglob("*")) if arm_dir else []:
         rel = src.relative_to(arm_dir)
@@ -97,8 +100,11 @@ def install_arm(ws: Path, arm_dir: Path | None) -> dict:
         if str(rel) == ".muse/hooks.json":
             dst.write_text(dst.read_text().replace("{WORKSPACE}", str(ws)))
         copied.append(str(rel))
-    if copied or stripped:
-        gitutil.git(ws, "add", "-A", "-f", "--", *(stripped + copied))
+    # A stripped file can be untracked (a global gitignore keeps it out of the start commit, as
+    # ~/.gitignore_global does CLAUDE.md here): there is then no removal to stage, and git add fails.
+    tracked = [p for p in stripped if gitutil.git(ws, "ls-files", "--", p).strip()]
+    if tracked or copied:
+        gitutil.git(ws, "add", "-A", "-f", "--", *(tracked + copied))
         gitutil.git(ws, "commit", "-q", "-m", "uplift arm")
     return {"copied": copied, "stripped": stripped}
 

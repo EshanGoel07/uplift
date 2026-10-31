@@ -222,3 +222,14 @@ Built for the Meta Global AI Developer Hackathon (Oct 26 – Nov 4, 2026).
 - Licences checked: SWE-rebench CC-BY-4.0 (dataset card), sqlglot MIT (its LICENSE). NOTICE.md no longer
   lists Docker images, which Uplift never used, and states our changes to the data, as CC-BY asks.
 - Main plan: 77 screened tasks (39 test, 38 fresh) × 6 arms × 2 seeds = 924 runs, `plans/main.json`.
+- Bug, main batch: all 456 fresh runs crashed in `install_arm` before the agent started (`pathspec 'CLAUDE.md'
+  did not match any files`); the 468 test runs were unaffected and were not touched. Cause: `workspace.create`
+  commits with `git add -A`, which honours the machine's global gitignore. `~/.gitignore_global` lists
+  CLAUDE.md, so it stayed untracked in the start commit, and staging its removal failed. No unit test caught it
+  because the existing test force-added the file. `install_arm` now stages only paths git tracks, and strips
+  symlinks with `lexists` (sqlglot's CLAUDE.md is a symlink to AGENTS.md, so a dangling one would have stayed).
+  Tests cover tracked and untracked snapshots for the none and prose arms. The crashed dirs are in
+  `runs_crashed_20261031/`; the smoke run (none, seed 1, resolved, $0.02, neither file in the workspace or its
+  trace) is in `runs_smoke_20261031/`, because `run-one` writes to the batch path but does not apply screening.
+  Other global-ignore entries (PLAN.md, .claude/, .cursor/, .aider*) still stay out of the start commit and the
+  patch, so a batch on another machine could differ slightly; the agent paths among them are stripped anyway.

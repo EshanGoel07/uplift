@@ -74,6 +74,52 @@ def test_install_arm_strips_repo_agent_files_and_fills_workspace(tmp_path):
     assert sh(ws, "status", "--porcelain").strip() == "", "arm install is committed"
 
 
+def snapshot(tmp_path, ignored: bool) -> Path:
+    """Workspace from a snapshot like sqlglot's: AGENTS.md, and CLAUDE.md as a symlink to it."""
+    src = tmp_path / "src"
+    src.mkdir()
+    sh(src, "init", "-q", "-b", "main")
+    sh(src, "config", "user.email", "t@t")
+    sh(src, "config", "user.name", "t")
+    (src / "calc.py").write_text("x = 1\n")
+    (src / "AGENTS.md").write_text("repo's own\n")
+    (src / "CLAUDE.md").symlink_to("AGENTS.md")
+    if ignored:                                 # stands in for a global gitignore listing CLAUDE.md
+        (src / ".gitignore").write_text("CLAUDE.md\n")
+    sh(src, "add", "-f", ".")
+    sh(src, "commit", "-q", "-m", "init")
+    ws = workspace.create(src, sh(src, "rev-parse", "HEAD").strip(), tmp_path / "ws")
+    if not ignored:
+        sh(ws, "add", "-f", "CLAUDE.md")        # -f: a global gitignore may list CLAUDE.md
+        sh(ws, "commit", "-q", "-m", "track")
+    assert bool(sh(ws, "ls-files", "CLAUDE.md").strip()) is not ignored
+    return ws
+
+
+@pytest.mark.parametrize("ignored", [True, False], ids=["untracked", "tracked"])
+@pytest.mark.parametrize("arm", ["none", "prose"])
+def test_install_arm_strips_snapshot_agent_files_tracked_or_not(tmp_path, arm, ignored):
+    ws = snapshot(tmp_path, ignored)
+    got = workspace.install_arm(ws, arms(tmp_path) / arm)
+    assert got["stripped"] == ["AGENTS.md", "CLAUDE.md"]
+    assert not os.path.lexists(ws / "CLAUDE.md")
+    if arm == "none":
+        assert not os.path.lexists(ws / "AGENTS.md") and got["copied"] == []
+        assert sh(ws, "ls-files", "AGENTS.md", "CLAUDE.md").strip() == ""
+    else:
+        assert (ws / "AGENTS.md").read_text() == SPEC["agents_md"] + "\n"
+        assert sh(ws, "show", "HEAD:AGENTS.md") == SPEC["agents_md"] + "\n"
+    assert sh(ws, "status", "--porcelain").strip() == "", "the removal is not left for the agent's patch"
+    assert workspace.agent_diff(ws) == ""
+
+
+def test_install_arm_strips_dangling_symlink(tmp_path):
+    ws = snapshot(tmp_path, ignored=True)
+    (ws / "AGENTS.md").unlink()
+    assert workspace.install_arm(ws, None)["stripped"] == ["CLAUDE.md"]
+    assert not os.path.lexists(ws / "CLAUDE.md")
+
+
 def test_arm_files_excluded_from_patch_and_recorded(calc, tmp_path):  # noqa: F811
     repo, task = calc
     body = ("pathlib.Path('AGENTS.md').write_text('agent rewrote this')\n"
