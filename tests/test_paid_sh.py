@@ -106,6 +106,12 @@ def test_generate_never_gets_the_key_and_probe_does(env):
         assert r.returncode == 0, r.stderr
         assert json.loads(env["out"].read_text())["key_ok"]
         assert run(env, "generate", "--guard=/tmp/evil.py").returncode == 2
+        for cmd in ("screen", "tune"):
+            r = run(env, cmd, "--repo", "o/r")
+            assert r.returncode == 0, r.stderr
+            got = json.loads(env["out"].read_text())
+            assert got["args"] == [cmd, "--repo", "o/r"] and not got["key_present"]
+            assert run(env, cmd, "--agent-cmd=x").returncode == 2
     finally:
         p.terminate()
 

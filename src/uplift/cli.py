@@ -281,6 +281,176 @@ def cmd_run_one(a) -> int:
     return 0
 
 
+def cmd_regrade(a) -> int:
+    """Free: re-grade finished runs from their saved agent.patch (fresh workspace, real tests)."""
+    from . import batch, gitutil, runner
+    d = repo_dir(a.workdir, a.repo)
+    by_id = {t.id: t for t in tasks_mod.read_tasks(d / "tasks.jsonl")}
+    workdir, clone = a.workdir.resolve(), a.clone.resolve()
+    for spec in a.runs:
+        arm, task, seed = spec.split("/")
+        run_dir = batch.run_path(d / "runs", {"arm": arm, "task": task, "seed": seed})
+        gitutil.ensure_commit(clone, by_id[task].base_commit)
+        r = runner.regrade(by_id[task], clone, workdir / "workspaces", run_dir, python_version=a.python)
+        g = r["grade"]
+        print(json.dumps({"run": spec, "resolved": r["resolved"], "agent_exit": r["agent_exit"],
+                          "f2p_failed": g["f2p_failed"], "p2p_failed": g["p2p_failed"], "error": g["error"],
+                          "agent_end": r["agent_end"]}))
+    return 0
+
+
+def cmd_tune(a) -> int:
+    """Paid: only through scripts/paid.sh. One Muse Spark call on dev results -> the tuned arm."""
+    from datetime import datetime, timezone
+    from . import generate as gen, screen, tune
+    d = repo_dir(a.workdir, a.repo)
+    s = split_mod.Split.load(d / "split.json")
+    manifest = json.loads((d / "arms" / "both" / "MANIFEST.json").read_text())
+    spec = json.loads((d / "generator" / manifest["generator_run"] / "spec.json").read_text())
+    risk = json.loads((d / "risk.json").read_text())
+    table = json.loads((d / "screen" / "dev_table.json").read_text())
+    inputs = tune.collect_inputs(d, json.loads(a.plan.read_text()), spec, screen.load(d / "screen" / "screened.json"),
+                                 table, a.findings.read_text(), s.dev_ids, s.test_ids + s.fresh_ids)
+    run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    out = d / "tune" / run_id
+    out.mkdir(parents=True)
+    messages = tune.build_messages(inputs)
+    (out / "inputs.json").write_text(json.dumps(inputs, indent=2))
+    (out / "messages.json").write_text(json.dumps(messages, indent=2))
+    resp = gen.call_model(messages, max_tokens=a.max_tokens)
+    (out / "response.json").write_text(json.dumps(resp, indent=2))
+    tuned, checks, problems = tune.parse(resp["choices"][0]["message"].get("content"), spec)
+    (out / "spec.json").write_text(json.dumps(dict(tuned, checks=checks), indent=2))
+    meta = {"run_id": run_id, "model": gen.MODEL, "generator_run": manifest["generator_run"], "usage": resp.get("usage"),
+            "tasks_where_arms_differed": len(inputs["tasks_where_arms_differed"]), "problems": problems}
+    if not problems:
+        pre = ("", a.repo.split("/")[1] + "/")
+        named = gen.paths_named(tuned)["generated"]
+        meta["missing_at_snapshot"] = gen.check_paths(a.clone, s.snapshot_commit, named, pre)
+        meta["missing_at_fresh_snapshot"] = gen.check_paths(a.clone, s.fresh_snapshot_commit, named, pre)
+        meta["files"] = tune.render(tuned, checks, risk, d / "arms", feedback=manifest_feedback(d), run_id=run_id)
+    (out / "meta.json").write_text(json.dumps(meta, indent=2))
+    if problems:
+        print(f"tuner output rejected: {problems} (see {out})")
+        return 1
+    print(f"tune run {run_id}: usage {resp.get('usage')}")
+    print(f"tuned arm: {len(tuned['agents_md'].splitlines())} lines of AGENTS.md; hooks kept: {checks or 'none'}; "
+          f"{len(tuned['cochange'])} co-change rules; wording: {json.dumps(tuned['wording'])}")
+    print(f"why: {tuned['why']}")
+    for k in ("missing_at_snapshot", "missing_at_fresh_snapshot"):
+        if meta[k]:
+            print(f"{k}: {meta[k]}")
+    print(tuned["agents_md"])
+    return 0
+
+
+def manifest_feedback(d: Path) -> str:
+    """The same hook feedback mode as the generated arms."""
+    return json.loads((d / "arms" / "both" / ".muse" / "uplift_hooks" / "config.json").read_text())["feedback"]
+
+
+SCREEN_LISTS = ("dev", "test", "fresh")
+
+
+def _screen_items(a) -> tuple[Path, list[dict]]:
+    from . import batch, screen
+    d = repo_dir(a.workdir, a.repo)
+    s = split_mod.Split.load(d / "split.json")
+    by_id = {t.id: t for t in tasks_mod.read_tasks(d / "tasks.jsonl")}
+    return d / "screen", screen.collect(by_id, {n: getattr(s, batch.LISTS[n]) for n in SCREEN_LISTS}, a.clone.resolve())
+
+
+def cmd_screen_plan(a) -> int:
+    """Free: what `paid.sh screen` will ask, and its estimated cost. No model calls."""
+    from . import screen
+    out, items = _screen_items(a)
+    todo = [it for it in items if not screen.item_path(out, it).exists()]
+    src: dict[str, int] = {}
+    for it in items:
+        src[it["source"]] = src.get(it["source"], 0) + 1
+    calls = sum(bool(it["messages"]) for it in todo)
+    print(f"{len(items)} F2P tests in {len({it['task'] for it in items})} tasks; lines from: {json.dumps(src)}; "
+          f"{sum(it['cut'] for it in items)} cut at {screen.MAX_LINES_CHARS} chars")
+    print(f"to ask: {calls} calls, estimated ${screen.estimate_usd(todo):.3f}")
+    return 0
+
+
+def cmd_screen(a) -> int:
+    """Paid: only through scripts/paid.sh. Prompts hold only the issue and the added test lines."""
+    from . import screen
+    out, items = _screen_items(a)
+    results = screen.run(items, out, workers=a.workers)
+    failed = [r for r in results if "failed" in r]
+    if failed:
+        print(f"{len(failed)} test(s) got no verdict, so screened.json was not written; run it again:")
+        for r in failed[:5]:
+            print(f"  {r['task']} {r['test']}: {r['failed']}")
+        return 1
+    print(f"-> {screen.save(results, out)}")
+    return cmd_screen_report(a)
+
+
+def _screened_outcomes(d: Path, runs: list[dict], screened: dict, grade_key) -> dict:
+    """{(task, seed): {arm: resolved}} for tasks the screen keeps; a run with an error counts False."""
+    from . import batch
+    rows: dict = {}
+    for r in runs:
+        t = screened["tasks"].get(r["task"])
+        res = batch.read_result(batch.run_path(d / "runs", r))
+        if t and not t["dropped"] and res is not None:
+            rows.setdefault((r["task"], r["seed"]), {})[r["arm"]] = grade_key(res, t)
+    return rows
+
+
+def cmd_screen_report(a) -> int:
+    from . import screen
+    d = repo_dir(a.workdir, a.repo)
+    screened = screen.load(d / "screen" / "screened.json")
+    print(f"{'list':<7}{'tasks':>6}{'kept':>6}{'dropped':>9}{'F2P tests':>11}{'excluded':>10}")
+    for name, s in screen.summary(screened).items():
+        print(f"{name:<7}{s['tasks']:>6}{s['kept']:>6}{s['dropped']:>9}{s['tests']:>11}{s['excluded']:>10}")
+        if s["dropped_ids"]:
+            print(f"       dropped: {' '.join(i.replace('tobymao__sqlglot-', '') for i in s['dropped_ids'])}")
+    counts: dict[str, int] = {}
+    for j in screened["judgements"]:
+        counts[j["verdict"]] = counts.get(j["verdict"], 0) + 1
+    print("verdicts:", json.dumps(counts))
+    by_id = {t.id: t for t in tasks_mod.read_tasks(d / "tasks.jsonl")}
+    for j in screen.sample(screened, a.sample, a.seed):
+        rec = json.loads(screen.item_path(d / "screen", j).read_text())
+        title = by_id[j["task"]].problem_statement.strip().splitlines()[0][:100]
+        print(f"\n[{j['verdict'].upper()}] {j['task']} {j['test'].split('::')[-1]}\n  issue: {title}")
+        for line in rec["lines"][:6]:
+            print(f"  + {line.strip()[:120]}")
+        if len(rec["lines"]) > 6:
+            print(f"  + ... {len(rec['lines']) - 6} more")
+        print(f"  why: {j['reason']}")
+    return 0
+
+
+def cmd_screen_table(a) -> int:
+    """Free: per-arm results on the screened lists, from the per-test results in result.json."""
+    from . import batch, screen
+    d = repo_dir(a.workdir, a.repo)
+    plan = json.loads(a.plan.read_text())
+    screened = screen.load(d / "screen" / "screened.json")
+    rows = _screened_outcomes(d, plan["runs"], screened, lambda res, t: screen.resolved(res.get("grade"), t["exclude"]))
+    raw = _screened_outcomes(d, plan["runs"], screened, lambda res, t: bool(res.get("grade", {}).get("resolved")))
+    arms = list(dict.fromkeys(r["arm"] for r in plan["runs"]))
+    both, base = screen.paired(rows, arms), screen.paired(raw, arms)
+    print(f"{len(rows)} task-seed rows on the screened lists ({len({k[0] for k in rows})} tasks)")
+    print(f"{'arm':<15}{'solved':>7}{'of':>4}{'wins':>6}{'losses':>8}   unscreened: solved, wins, losses (same tasks)")
+    for arm in arms:
+        r, b = both[arm], base[arm]
+        print(f"{arm:<15}{r['resolved']:>7}{r['tasks']:>4}{r['wins']:>6}{r['losses']:>8}   "
+              f"{b['resolved']}, +{b['wins']}, -{b['losses']}")
+    if a.out:
+        a.out.parent.mkdir(parents=True, exist_ok=True)
+        a.out.write_text(json.dumps({"screened": both, "unscreened_same_tasks": base,
+                                     "rows": {f"{k[0]}|{k[1]}": v for k, v in rows.items()}}, indent=2))
+    return 0
+
+
 def cmd_plan_batch(a) -> int:
     from . import batch
     d = repo_dir(a.workdir, a.repo)
@@ -297,17 +467,31 @@ def cmd_plan_batch(a) -> int:
         return p.exists() and bool(json.loads(p.read_text()).get("valid"))
 
     dropped = [i for i in ids if not valid(i)]
+    screen_ref = None
+    if a.screen:
+        from . import screen
+        path = d / "screen" / "screened.json"
+        screened = screen.load(path)["tasks"]
+        unknown = [i for i in ids if i not in screened]
+        if unknown:
+            raise SystemExit(f"not screened: {unknown[:5]}")
+        off = [i for i in ids if screened[i]["dropped"]]
+        print(f"screen: {len(off)} task(s) with no F2P test left: {off}")
+        dropped += [i for i in off if i not in dropped]
+        screen_ref = {"path": str(path.resolve()), "sha256": screen.sha256(path)}
     arms = a.arms.split(",")
     for arm in arms:
         arm_dir(a.workdir, a.repo, arm)
     plan = batch.build_plan(a.repo, a.clone.resolve(), [i for i in ids if i not in dropped], arms,
                             [int(x) for x in a.seeds.split(",")], s.dev_ids)
+    if screen_ref:
+        plan["screen"] = screen_ref
     a.out.parent.mkdir(parents=True, exist_ok=True)
     a.out.write_text(json.dumps(plan, indent=2))
     todo = sum(batch.read_result(batch.run_path(d / "runs", r)) is None for r in plan["runs"])
     print(f"{plan['run_count']} runs ({todo} still to run), estimated ${todo * batch.EST_USD_PER_RUN:.2f} -> {a.out}")
     if dropped:
-        print(f"left out {len(dropped)} task(s) not validated as valid: {dropped}")
+        print(f"left out {len(dropped)} task(s) not valid or dropped by the screen: {dropped}")
     return 0
 
 
@@ -327,6 +511,12 @@ def cmd_run_batch(a) -> int:
     for tid in sorted({r["task"] for r in plan["runs"]}):
         gitutil.ensure_commit(clone, by_id[tid].base_commit)
     proxy = os.environ.get("UPLIFT_PROXY", "http://127.0.0.1:8787")
+    excluded: dict[str, list[str]] = {}
+    if plan.get("screen"):
+        from . import screen
+        if screen.sha256(plan["screen"]["path"]) != plan["screen"]["sha256"]:
+            raise SystemExit("screened.json changed since this plan was written; write the plan again")
+        excluded = {tid: t["exclude"] for tid, t in screen.load(plan["screen"]["path"])["tasks"].items()}
 
     def budget() -> dict:
         with urllib.request.urlopen(f"{proxy}/__budget", timeout=5) as r:
@@ -334,7 +524,8 @@ def cmd_run_batch(a) -> int:
 
     def one(r: dict):
         return runner.attempt(by_id[r["task"]], clone, workdir / "workspaces", batch.run_path(d / "runs", r),
-                              arm=r["arm"], setup_dir=arms[r["arm"]], seed=r["seed"], guard=DEFAULT_GUARD)
+                              arm=r["arm"], setup_dir=arms[r["arm"]], seed=r["seed"], guard=DEFAULT_GUARD,
+                              excluded_f2p=excluded.get(r["task"], ()))
 
     out = batch.run_plan(plan["runs"], runs_root=d / "runs", ws_root=workdir / "workspaces",
                          summary_path=a.plan.with_suffix(".summary.json"), run_one=one, budget=budget,
@@ -439,6 +630,48 @@ def main(argv: list[str] | None = None) -> int:
     o.add_argument("--agent-cmd", help=argparse.SUPPRESS)  # tests only: replaces the agent
     o.set_defaults(func=cmd_run_one)
 
+    tn = sub.add_parser("tune", help="Muse Spark writes the tuned arm from dev results (paid: via scripts/paid.sh)")
+    tn.add_argument("--repo", required=True)
+    tn.add_argument("--clone", type=Path, required=True)
+    tn.add_argument("--plan", type=Path, required=True, help="the dev plan")
+    tn.add_argument("--findings", type=Path, required=True, help="text file: written findings from dev")
+    tn.add_argument("--max-tokens", type=int, default=16000)
+    tn.set_defaults(func=cmd_tune)
+
+    sp = sub.add_parser("screen-plan", help="what `paid.sh screen` will ask and its estimated cost (free)")
+    sp.add_argument("--repo", required=True)
+    sp.add_argument("--clone", type=Path, required=True)
+    sp.set_defaults(func=cmd_screen_plan)
+    for flag, value in (("--workers", 8), ("--sample", 5), ("--seed", 1)):  # paid.sh passes `screen`'s flags here
+        sp.add_argument(flag, type=int, default=value, help=argparse.SUPPRESS)
+
+    sc = sub.add_parser("screen", help="Muse Spark screens every F2P test (paid: via scripts/paid.sh)")
+    sc.add_argument("--repo", required=True)
+    sc.add_argument("--clone", type=Path, required=True)
+    sc.add_argument("--workers", type=int, default=8)
+    sc.add_argument("--sample", type=int, default=5, help="random judgements to print per verdict")
+    sc.add_argument("--seed", type=int, default=1)
+    sc.set_defaults(func=cmd_screen)
+
+    sr = sub.add_parser("screen-report", help="kept / excluded / dropped per list, and a random sample (free)")
+    sr.add_argument("--repo", required=True)
+    sr.add_argument("--sample", type=int, default=5)
+    sr.add_argument("--seed", type=int, default=1)
+    sr.set_defaults(func=cmd_screen_report)
+
+    st = sub.add_parser("screen-table", help="per-arm results of a plan on the screened lists (free)")
+    st.add_argument("--repo", required=True)
+    st.add_argument("--plan", type=Path, required=True)
+    st.add_argument("--out", type=Path)
+    st.set_defaults(func=cmd_screen_table)
+
+    rg = sub.add_parser("regrade", help="re-grade finished runs from their saved agent.patch (free)")
+    rg.add_argument("--repo", required=True)
+    rg.add_argument("--clone", type=Path, required=True)
+    rg.add_argument("--python", default="3.12")
+    rg.add_argument("runs", nargs="+", help="<arm>/<task id>/<seed>")
+    rg.set_defaults(func=cmd_regrade)
+
     pb = sub.add_parser("plan-batch", help="write the list of (task, arm, seed) runs for run-batch")
     pb.add_argument("--repo", required=True)
     pb.add_argument("--clone", type=Path, required=True)
@@ -447,6 +680,7 @@ def main(argv: list[str] | None = None) -> int:
     pb.add_argument("--arms", default="none,prose,sensors,both,handwritten,lint-only,cochange-only,verify-only")
     pb.add_argument("--seeds", default="1")
     pb.add_argument("--out", type=Path, required=True)
+    pb.add_argument("--screen", action="store_true", help="use the screened F2P lists (screen/screened.json)")
     pb.set_defaults(func=cmd_plan_batch)
 
     rb = sub.add_parser("run-batch", allow_abbrev=False, help="run a plan in parallel (paid: via scripts/paid.sh)")

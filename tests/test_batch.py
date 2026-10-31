@@ -126,7 +126,7 @@ def test_stopped_batch_resumes_and_skips_finished_runs(tmp_path):
     out, started = paid_plan(tmp_path, RUNS)
     assert started == RUNS[1:], "a run with a result, even an error, is not run again"
     assert out["status"] == "finished" and out["done"] == 3 and out["errors"] == 1
-    assert out["per_arm"]["none"] == {"done": 3, "resolved": 2, "errors": 1}
+    assert out["per_arm"]["none"] == {"done": 3, "resolved": 2, "errors": 1, "nonzero_exit": 0}
     run_dir = batch.run_path(tmp_path / "runs", RUNS[1])
     assert (run_dir / "stdout.jsonl.gz").exists() and not (run_dir / "stdout.jsonl").exists()
     assert not any((tmp_path / "workspaces").iterdir()), "workspaces are deleted"

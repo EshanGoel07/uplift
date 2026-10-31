@@ -50,8 +50,10 @@ What each criterion needs from us:
 
 ## Findings to remember for the story
 
-- Dev batch (Oct 31, 38 tasks x 8 arms x 1 seed, $7.52): no arm clearly beats none; co-change warnings may hurt (cochange-only +0/-4, both +0/-3 vs none); lint-only and verify-only neutral to slightly positive. Only 9 of 38 tasks differ between arms.
-- Some benchmark tasks require tests for changes the issue never describes (bundled commits); screen them before the main batch, rule fixed before seeing arm results.
+- Dev batch (Oct 31, 38 tasks x 8 arms x 1 seed, $7.52): no arm clearly beats none. On the screened lists (37 tasks, one seed, solved / wins-losses vs none): none 26; prose 24 (+1/-3); sensors 26 (+4/-4); both 24 (+1/-3); handwritten 28 (+3/-1); lint-only 27 (+2/-1); cochange-only 21 (+1/-6); verify-only 28 (+4/-2). Only 12 of 37 tasks differ between arms.
+- The early "co-change warnings hurt" reading did not hold: both's 3 losses were runs wrongly recorded as errors (solved once graded), and most of cochange-only's gap is in runs where no warning fired (with a warning: 13/20 vs none 14/20; without: 8/17 vs 12/17). Warnings look weak (followed ~28% of the time), not harmful.
+- The 40-step cap binds: Muse starts its wind-down reminders at step 30 and 284 of 304 dev runs reached them, in every arm. A verify block at step 33-39 can run the agent out of steps (5 dev runs, exit 1, 4 of them solved anyway).
+- Some benchmark tasks require tests for changes the issue never describes (bundled commits); screened before the main batch, rule fixed before seeing arm results. Muse Spark excluded 38 of 164 F2P tests and dropped 4 of 120 tasks. Spot-check: 9 of 10 looked right to Claude Code (4516 doubtful); the by-hand check is still to report.
 - The 2024-generated setup references sqlglot/expressions.py, which no longer exists in 2026: setups go stale (supports "re-test your setup").
 - Muse hooks only load nested under "hooks"; blocking and feedback both work.
 - sqlglot added its own CLAUDE.md (2026-02) and AGENTS.md (2026-03); stripped so "none" means none.

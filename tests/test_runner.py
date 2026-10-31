@@ -184,6 +184,71 @@ def test_guard_timeout_is_an_error_never_a_pass(calc, tmp_path):
     assert r["resolved"] is False and r["agent_exit"] == 124 and "timed out" in r["error"]
 
 
+def test_nonzero_exit_with_a_patch_is_graded(calc, tmp_path):
+    """Muse exits 1 when it uses up its step limit; the patch left behind is graded as usual."""
+    clone, t = calc
+    agent = fake_agent(tmp_path, "pathlib.Path('calc.py').write_text(pathlib.Path('calc.py').read_text()"
+                                 ".replace('a - b','a + b'))\nsys.exit(1)\n")
+    res = runner.attempt(t, clone, tmp_path / "ws", tmp_path / "run", arm="x", setup_dir=None, seed=1,
+                  guard=Path("/nonexistent"), agent_cmd=agent)
+    r = json.loads((tmp_path / "run" / "result.json").read_text())
+    assert res.resolved and r["resolved"] is True and r["agent_exit"] == 1 and r["error"] == ""
+    assert r["grade"]["f2p_failed"] == []
+
+
+def test_nonzero_exit_with_a_wrong_patch_is_a_graded_failure(calc, tmp_path):
+    clone, t = calc
+    agent = fake_agent(tmp_path, "pathlib.Path('calc.py').write_text(pathlib.Path('calc.py').read_text()"
+                                 " + '# nothing useful\\n')\nsys.exit(1)\n")
+    runner.attempt(t, clone, tmp_path / "ws", tmp_path / "run", arm="x", setup_dir=None, seed=1,
+                   guard=Path("/nonexistent"), agent_cmd=agent)
+    r = json.loads((tmp_path / "run" / "result.json").read_text())
+    assert r["resolved"] is False and r["error"] == "" and r["grade"]["f2p_failed"]
+
+
+def test_nonzero_exit_with_no_patch_is_an_error(calc, tmp_path):
+    clone, t = calc
+    runner.attempt(t, clone, tmp_path / "ws", tmp_path / "run", arm="x", setup_dir=None, seed=1,
+                   guard=Path("/nonexistent"), agent_cmd=fake_agent(tmp_path, "sys.exit(1)\n"))
+    r = json.loads((tmp_path / "run" / "result.json").read_text())
+    assert r["resolved"] is False and r["grade"] == {} and "no patch" in r["error"]
+
+
+@pytest.mark.parametrize("rc, summary, guarded, why", [
+    (124, {}, True, "timed out"),
+    (1, {}, True, "guard failed"),                 # the guard itself crashed: no summary
+    (247, {"exit_code": -9}, True, "killed"),      # Muse killed by a signal
+    (127, {"exit_code": 127}, True, "never started"),
+    (0, {"exit_code": 0}, True, ""),
+    (1, {"exit_code": 1}, True, ""),
+])
+def test_infra_failures(rc, summary, guarded, why):
+    got = runner.infra_failure(rc, False, 10, 5, "diff --git a b\n", summary, guarded=guarded)
+    assert (why in got) and (bool(got) == bool(why))
+    assert "hard-killed" in runner.infra_failure(0, True, 10, 5, "x", {}, guarded=True)
+
+
+def test_agent_end_reads_muses_last_word(tmp_path):
+    (tmp_path / "stderr_trace.log").write_text("x\nrun ended with Failed: model did not reach a terminal state\n")
+    assert runner.agent_end(tmp_path).endswith("terminal state")
+    assert runner.agent_end(tmp_path / "missing") == ""
+
+
+def test_regrade_applies_the_saved_patch_to_a_fresh_workspace(calc, tmp_path):
+    clone, t = calc
+    agent = fake_agent(tmp_path, "pathlib.Path('calc.py').write_text(pathlib.Path('calc.py').read_text()"
+                                 ".replace('a - b','a + b'))\nsys.exit(1)\n")
+    run = tmp_path / "run"
+    runner.attempt(t, clone, tmp_path / "ws", run, arm="x", setup_dir=None, seed=1, guard=Path("/nonexistent"),
+                   agent_cmd=agent)
+    old = json.loads((run / "result.json").read_text())
+    (run / "result.json").write_text(json.dumps(dict(old, resolved=False, grade={}, error="agent exited 1")))
+    r = runner.regrade(t, clone, tmp_path / "ws2", run)
+    assert r["resolved"] is True and r["error"] == "" and r["regraded"] and r["agent_exit"] == 1
+    assert json.loads((run / "result.before_regrade.json").read_text())["error"] == "agent exited 1"
+    assert not (tmp_path / "ws2" / t.id / "regrade-x-s1").exists()
+
+
 def test_hung_run_is_hard_killed_with_its_children(calc, tmp_path):
     repo, task = calc
     pidfile = tmp_path / "child.pid"

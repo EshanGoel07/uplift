@@ -238,6 +238,17 @@ def test_hook_verify_blocks_stop_on_failing_related_tests(hooked, tmp_path):
     assert sum(r["check"] == "verify" and r["fired"] for r in recs) == 2
 
 
+def test_hook_wording_replaces_the_default_sentence(hooked, tmp_path):
+    ws = hooked
+    cfg_path = ws / ".muse" / "uplift_hooks" / "config.json"
+    cfg = json.loads(cfg_path.read_text())
+    cfg["wording"] = {"verify": "Run only the failing test."}
+    cfg_path.write_text(json.dumps(cfg))
+    (ws / "calc.py").write_text("def add(a, b):\n    return a - b\n")
+    out = hook(ws, "Stop", tmp_path / "log.jsonl")
+    assert "Run only the failing test." in out["reason"] and "Fix them before finishing" not in out["reason"]
+
+
 def test_hook_block_reason_mode(hooked, tmp_path):
     cfg_path = hooked / ".muse" / "uplift_hooks" / "config.json"
     cfg = json.loads(cfg_path.read_text())

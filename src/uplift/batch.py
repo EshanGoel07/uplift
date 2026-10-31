@@ -187,12 +187,13 @@ def run_plan(runs: list[dict], *, runs_root: Path, ws_root: Path, summary_path: 
             res = read_result(run_path(runs_root, r))
             if res is None:
                 continue
-            a = arms.setdefault(r["arm"], {"done": 0, "resolved": 0, "errors": 0})
+            a = arms.setdefault(r["arm"], {"done": 0, "resolved": 0, "errors": 0, "nonzero_exit": 0})
             err = bool(res.get("error") or (res.get("grade") or {}).get("error"))
             done, errors = done + 1, errors + err
             a["done"] += 1
             a["resolved"] += bool(res.get("resolved"))
             a["errors"] += err
+            a["nonzero_exit"] += res.get("agent_exit") not in (0, None)
         out = {"status": status, "stop_reason": state["stop"], "total": len(runs), "done": done,
                "running": state["running"], "errors": errors, "spent_usd": round(state["spent"], 6),
                "max_usd": max_usd, "wall_seconds": round(time.time() - t0), "per_arm": arms}

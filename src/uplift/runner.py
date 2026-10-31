@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import gzip
 import json
 import os
 import shlex
@@ -13,7 +14,7 @@ import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-from . import gitutil, grade as grade_mod, workspace
+from . import gitutil, grade as grade_mod, screen, workspace
 from .tasks import Task
 
 PROMPT = """You are working in a Python repository. Fix the issue below so the code behaves as described.
@@ -37,6 +38,7 @@ class RunResult:
     resolved: bool
     grade: dict
     agent_exit: int | None = None
+    agent_end: str = ""                                # how Muse says the run ended, if it failed
     seconds: float = 0.0
     cost_usd: float | None = None
     tokens: dict = field(default_factory=dict)
@@ -45,6 +47,7 @@ class RunResult:
     arm_files: list = field(default_factory=list)      # copied into the workspace
     stripped: list = field(default_factory=list)       # repo's own agent files removed first
     hooks: dict = field(default_factory=dict)          # {check: {"runs": n, "fired": n}}
+    f2p_excluded: list = field(default_factory=list)   # screened out: don't count towards `resolved`
 
 
 def _start_ref(ws: Path) -> str:
@@ -107,15 +110,52 @@ def hook_counts(log: Path) -> dict:
     return out
 
 
+def agent_end(run_dir: Path) -> str:
+    """Muse's own last word on a failed run, e.g. `run ended with Failed: model did not reach a
+    terminal state within 40 step(s)` ("" if there is none). Batch runs have the trace gzipped."""
+    plain, packed = Path(run_dir) / "stderr_trace.log", Path(run_dir) / "stderr_trace.log.gz"
+    if plain.exists():
+        text = plain.read_text(errors="replace")
+    elif packed.exists():
+        with gzip.open(packed, "rt", errors="replace") as f:
+            text = f.read()
+    else:
+        return ""
+    return next((ln.strip() for ln in reversed(text.splitlines()) if ln.startswith("run ended with")), "")
+
+
+def infra_failure(rc: int, hard_killed: bool, timeout: int, kill_grace: int, patch: str, summary: dict,
+                  guarded: bool) -> str:
+    """Why this run can't be graded, or "". A non-zero exit alone is not such a reason: Muse exits 1
+    when it uses up its step limit, with real work left in the workspace (5 dev runs: the Stop hook
+    blocked the agent at step 33-39 of 40). Those are graded like any run, with `agent_exit` kept."""
+    if hard_killed:
+        return f"hard-killed after {timeout + kill_grace}s (guard did not exit; cost not settled)"
+    if rc == 124:
+        return f"agent timed out after {timeout}s"
+    if rc == 0:
+        return ""
+    if guarded and not summary:
+        return f"guard failed: exit {rc} and no guard_summary.json"
+    if rc < 0 or summary.get("exit_code", 0) < 0 or rc == 127:
+        return f"agent exited {summary.get('exit_code', rc)} (killed or never started)"
+    return "" if patch.strip() else f"agent exited {rc} with no patch"
+
+
 def attempt(task: Task, clone: Path, ws_root: Path, run_dir: Path, *, arm: str, setup_dir: Path | None,
             seed: int, guard: Path, max_steps: int = 40, timeout: int = 2400, trust_usage: bool = True,
-            python_version: str = "3.12", agent_cmd: str | None = None, kill_grace: int = 180) -> RunResult:
+            python_version: str = "3.12", agent_cmd: str | None = None, kill_grace: int = 180,
+            excluded_f2p=()) -> RunResult:
     """One agent attempt. Muse Code runs through guarded_muse.py (budget cap enforced).
     `agent_cmd` replaces the agent for tests only.
 
     Timeouts: the guard kills Muse after `timeout` s and still settles the real cost (exit 124).
     As a backstop, the whole process group is killed `kill_grace` s later. Either way the run is
-    recorded as an error and never graded, so a timed-out run can't count as a pass."""
+    recorded as an error and never graded, so a timed-out run can't count as a pass. See
+    `infra_failure` for what else is an error rather than a graded run.
+
+    `excluded_f2p`: F2P tests the screen left out. All tests still run and `grade` holds the raw
+    result; `resolved` ignores the excluded ones."""
     # Absolute paths: the agent/guard runs with cwd=ws, where a relative run_dir would
     # make the guard write its logs (and cost summary) inside the workspace instead.
     run_dir, ws_root = Path(run_dir).resolve(), Path(ws_root).resolve()
@@ -167,10 +207,10 @@ def attempt(task: Task, clone: Path, ws_root: Path, run_dir: Path, *, arm: str, 
     summary = {}
     if (run_dir / "guard_summary.json").exists():
         summary = json.loads((run_dir / "guard_summary.json").read_text())
-    if hard_killed or rc != 0:  # timed out or crashed: an error, not graded (never a pass)
-        why = (f"hard-killed after {timeout + kill_grace}s (guard did not exit; cost not settled)" if hard_killed
-               else f"agent timed out after {timeout}s" if rc == 124 else f"agent exited {rc}")
-        res = RunResult(task.id, arm, seed, False, {}, agent_exit=rc, error=why,
+    end = agent_end(run_dir)
+    why = infra_failure(rc, hard_killed, timeout, kill_grace, patch, summary, guarded=not agent_cmd)
+    if why:  # not graded, so never a pass
+        res = RunResult(task.id, arm, seed, False, {}, agent_exit=rc, agent_end=end, error=why,
                         seconds=round(time.time() - t0, 1), cost_usd=summary.get("parsed_cost_usd"),
                         tokens=summary.get("tokens", {}), patch_lines=patch.count("\n"),
                         arm_files=installed["copied"], stripped=installed["stripped"], hooks=hook_counts(hook_log))
@@ -178,9 +218,29 @@ def attempt(task: Task, clone: Path, ws_root: Path, run_dir: Path, *, arm: str, 
         return res
     g = grade_mod.grade(ws, py, start, task.test_patch, task.test_files, task.fail_to_pass,
                         task.pass_to_pass, log_path=run_dir / "grade_pytest.txt")
-    res = RunResult(task.id, arm, seed, g.resolved, g.to_dict(), agent_exit=rc,
-                    seconds=round(time.time() - t0, 1), cost_usd=summary.get("parsed_cost_usd"),
+    res = RunResult(task.id, arm, seed, screen.resolved(g.to_dict(), excluded_f2p), g.to_dict(),
+                    agent_exit=rc, agent_end=end, f2p_excluded=list(excluded_f2p), seconds=round(time.time() - t0, 1), cost_usd=summary.get("parsed_cost_usd"),
                     tokens=summary.get("tokens", {}), patch_lines=patch.count("\n"),
                     arm_files=installed["copied"], stripped=installed["stripped"], hooks=hook_counts(hook_log))
     (run_dir / "result.json").write_text(json.dumps(asdict(res), indent=2))
     return res
+
+
+def regrade(task: Task, clone: Path, ws_root: Path, run_dir: Path, python_version: str = "3.12") -> dict:
+    """Grade a finished run offline: agent.patch on a fresh workspace, no model calls. The patch
+    is applied as saved, so the test reset in `grade` still removes any test edits. The old
+    result is kept as result.before_regrade.json."""
+    run_dir, ws_root = Path(run_dir).resolve(), Path(ws_root).resolve()
+    old = json.loads((run_dir / "result.json").read_text())
+    ws, py, start = prepare(task, clone, ws_root, f"regrade-{old['arm']}-s{old['seed']}", python_version)
+    try:
+        if not workspace.apply_patch(ws, (run_dir / "agent.patch").read_text()):
+            raise RuntimeError(f"{run_dir}: agent.patch did not apply to a fresh workspace")
+        g = grade_mod.grade(ws, py, start, task.test_patch, task.test_files, task.fail_to_pass,
+                            task.pass_to_pass, log_path=run_dir / "grade_pytest.txt")
+    finally:
+        shutil.rmtree(ws, ignore_errors=True)
+    shutil.copy2(run_dir / "result.json", run_dir / "result.before_regrade.json")
+    new = dict(old, resolved=g.resolved, grade=g.to_dict(), error="", regraded=True, agent_end=agent_end(run_dir))
+    (run_dir / "result.json").write_text(json.dumps(new, indent=2))
+    return new

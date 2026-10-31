@@ -242,7 +242,7 @@ def hook_config(checks: list[str], spec: dict, risk: dict, feedback: str) -> dic
         tests.setdefault(s, [])
         tests[s] += [t for t in ts if t not in tests[s]]
     return {"checks": checks, "feedback": feedback, "lint": spec["lint"], "cochange": spec["cochange"],
-            "tests_for_source": tests, "max_stop_blocks": 2}
+            "tests_for_source": tests, "max_stop_blocks": 2, "wording": spec.get("wording", {})}
 
 
 def hooks_json(checks: list[str]) -> dict:

@@ -184,3 +184,41 @@ Built for the Meta Global AI Developer Hackathon (Oct 26 – Nov 4, 2026).
   issue about MySQL JSON_VALUE). The dataset's F2P comes from the whole fix commit, so some tasks ask
   for more than the statement says. No arm can gain on such a task (a floor), which would dilute any
   difference between arms. How common this is across the 38 dev tasks is not known yet.
+
+## Phase 4: main-batch prep (Oct 31)
+
+- **Exit-1 runs:** the 5 dev errors (both 4110/4127/4293, sensors 4110, verify-only 4104) all ended with
+  `run ended with Failed: model did not reach a terminal state within 40 step(s)`. The verify Stop hook
+  blocked at step 33-39 and the agent used up its steps responding. Phase 3 had made every non-zero exit an
+  ungraded error, which hid finished work in hook arms only. Now a non-zero exit with a patch is graded
+  (`agent_exit`, `agent_end` recorded); errors are timeout, guard failure, killed or never started, no patch.
+  `uplift regrade` applied the 5 patches to fresh workspaces: 4 resolved, verify-only 4104 failed 3 F2P tests.
+- **Bias this removes:** `both` went from 19 to 22 solved and its 3 "losses" vs none disappeared. They were
+  these error runs, so the Oct 31 "co-change hurts" reading was partly an artefact.
+- **The step cap binds in every arm (not changed):** Muse adds a `<step-budget>` reminder from step 30 of 40
+  telling the agent to wind down, and 284 of 304 dev runs reached it (none 37/38). The working budget is
+  about 30 steps. Found while reading the traces for the exit-1 runs. The main plan keeps 40, as dev did.
+- **Screening** (`paid.sh screen`, 164 Muse Spark calls, $0.067): the prompt holds only the issue and the
+  lines the fix added to that test. Lines are found by rebuilding the patched test file and using `ast`
+  spans, so a hunk spanning two tests doesn't mix them; all 164 tests had added lines of their own. The rule
+  was fixed first. dev keeps 39/40 tasks (23/66 tests excluded), test 39/40 (12/53), fresh 38/40 (3/45).
+  Dropped: 4040, 4516, fresh-06eb0510, fresh-d6d174e8. 4516 looks like a false "no": its only F2P test
+  round-trips FLOAT(8), and the real fix is the REAL(8) one the issue reports. Kept dropped; no overrides.
+- Screened grading runs the same tests. `grade` keeps the raw result, `resolved` ignores excluded tests.
+  Plans record screened.json's hash and run-batch refuses a changed file.
+- **Dev on the screened lists** (37 tasks, 1 seed), solved and wins/losses vs none: none 26; prose 24 +1/-3;
+  sensors 26 +4/-4; both 24 +1/-3; handwritten 28 +3/-1; lint-only 27 +2/-1; cochange-only 21 +1/-6;
+  verify-only 28 +4/-2. Note both's -3 here are other tasks (3987, 4302, 4328), with no co-change warning.
+- **Co-change:** of cochange-only's 4 unscreened losses, 2 got no warning, 1 followed it and failed, 1 ignored
+  it and failed. On screened dev, warned runs solved 13/20 (none 14/20 on those tasks), unwarned 8/17 (none
+  12/17). Suggested files were edited in about 28% of warnings. No evidence the warnings hurt.
+- **Tuned arm** (`paid.sh tune`, 1 call, $0.0014): dev inputs only, `assert_dev_only` refuses any test or
+  fresh id, and a plan with non-dev tasks is refused. Output: 11-line AGENTS.md, lint and verify kept with
+  new wording, co-change dropped. Muse Spark's stated reasoning is one-seed differences, so treat it as a
+  hypothesis for the test set. The tuned arm has not had a real Muse Code smoke run.
+- Hook script: optional `wording` in config.json; other arms' installed copies are unchanged and their
+  behaviour is the same without it. `*.egg-info/` joined the workspace excludes (found by a new test: a repo
+  with no .gitignore would have the build artefact counted in the agent's patch; sqlglot's patches had none).
+- Licences checked: SWE-rebench CC-BY-4.0 (dataset card), sqlglot MIT (its LICENSE). NOTICE.md no longer
+  lists Docker images, which Uplift never used, and states our changes to the data, as CC-BY asks.
+- Main plan: 77 screened tasks (39 test, 38 fresh) × 6 arms × 2 seeds = 924 runs, `plans/main.json`.

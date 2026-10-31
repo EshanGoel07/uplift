@@ -74,7 +74,8 @@ def lint(files, cfg):
             if r.returncode != 0:
                 msgs.append(f"ruff format: {f} is not formatted (line length {ll}); "
                             f"run `ruff format --line-length {ll} {f}`")
-    return msgs
+    note = cfg.get("wording", {}).get("lint")
+    return msgs + [note] if msgs and note else msgs
 
 
 def cochange(changed, cfg, state):
@@ -126,7 +127,8 @@ def verify(changed, cfg, state):
         return [], tests
     state["stop_blocks"] += 1
     tail = "\n".join((r.stdout + r.stderr).strip().splitlines()[-30:])
-    return [f"verify: related tests fail ({' '.join(tests)}). Fix them before finishing.\n{tail}"], tests
+    note = cfg.get("wording", {}).get("verify") or "Fix them before finishing."
+    return [f"verify: related tests fail ({' '.join(tests)}). {note}\n{tail}"], tests
 
 
 def respond(event, msgs, feedback):

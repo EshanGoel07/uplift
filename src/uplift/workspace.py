@@ -15,7 +15,7 @@ from pathlib import Path
 
 from . import gitutil
 
-EXCLUDES = [".venv/", ".uplift-run/", "__pycache__/", "*.pyc", ".pytest_cache/",
+EXCLUDES = [".venv/", ".uplift-run/", "__pycache__/", "*.pyc", ".pytest_cache/", "*.egg-info/",
             # guard logs: never part of the agent's patch, even if they land in the workspace
             "guard_summary.json", "stdout.jsonl", "stderr_trace.log"]
 

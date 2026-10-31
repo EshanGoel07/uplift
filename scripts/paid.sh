@@ -5,14 +5,16 @@
 #   scripts/paid.sh generate --repo tobymao/sqlglot --clone ~/sqlglot     (Muse Spark, via the proxy)
 #   scripts/paid.sh probe-hooks [--wrapped]                                (one tiny Muse Code run)
 #   scripts/paid.sh run-batch --plan plan.json --workers 8 --max-usd 2     (at most $20 per batch)
+#   scripts/paid.sh screen --repo tobymao/sqlglot --clone ~/sqlglot       (Muse Spark, via the proxy)
+#   scripts/paid.sh tune --repo tobymao/sqlglot --clone ~/sqlglot --plan dev.json --findings f.md  (Muse Spark, via the proxy)
 #
 # What it guarantees:
 #   * the API key is loaded here, from a chmod-600 file, and never printed;
 #     whoever runs this script (you or Claude Code) never sees the key;
 #   * the budget proxy must be up, and at least $2 must remain under the cap;
-#   * only `run-one`, `run-batch`, `generate` and `probe-hooks` are allowed, and flags that could run
+#   * only `run-one`, `run-batch`, `generate`, `screen`, `tune` and `probe-hooks` are allowed, and flags that could run
 #     arbitrary code with the key in the environment (--agent-cmd, --guard) are refused;
-#   * `generate` only talks to the proxy (which adds the key itself), so it never gets the key;
+#   * `generate`, `screen` and `tune` only talk to the proxy (which adds the key itself), so they never get the key;
 #   * every invocation is logged to runs/paid.log (no secrets).
 set -euo pipefail
 
@@ -26,8 +28,8 @@ LOG_DIR="${UPLIFT_PAID_LOG_DIR:-$(cd "$(dirname "$0")/.." && pwd)/runs}"
 die() { echo "paid.sh: $*" >&2; exit "${2:-2}"; }
 
 case "${1:-}" in
-  run-one|run-batch|generate|probe-hooks) ;;
-  *) die "only 'run-one', 'run-batch', 'generate' and 'probe-hooks' are allowed (got '${1:-}')" 2 ;;
+  run-one|run-batch|generate|screen|tune|probe-hooks) ;;
+  *) die "only 'run-one', 'run-batch', 'generate', 'screen', 'tune' and 'probe-hooks' are allowed (got '${1:-}')" 2 ;;
 esac
 for arg in "$@"; do
   case "$arg" in
@@ -70,7 +72,11 @@ perm="$(stat -c '%a' "$KEY_FILE" 2>/dev/null || stat -f '%Lp' "$KEY_FILE")"
 mkdir -p "$LOG_DIR"
 printf '%s\t%s\n' "$(date -u +%FT%TZ)" "$*" >> "$LOG_DIR/paid.log"
 
-if [ "$1" = "generate" ]; then
+if [ "$1" = "screen" ]; then
+  # Free: shows the call count and estimated cost before anything is spent.
+  "$UPLIFT_BIN" screen-plan "${@:2}"
+fi
+if [ "$1" = "generate" ] || [ "$1" = "screen" ] || [ "$1" = "tune" ]; then
   # Model calls go to the proxy, which holds the key: don't put the key in this process at all.
   UPLIFT_PROXY="$PROXY" exec "$UPLIFT_BIN" "$@"
 fi
