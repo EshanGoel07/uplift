@@ -14,6 +14,26 @@ Read this before writing the README, the video script or the writeup. Plan doc: 
 - **Theme:** Push the Frontier (Muse Spark / Meta models on hard problems in software).
 - **Banned:** code, data or assets without rights; generic project types (not us).
 
+## Judging (FAQ, Oct 31)
+
+- Gate first: fits the theme AND meaningfully uses the Meta Model API and/or Meta open-weight models.
+- Then scored EQUALLY on four criteria: **Impact**, **Use of Meta AI tooling**, **Technical depth and execution**, **Demo quality**.
+- Top 5 projects per track advance to the finals.
+- Building on an existing project is allowed only if the demo clearly shows just what was built during the event.
+- Also banned: anything political or involving war.
+
+What each criterion needs from us:
+- Impact: who benefits (teams paying for coding agents), what it changes (proof instead of guesswork, cost per solved bug, setups that hurt).
+- Use of Meta AI tooling (decided Oct 31): four Muse Spark roles + Muse Code as the agent under test.
+  1. Muse Spark screens tasks: does the issue describe each required test? Spot-check ~10 by hand, report agreement.
+  2. Muse Spark generates the setups (done).
+  3. Muse Spark diagnoses dev failures and writes the tuned setup.
+  4. Muse Spark labels why failed runs failed, cross-checked with simple rules (Nov 1, cheap).
+  Extra if feasible after the main analysis: a smaller Meta model (Muse Glimmer on Fireworks) as the agent, none vs tuned on ~40 tasks ("do setups help small models more?"). Check feasibility first (~3-4 h).
+  Skip: SAM 3 / vision, Muse writing report text (decoration, not meaningful use).
+- Technical depth: the trust section and the bugs we caught.
+- Demo quality: the 3-minute video is a quarter of the score; plan it early (Nov 2).
+
 ## Must appear in the README and the video
 
 1. First lines: track (Indie), problem statement (Push the Frontier), Meta models used (Muse Code = agent under test; Muse Spark = setup generator; no other models), built Oct 29 - Nov 4.
