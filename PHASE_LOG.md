@@ -233,3 +233,39 @@ Built for the Meta Global AI Developer Hackathon (Oct 26 – Nov 4, 2026).
   trace) is in `runs_smoke_20261031/`, because `run-one` writes to the batch path but does not apply screening.
   Other global-ignore entries (PLAN.md, .claude/, .cursor/, .aider*) still stay out of the start commit and the
   patch, so a batch on another machine could differ slightly; the agent paths among them are stripped anyway.
+
+## Phase 5: analysis and exports (Nov 1)
+
+- **Web leak (the main finding), caught while looking for how to detect "never ran tests":** a request listed `muse.web_fetch`
+  calls. Workspaces have no git history, but Muse Code has web tools and its shell has network access, and nothing blocked
+  them, e.g. `curl -sL https://github.com/tobymao/sqlglot/pull/4347.diff` returned the real fix during a run on task 4347.
+  The snapshot leakage checks can't see this. `uplift web-audit` reads every tool call in every trace and gives each run
+  its worst tier. Main batch: 59 own fix diff, 21 newer upstream code, 7 own PR page, 16 another PR or issue, 821 docs or no
+  web. So 80 of 924 runs (8.7%) were exposed and 78 of them solved, against 572 of 821 clean (partly easy tasks). Exposed runs
+  per arm: none 13, prose 12, sensors 16, both 12, handwritten 15, tuned 12. Test 73 of 468, fresh 7 of 456. Dev 69 of 304, so
+  the tuned arm learned from leaked runs too. A lower bound (URLs built at run time and search snippets are not seen).
+- **The result survives:** without the 26 affected tasks (51 left), also without own-PR-page tasks (50 left), and with exposed
+  runs counted as failed, every arm's interval still crosses 0. Not fixed: no paid run was repeated. Any new batch should block
+  the network. The trust card no longer says the fix can't be looked up.
+- **hooks.jsonl is not what the agent received.** It logs quiet evaluations too (a not-fired line's detail is `ran: <tests>` or
+  file names), cuts detail at 2,000 characters (28 of 50 verify messages), and joins findings with `\n` where the agent gets
+  `\n\n`. results.json now takes messages from the model's requests, developer messages only: Muse's reminder side-calls quote
+  the transcript in a user message, and after a Stop block Muse appends its own reminders to the same message.
+- **6 verify blocks never reached the agent** (both 3, tuned 3): the Stop hook fired on the last step and the run ended at the
+  step limit. Logged as fired, left out of results.json. Found by comparing hooks.jsonl with the traces.
+- **Ledger:** the proxy's `model` column names the run folder, so cost matches run by run, and the sum ($21.306346) equals the
+  result.json costs. The fresh-8e5e2557 smoke run wrote to the same path before the batch, so a path match alone would add its
+  $0.0206; the batch's row is the last one. The ledger's whole-file sum ($30.65) is above spent ($29.78) by a $0.87 row from a
+  Phase 0 run that was charged worst case; not a main-batch cost.
+- **CIs differ from the Oct 31 figures** by one lattice step (0.65 points) in places. Those came from another seed; across seeds
+  the bounds move by at most that step and no conclusion changes. SUBMISSION.md updated. It also said 5-7 points "could have
+  been detected", which is the CI half-width, i.e. about 50% power; at 80% power it is 5.4-9.1 points.
+- An audit false alarm worth keeping: 360 runs seemed to have a statement that differed from prompt.txt. `read_text` had folded
+  `\r\n`; byte for byte, all 924 match.
+- matplotlib added as the `report` extra (only `uplift report` imports it). The report is deterministic: identical bytes over
+  two runs. `paid.sh label` added, plus a deny line for direct `uplift label`.
+- **Failure labels** (`paid.sh label`, 258 failed runs, $0.47 against an estimate of $0.20): hidden reasoning used up the tokens
+  on many calls, 84 extra requests in all, and 7 runs came back empty even at 16K, so a third try at 32K was added. The prompt has only
+  the issue, the fix's file list and the diff. Agreement: "wrong file" matches the rule well, but Muse Spark's "broke other
+  tests" is unreliable, because nearly all its uses are on runs where every PASS_TO_PASS test passed. The rules are the facts.
+

@@ -40,7 +40,7 @@ What each criterion needs from us:
 2. "What we built vs what we used":
    - Built: budget guard, task loader/split, leakage checks, fresh-task miner, validator, fail-closed grader, risk map, setup generator, arms and hooks, batch runner, analysis and report.
    - Used: sqlglot (MIT, test repo), SWE-rebench tasks (check licence), Muse Code, Muse Spark.
-3. "Why you can trust the numbers": 0/40 leakage with positive controls, fresh 2026 bugs, dev/test split, fail-closed grader (3 hidden-failure formats caught), no git history in workspaces, repo's own CLAUDE.md/AGENTS.md stripped, every call metered.
+3. "Why you can trust the numbers": 0/40 snapshot leakage with positive controls, fresh 2026 bugs, dev/test split, fail-closed grader (3 hidden-failure formats caught), no git history in workspaces, repo's own CLAUDE.md/AGENTS.md stripped, every main-batch run metered. Must also state the web gap: 80 of 924 runs reached the fix or newer code, audited and shown not to change the result.
 4. Headline chart: solved per arm with paired stats and error bars, cost per solved bug, regressions.
 5. One worked example task (bug, agent diff, hook message, pass/fail).
 6. Honest framing: claims no bigger than the evidence; state the smallest difference we could detect.
@@ -50,7 +50,8 @@ What each criterion needs from us:
 
 ## Findings to remember for the story
 
-- MAIN RESULT (Oct 31, 924 runs: 77 screened tasks = 39 test + 38 fresh, x 6 arms x 2 repeats, $10.08 + $11.22): solved none 72.7%, prose 72.7%, sensors 72.1%, both 72.1%, handwritten 69.5%, tuned 73.4%. Paired bootstrap vs none (95% CI): prose +0.0 [-5.2,+5.2], sensors -0.6 [-6.5,+5.2], both -0.6 [-7.1,+5.8], handwritten -3.2 [-8.4,+1.3], tuned +0.6 [-3.2,+4.5]. No arm significantly different from none; differences of roughly 5-7 points could have been detected. Generic handwritten file is lowest, most expensive per solved bug ($0.034 vs $0.031) and the only arm with 2 regression runs. 43/77 tasks solved in every run by every arm, 11 never: only ~23 tasks discriminate (ceiling effect with a strong agent). Test vs fresh similar (75.6% vs 69.7% for none). Total project spend $29.78 of $100.
+- WEB LEAK (found Nov 1 in Phase 5): workspaces have no git history, but Muse Code has web tools and shell network access, and nothing blocked them. `uplift web-audit`: 80 of 924 main runs (8.7%) reached the task's own fix or newer upstream code (59 own fix diff, 21 newer code; 78 solved), 12-16 per arm; test 73 of 468, fresh 7 of 456; dev 69 of 304. A lower bound. The main result survives: dropping the 26 affected tasks (51 left), or counting exposed runs as failed, still leaves every interval crossing 0. Never say the fix could not be looked up. Do say we found this ourselves and measured it.
+- MAIN RESULT (Oct 31, 924 runs: 77 screened tasks = 39 test + 38 fresh, x 6 arms x 2 repeats, $10.08 + $11.22): solved none 72.7%, prose 72.7%, sensors 72.1%, both 72.1%, handwritten 69.5%, tuned 73.4%. Paired task-level bootstrap vs none (95% CI, 10,000 resamples, seed 20261101, `uplift report`): prose +0.0 [-5.8,+4.5], sensors -0.6 [-6.5,+4.5], both -0.6 [-7.1,+5.8], handwritten -3.2 [-9.1,+1.3], tuned +0.6 [-2.6,+4.5]. No arm significantly different from none. Smallest effect detectable with 80% power: 5.4-9.1 points (CI half-widths are 3.6-6.5, which is only ~50% power). Generic handwritten file is lowest, most expensive per solved bug ($0.034 vs $0.031) and has the most regression runs (2; both has 1, the others 0). 43/77 tasks solved in every run by every arm, 11 never: only ~23 tasks discriminate (ceiling effect with a strong agent). Test vs fresh similar (75.6% vs 69.7% for none). Total project spend $29.78 of $100.
 - Dev batch (Oct 31, 38 tasks x 8 arms x 1 seed, $7.52): no arm clearly beats none. On the screened lists (37 tasks, one seed, solved / wins-losses vs none): none 26; prose 24 (+1/-3); sensors 26 (+4/-4); both 24 (+1/-3); handwritten 28 (+3/-1); lint-only 27 (+2/-1); cochange-only 21 (+1/-6); verify-only 28 (+4/-2). Only 12 of 37 tasks differ between arms.
 - The early "co-change warnings hurt" reading did not hold: both's 3 losses were runs wrongly recorded as errors (solved once graded), and most of cochange-only's gap is in runs where no warning fired (with a warning: 13/20 vs none 14/20; without: 8/17 vs 12/17). Warnings look weak (followed ~28% of the time), not harmful.
 - The 40-step cap binds: Muse starts its wind-down reminders at step 30 and 284 of 304 dev runs reached them, in every arm. A verify block at step 33-39 can run the agent out of steps (5 dev runs, exit 1, 4 of them solved anyway).
@@ -67,6 +68,9 @@ What each criterion needs from us:
 - Screening rule fixed before seeing results, no overrides: task 4516 was probably dropped wrongly and stays dropped.
 - Ceiling effect: 43/77 tasks solved by every run of every arm, 11 by none; only ~23 tasks can show a difference.
 - The tuned arm was chosen from one-seed dev differences: a hypothesis, not a proven improvement.
+- Agents had web and shell network access: at least 80 of 924 runs reached the real fix or newer upstream code, 12-16 per arm and mostly on test tasks. Removing them doesn't change the conclusion, but solve rates are somewhat inflated, and test vs fresh is not a clean comparison.
+- The 5 comparisons vs none are not adjusted for multiplicity, and the intervals move by up to one step (0.65 points) with the bootstrap seed.
+- 6 verify blocks fired on the last step and never reached the agent.
 - Global gitignore on the build machine keeps a few agent files (CLAUDE.md, .claude/, .cursor/) out of start commits; grading is unaffected.
 
 ## Before submitting

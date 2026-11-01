@@ -7,6 +7,10 @@
     uplift validate-batch --repo tobymao/sqlglot --clone ../sqlglot --ids dev,test,fresh --workers 4
     uplift plan-batch --repo tobymao/sqlglot --clone ../sqlglot --ids dev --out plan.json
     scripts/paid.sh run-batch --plan plan.json --workers 8 --max-usd 2
+    uplift web-audit --repo tobymao/sqlglot --plan .uplift/tobymao__sqlglot/plans/main.json
+    uplift export --repo tobymao/sqlglot --plan .uplift/tobymao__sqlglot/plans/main.json
+    uplift report --repo tobymao/sqlglot --plan .uplift/tobymao__sqlglot/plans/main.json --dev-plan <dev plan>
+    scripts/paid.sh label --repo tobymao/sqlglot --plan .uplift/tobymao__sqlglot/plans/main.json
 
 Working data lives in .uplift/<owner>__<name>/ (git-ignored).
 """
@@ -534,6 +538,95 @@ def cmd_run_batch(a) -> int:
     return 0 if out["status"] == "finished" else 1
 
 
+def _load_batch(a):
+    from . import analysis
+    d = repo_dir(a.workdir, a.repo).resolve()
+    s = split_mod.Split.load(d / "split.json")
+    return analysis.load(d, json.loads(a.plan.read_text()), {"test": s.test_ids, "fresh": s.fresh_ids}), d
+
+
+def cmd_export(a) -> int:
+    """Free: site/data/results.json from a finished batch."""
+    from . import analysis, webaudit
+    b, d = _load_batch(a)
+    by_id = {t.id: t for t in tasks_mod.read_tasks(d / "tasks.jsonl")}
+    web = webaudit.trust_summary(b, webaudit.load(d, a.plan))
+    data, notes = analysis.export(b, by_id, a.repo, a.workdir.resolve() / "workspaces", web)
+    a.out.parent.mkdir(parents=True, exist_ok=True)
+    a.out.write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    json.loads(a.out.read_text(encoding="utf-8"))
+    print(f"-> {a.out}: {a.out.stat().st_size / 1e6:.1f} MB, {data['summary']}")
+    for r in data["arms"]:
+        print(f"{r['id']:<12} {r['solved']}/{r['attempts']} {r['rate']:.1%}  vs none {r['diff_vs_none']:+.1%} "
+              f"[{r['ci_low']:+.1%}, {r['ci_high']:+.1%}]  ${r['cost_per_solved']:.4f}/solved  regressions {r['regressions']}")
+    print(f"{notes['with_messages']} runs with hook messages; {len(notes['not_delivered'])} fired but never reached "
+          f"the model (left out); {notes['diffs_cut']} diffs cut")
+    return 0
+
+
+def cmd_web_audit(a) -> int:
+    """Free: what each run reached on the network, from its saved trace."""
+    from . import webaudit
+    d = repo_dir(a.workdir, a.repo).resolve()
+    plan = json.loads(a.plan.read_text())
+    by_id = {t.id: t for t in tasks_mod.read_tasks(d / "tasks.jsonl")}
+    rows = webaudit.audit(d, plan["runs"], by_id, Path(plan["clone"]), workers=a.workers)
+    out = webaudit.path_for(d, a.plan)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(rows, indent=1))
+    print(f"-> {out}")
+    for tier, name in webaudit.LABELS.items():
+        print(f"{tier} {name:<30} {sum(r['tier'] == tier for r in rows):>4} runs")
+    for arm in dict.fromkeys(r["arm"] for r in plan["runs"]):
+        print(f"{arm:<14} exposed {sum(r['arm'] == arm and r['tier'] in webaudit.EXPOSED for r in rows)}")
+    return 0
+
+
+def _label_items(a):
+    from . import label, webaudit
+    b, d = _load_batch(a)
+    by_id = {t.id: t for t in tasks_mod.read_tasks(d / "tasks.jsonl")}
+    return d / "labels", label.collect(b, by_id, webaudit.by_run(webaudit.load(d, a.plan)))
+
+
+def cmd_label_plan(a) -> int:
+    """Free: what `paid.sh label` will ask, and its estimated cost. No model calls."""
+    from . import label
+    out, items = _label_items(a)
+    todo = [it for it in items if not label.item_path(out, it).exists()]
+    print(f"{len(items)} failed runs; {sum(it['cut'] for it in items)} diffs cut at {label.MAX_DIFF_CHARS} chars")
+    print(f"to ask: {len(todo)} calls, estimated ${label.estimate_usd(todo):.3f}")
+    return 0
+
+
+def cmd_label(a) -> int:
+    """Paid: only through scripts/paid.sh. Prompts hold only the issue, the fix's files and the diff."""
+    from . import label
+    out, items = _label_items(a)
+    results = label.run(items, out, workers=a.workers)
+    failed = [r for r in results if "failed" in r]
+    if failed:
+        print(f"{len(failed)} run(s) got no label; run it again (saved labels are reused):")
+        for r in failed[:5]:
+            print(f"  {r['task']} {r['arm']} s{r['seed']}: {r['failed']}")
+        return 1
+    print(f"{len(results)} labels in {out}")
+    return 0
+
+
+def cmd_report(a) -> int:
+    """Free: reports/main.md and charts. Same inputs, same numbers."""
+    from . import report, webaudit
+    b, d = _load_batch(a)
+    c = report.write(d, b, json.loads(a.dev_plan.read_text()), a.out, a.submission, webaudit.load(d, a.plan),
+                     webaudit.load(d, a.dev_plan))
+    print(f"-> {a.out / 'main.md'} and {len(report.CHARTS)} charts")
+    for r in c["arms"]:
+        print(f"{r['id']:<12} {r['rate']:.1%}  {r['diff'] * 100:+.1f} [{r['diff_ci'][0] * 100:+.1f}, "
+              f"{r['diff_ci'][1] * 100:+.1f}]  detectable {r['mde'] * 100:.1f}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="uplift", description=__doc__.split("\n\n")[0])
     ap.add_argument("--workdir", type=Path, default=Path(".uplift"))
@@ -671,6 +764,38 @@ def main(argv: list[str] | None = None) -> int:
     rg.add_argument("--python", default="3.12")
     rg.add_argument("runs", nargs="+", help="<arm>/<task id>/<seed>")
     rg.set_defaults(func=cmd_regrade)
+
+    ex = sub.add_parser("export", help="site/data/results.json from a finished batch (free)")
+    ex.add_argument("--repo", required=True)
+    ex.add_argument("--plan", type=Path, required=True)
+    ex.add_argument("--out", type=Path, default=Path("site/data/results.json"))
+    ex.set_defaults(func=cmd_export)
+
+    wa = sub.add_parser("web-audit", help="what each run reached on the network, from its trace (free)")
+    wa.add_argument("--repo", required=True)
+    wa.add_argument("--plan", type=Path, required=True)
+    wa.add_argument("--workers", type=int, default=8)
+    wa.set_defaults(func=cmd_web_audit)
+
+    rp = sub.add_parser("report", help="reports/main.md and charts from a finished batch (free)")
+    rp.add_argument("--repo", required=True)
+    rp.add_argument("--plan", type=Path, required=True)
+    rp.add_argument("--dev-plan", type=Path, required=True)
+    rp.add_argument("--out", type=Path, default=Path("reports"))
+    rp.add_argument("--submission", type=Path, default=Path("SUBMISSION.md"))
+    rp.set_defaults(func=cmd_report)
+
+    lp = sub.add_parser("label-plan", help="what `paid.sh label` will ask and its estimated cost (free)")
+    lp.add_argument("--repo", required=True)
+    lp.add_argument("--plan", type=Path, required=True)
+    lp.add_argument("--workers", type=int, default=8, help=argparse.SUPPRESS)  # paid.sh passes `label`'s flags here
+    lp.set_defaults(func=cmd_label_plan)
+
+    lb = sub.add_parser("label", help="Muse Spark labels each failed run (paid: via scripts/paid.sh)")
+    lb.add_argument("--repo", required=True)
+    lb.add_argument("--plan", type=Path, required=True)
+    lb.add_argument("--workers", type=int, default=8)
+    lb.set_defaults(func=cmd_label)
 
     pb = sub.add_parser("plan-batch", help="write the list of (task, arm, seed) runs for run-batch")
     pb.add_argument("--repo", required=True)

@@ -37,6 +37,7 @@
       "Bash(uplift run-batch *)",
       "Bash(uplift generate *)",
       "Bash(uplift screen *)",
+      "Bash(uplift label *)",
       "Bash(uplift tune *)",
       "Bash(uplift probe-hooks *)",
       "Bash(*--agent-cmd*)",
