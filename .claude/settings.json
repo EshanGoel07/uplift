@@ -40,6 +40,7 @@
       "Bash(uplift label *)",
       "Bash(uplift tune *)",
       "Bash(uplift probe-hooks *)",
+      "Bash(uplift probe-network *)",
       "Bash(*--agent-cmd*)",
       "Bash(printenv *)",
       "Bash(env)",

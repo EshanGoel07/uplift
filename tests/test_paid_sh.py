@@ -105,6 +105,10 @@ def test_generate_never_gets_the_key_and_probe_does(env):
         r = run(env, "probe-hooks")
         assert r.returncode == 0, r.stderr
         assert json.loads(env["out"].read_text())["key_ok"]
+        r = run(env, "probe-network")
+        assert r.returncode == 0, r.stderr
+        assert json.loads(env["out"].read_text())["key_ok"]
+        assert run(env, "probe-network", "--guard=/tmp/evil.py").returncode == 2
         assert run(env, "generate", "--guard=/tmp/evil.py").returncode == 2
         for cmd in ("screen", "tune", "label"):
             r = run(env, cmd, "--repo", "o/r")

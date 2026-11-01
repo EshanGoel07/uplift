@@ -29,6 +29,23 @@ Rules:
 </issue>
 """
 
+# The agent's network policy, applied by Muse Code itself (flags on `muse exec`, this run only).
+#   --sandbox-network restricted   its shell has no network, not even Muse's default "approved
+#                                  hosts" proxy, which let `curl github.com` through (Phase 5).
+#   web_fetch off, web_search off  these run in Muse or at the provider, outside the shell sandbox.
+# Unknown or clashing settings make Muse refuse the run, so a typo can't leave the network open.
+# Not sandbox-exec: it can't allow one remote host, and Muse's own model calls go to api.meta.ai.
+# The guard (reserve and settle at the proxy), pip installs and grading run outside all of this.
+NETWORK_POLICY = "blocked"
+NETWORK_ARGS = ("--sandbox-network", "restricted",
+                "--config", "tools.web_fetch.enabled=false",
+                "--config", 'tools.web_search.mode="off"')
+
+
+def muse_args(prompt: str) -> list[str]:
+    """Arguments for `muse exec`. Every agent run goes through here, so none can skip the block."""
+    return ["--trust-workspace", "--disable-approval", *NETWORK_ARGS, prompt]
+
 
 @dataclass
 class RunResult:
@@ -48,6 +65,7 @@ class RunResult:
     stripped: list = field(default_factory=list)       # repo's own agent files removed first
     hooks: dict = field(default_factory=dict)          # {check: {"runs": n, "fired": n}}
     f2p_excluded: list = field(default_factory=list)   # screened out: don't count towards `resolved`
+    network: str = ""                                  # NETWORK_POLICY; "" in runs that predate it
 
 
 def _start_ref(ws: Path) -> str:
@@ -172,10 +190,12 @@ def attempt(task: Task, clone: Path, ws_root: Path, run_dir: Path, *, arm: str, 
 
     if agent_cmd:
         cmd = shlex.split(agent_cmd) + [prompt]
+        network = "not applied (test agent)"
     else:
         cmd = [sys.executable, str(guard), "--log-dir", str(run_dir), "--max-steps", str(max_steps),
                "--timeout", str(timeout)] + (["--trust-usage"] if trust_usage else []) + \
-              ["--", "--trust-workspace", "--disable-approval", prompt]
+              ["--", *muse_args(prompt)]
+        network = NETWORK_POLICY
     proc = subprocess.Popen(cmd, cwd=ws, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
                             env=dict(os.environ, UPLIFT_HOOK_LOG=str(hook_log), MUSE_NO_AUTO_UPDATE="1"),
                             start_new_session=True)
@@ -197,7 +217,7 @@ def attempt(task: Task, clone: Path, ws_root: Path, run_dir: Path, *, arm: str, 
         return RunResult(task.id, arm, seed, False, {}, agent_exit=rc,
                          error="refused by budget cap" if rc == 3 else "budget proxy unreachable",
                          seconds=round(time.time() - t0, 1), arm_files=installed["copied"],
-                         stripped=installed["stripped"])
+                         stripped=installed["stripped"], network=network)
 
     ws_log = ws / ".muse" / "uplift_hooks" / "fired.jsonl"
     if not hook_log.exists() and ws_log.exists():  # Muse doesn't pass env to hooks (hook probe)
@@ -213,7 +233,8 @@ def attempt(task: Task, clone: Path, ws_root: Path, run_dir: Path, *, arm: str, 
         res = RunResult(task.id, arm, seed, False, {}, agent_exit=rc, agent_end=end, error=why,
                         seconds=round(time.time() - t0, 1), cost_usd=summary.get("parsed_cost_usd"),
                         tokens=summary.get("tokens", {}), patch_lines=patch.count("\n"),
-                        arm_files=installed["copied"], stripped=installed["stripped"], hooks=hook_counts(hook_log))
+                        arm_files=installed["copied"], stripped=installed["stripped"], hooks=hook_counts(hook_log),
+                        network=network)
         (run_dir / "result.json").write_text(json.dumps(asdict(res), indent=2))
         return res
     g = grade_mod.grade(ws, py, start, task.test_patch, task.test_files, task.fail_to_pass,
@@ -221,7 +242,8 @@ def attempt(task: Task, clone: Path, ws_root: Path, run_dir: Path, *, arm: str, 
     res = RunResult(task.id, arm, seed, screen.resolved(g.to_dict(), excluded_f2p), g.to_dict(),
                     agent_exit=rc, agent_end=end, f2p_excluded=list(excluded_f2p), seconds=round(time.time() - t0, 1), cost_usd=summary.get("parsed_cost_usd"),
                     tokens=summary.get("tokens", {}), patch_lines=patch.count("\n"),
-                    arm_files=installed["copied"], stripped=installed["stripped"], hooks=hook_counts(hook_log))
+                    arm_files=installed["copied"], stripped=installed["stripped"], hooks=hook_counts(hook_log),
+                    network=network)
     (run_dir / "result.json").write_text(json.dumps(asdict(res), indent=2))
     return res
 

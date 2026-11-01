@@ -267,6 +267,13 @@ def cmd_probe_hooks(a) -> int:
     return 0
 
 
+def cmd_probe_network(a) -> int:
+    from . import netprobe
+    res = netprobe.run(a.workdir / "workspaces", a.workdir / "probes" / "network", a.guard)
+    print(json.dumps(res, indent=2))
+    return 0 if res["passed"] else 1
+
+
 def cmd_run_one(a) -> int:
     from . import runner
     t = _task(a)
@@ -705,6 +712,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--guard", type=Path, default=DEFAULT_GUARD)
     p.add_argument("--agent-cmd", help=argparse.SUPPRESS)  # tests only
     p.set_defaults(func=cmd_probe_hooks)
+
+    n = sub.add_parser("probe-network", help="is the agent cut off from the network? (paid: via scripts/paid.sh)")
+    n.add_argument("--guard", type=Path, default=DEFAULT_GUARD)
+    n.set_defaults(func=cmd_probe_network)
 
     o = sub.add_parser("run-one", help="one agent attempt on one task, graded by the real tests")
     o.add_argument("--repo", required=True)

@@ -35,7 +35,10 @@ _URL = re.compile(r"https?://[^\s\"'\\)]+")
 _DIFF = re.compile(r"\.diff|\.patch|/files|patch-diff")
 _RAW = re.compile(r"raw\.githubusercontent\.com/tobymao/sqlglot/|/raw/|/blob/")
 _COMMIT = re.compile(r"/commits?/([0-9a-f]{7,40})")
-_FAILED = re.compile(r"Sign in to GitHub|Page not found|404: Not Found|HTTP Error 4|API rate limit|\"exit_code\": [1-9]", re.I)
+# The last two are how a blocked call looks. Empty output is not a failure: `curl -o fix.diff` prints
+# nothing and the agent can read the file next, so a blocked `curl -s | head` errs towards exposed.
+_FAILED = re.compile(r"Sign in to GitHub|Page not found|404: Not Found|HTTP Error 4|API rate limit|\"exit_code\": [1-9]"
+                     r"|^tool failed:|Could not resolve host", re.I)
 _PIP = re.compile(r"(?:pip3?|uv pip) +(?:install|download)[^;&|\n]*sqlglot")
 _TESTS = re.compile(r"\bpytest\b|\bunittest\b|python3? +-m +tests?\b|make +(?:unit|test)")
 

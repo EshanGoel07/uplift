@@ -50,7 +50,9 @@ What each criterion needs from us:
 
 ## Findings to remember for the story
 
+- BENCHMARK QUALITY (computed Nov 2 from screen/screened.json): 23 of 80 SWE-rebench sqlglot tasks (29%; dev 12/40, test 11/40) have at least one FAIL_TO_PASS test that Muse Spark judged unrelated to the issue (bundled commits); 38 of 164 F2P tests excluded overall, 4 tasks dropped. SWE-rebench's own llm_score.test_score rated 7 of those 23 tasks 0 (verify the scale's direction in the paper, arXiv 2505.20411, before claiming it). Our own miner had the same issue on 3 of 40 fresh tasks. Judgements are Muse Spark's (spot-check 9/10): hand-verify before reporting upstream.
 - WEB LEAK (found Nov 1 in Phase 5): workspaces have no git history, but Muse Code has web tools and shell network access, and nothing blocked them. `uplift web-audit`: 80 of 924 main runs (8.7%) reached the task's own fix or newer upstream code (59 own fix diff, 21 newer code; 78 solved), 12-16 per arm; test 73 of 468, fresh 7 of 456; dev 69 of 304. A lower bound. The main result survives: dropping the 26 affected tasks (51 left), or counting exposed runs as failed, still leaves every interval crossing 0. Never say the fix could not be looked up. Do say we found this ourselves and measured it.
+- NETWORK BLOCK (Nov 2): Uplift now blocks agent network access except the model API, and audits every tool call; the 924 main-batch runs predate this and are reported with the audit. Probe, $0.0085: curl and escalated curl both refused, web tools not offered, model calls fine, audit clean. Say "the model API", not "the proxy": Muse calls api.meta.ai itself, and the proxy meters through the guard. The block has only been tested by that probe, not on a real task.
 - MAIN RESULT (Oct 31, 924 runs: 77 screened tasks = 39 test + 38 fresh, x 6 arms x 2 repeats, $10.08 + $11.22): solved none 72.7%, prose 72.7%, sensors 72.1%, both 72.1%, handwritten 69.5%, tuned 73.4%. Paired task-level bootstrap vs none (95% CI, 10,000 resamples, seed 20261101, `uplift report`): prose +0.0 [-5.8,+4.5], sensors -0.6 [-6.5,+4.5], both -0.6 [-7.1,+5.8], handwritten -3.2 [-9.1,+1.3], tuned +0.6 [-2.6,+4.5]. No arm significantly different from none. Smallest effect detectable with 80% power: 5.4-9.1 points (CI half-widths are 3.6-6.5, which is only ~50% power). Generic handwritten file is lowest, most expensive per solved bug ($0.034 vs $0.031) and has the most regression runs (2; both has 1, the others 0). 43/77 tasks solved in every run by every arm, 11 never: only ~23 tasks discriminate (ceiling effect with a strong agent). Test vs fresh similar (75.6% vs 69.7% for none). Total project spend $29.78 of $100.
 - Dev batch (Oct 31, 38 tasks x 8 arms x 1 seed, $7.52): no arm clearly beats none. On the screened lists (37 tasks, one seed, solved / wins-losses vs none): none 26; prose 24 (+1/-3); sensors 26 (+4/-4); both 24 (+1/-3); handwritten 28 (+3/-1); lint-only 27 (+2/-1); cochange-only 21 (+1/-6); verify-only 28 (+4/-2). Only 12 of 37 tasks differ between arms.
 - The early "co-change warnings hurt" reading did not hold: both's 3 losses were runs wrongly recorded as errors (solved once graded), and most of cochange-only's gap is in runs where no warning fired (with a warning: 13/20 vs none 14/20; without: 8/17 vs 12/17). Warnings look weak (followed ~28% of the time), not harmful.
@@ -60,6 +62,16 @@ What each criterion needs from us:
 - Muse hooks only load nested under "hooks"; blocking and feedback both work.
 - sqlglot added its own CLAUDE.md (2026-02) and AGENTS.md (2026-03); stripped so "none" means none.
 
+## Notes for Muse developers (README section, decided Nov 2) - MUST be in the README
+
+A highlighted README section "Notes for Muse developers": what we observed in 1,228 Muse Code runs, the evidence, and a suggested fix for each. Check Meta's docs first; report only what is undocumented; phrase as "we observed".
+1. `.muse/hooks.json` is silently ignored unless events are nested under "hooks" (no warning). Fix: warn/fail on unrecognised format.
+2. By default, web tools are on and the shell's "proxy-only" network mode still lets curl reach github.com, so the agent fetched the real fix during evaluation (8.7% of main runs). Muse already has controls (--sandbox-network restricted, tools.web_fetch.enabled=false, tools.web_search.mode="off"), but we found them only in the binary and a third-party post, not in Meta's docs. Fix: document these flags, and recommend them for benchmarks and evaluations.
+3. A Stop-hook block on the final step never reaches the agent, though logged as fired. Fix: deliver or report it; document.
+4. Muse Spark hidden reasoning can use the whole output budget (4K) and return nothing. Fix: document; clear "out of tokens" signal.
+5. Muse exits 1 in some runs that still produced a valid patch. Fix: document exit codes (e.g. step limit).
+Also: one sentence in the video; a short friendly Discord post linking the section. Optional (if time): package the leak audit + network block as a reusable module for anyone evaluating Muse Code.
+
 ## Limitations to state honestly (decided Oct 31)
 
 - One repo (sqlglot) and one agent (Muse Code on muse-spark-1.3-contributor).
@@ -68,7 +80,8 @@ What each criterion needs from us:
 - Screening rule fixed before seeing results, no overrides: task 4516 was probably dropped wrongly and stays dropped.
 - Ceiling effect: 43/77 tasks solved by every run of every arm, 11 by none; only ~23 tasks can show a difference.
 - The tuned arm was chosen from one-seed dev differences: a hypothesis, not a proven improvement.
-- Agents had web and shell network access: at least 80 of 924 runs reached the real fix or newer upstream code, 12-16 per arm and mostly on test tasks. Removing them doesn't change the conclusion, but solve rates are somewhat inflated, and test vs fresh is not a clean comparison.
+- Agents in the 924 main-batch runs had web and shell network access: at least 80 of 924 runs reached the real fix or newer upstream code, 12-16 per arm and mostly on test tasks. Removing them doesn't change the conclusion, but solve rates are somewhat inflated, and test vs fresh is not a clean comparison. Uplift now blocks this for new runs; none of the 924 were re-run.
+- The network block does not cover the filesystem: an agent could still read the full-history clone on the build machine. 0 of 1,220 saved traces name it, but nothing blocks it.
 - The 5 comparisons vs none are not adjusted for multiplicity, and the intervals move by up to one step (0.65 points) with the bootstrap seed.
 - 6 verify blocks fired on the last step and never reached the agent.
 - Global gitignore on the build machine keeps a few agent files (CLAUDE.md, .claude/, .cursor/) out of start commits; grading is unaffected.

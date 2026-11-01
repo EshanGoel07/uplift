@@ -269,3 +269,23 @@ Built for the Meta Global AI Developer Hackathon (Oct 26 – Nov 4, 2026).
   the issue, the fix's file list and the diff. Agreement: "wrong file" matches the rule well, but Muse Spark's "broke other
   tests" is unreliable, because nearly all its uses are on runs where every PASS_TO_PASS test passed. The rules are the facts.
 
+## Phase 6: network block (Nov 2)
+
+- **Agent runs are cut off from the web.** `muse exec` gets `--sandbox-network restricted`, `tools.web_fetch.enabled=false` and
+  `tools.web_search.mode="off"`, for run-one and run-batch, and result.json records `"network": "blocked"`. Muse's default,
+  proxy-only, is why `curl github.com` worked. Found in the binary's strings (the rules forbid running `muse`); a web search did not
+  turn up Meta's own docs for these. sandbox-exec was rejected: it can't allow one remote host, and it can't reach tools that run in Muse or at the provider.
+- **The model API is not the proxy.** Muse calls api.meta.ai itself; the proxy only sees the guard's reserve and settle, which run
+  outside the block. So the agent's tools reach nothing, proxy included, and the Muse process alone reaches the model API.
+- **Probe** (`paid.sh probe-network`, $0.008484, control 200 from outside): `curl: (6) Could not resolve host: github.com`; the same
+  curl with `require_escalated`, added because approval-free runs might have allowed it: `tool failed: launch policy forbids
+  unsandboxed execution`; web_fetch and web_search not among the 34 tools offered, so step (b) was never callable; agent replied done.
+- **Bug caught by the probe:** the audit counted that refusal as a fetch of the fix (`own_fix`), so the first verdict was a fail.
+  It now knows `tool failed:` and `Could not resolve host`; the verdict was re-scored from the saved trace, no second paid run. A
+  first fix also treated empty output as failed; comparing with the cached audits moved one dev run (4014), which really did fetch
+  upstream code and print nothing, and `curl -o` then `cat` would have hidden the same way. Reverted. Final: 0 of 924 main and 0 of
+  304 dev tiers change. The cost: a blocked `curl -s | head` still reads as exposed, the safe direction.
+- **Still open:** the sandbox leaves the filesystem readable, so an agent could read the full-history clone at `--clone`. 0 of 1,220
+  saved traces name it, but nothing blocks it. Blocked runs also can't `pip install` missing test dependencies, and past agents
+  sometimes tried, so new runs should not be pooled with the 924.
+
