@@ -59,8 +59,18 @@ What each criterion needs from us:
 - Muse hooks only load nested under "hooks"; blocking and feedback both work.
 - sqlglot added its own CLAUDE.md (2026-02) and AGENTS.md (2026-03); stripped so "none" means none.
 
+## Limitations to state honestly (decided Oct 31)
+
+- One repo (sqlglot) and one agent (Muse Code on muse-spark-1.3-contributor).
+- 40-step agent budget for every arm (Muse wind-down starts at step 30); the verify hook arrives late in that budget.
+- "Seeds" are repeats: the seed labels the run but isn't passed to Muse.
+- Screening rule fixed before seeing results, no overrides: task 4516 was probably dropped wrongly and stays dropped.
+- Ceiling effect: 43/77 tasks solved by every run of every arm, 11 by none; only ~23 tasks can show a difference.
+- The tuned arm was chosen from one-seed dev differences: a hypothesis, not a proven improvement.
+- Global gitignore on the build machine keeps a few agent files (CLAUDE.md, .claude/, .cursor/) out of start commits; grading is unaffected.
+
 ## Before submitting
 
 - Make the repo public; README first lines as above; NOTICE.md credits sqlglot and SWE-rebench.
 - Video <= 3 min, link in the form; every team member added.
-- Friend's frontend only if organisers confirm (open question: can he be on two teams?); credit him if so.
+- Friend is on the team (Uplift is his only hackathon project; rules allow up to 4). Add him on the submission form, and list his part (results page / frontend) under "what we built" with his name. Everything he builds must be made during the event.
