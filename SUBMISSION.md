@@ -65,12 +65,13 @@ What each criterion needs from us:
 ## Notes for Muse developers (README section, decided Nov 2) - MUST be in the README
 
 A highlighted README section "Notes for Muse developers": what we observed in 1,228 Muse Code runs, the evidence, and a suggested fix for each. Check Meta's docs first; report only what is undocumented; phrase as "we observed".
-1. `.muse/hooks.json` is silently ignored unless events are nested under "hooks" (no warning). Fix: warn/fail on unrecognised format.
-2. By default, web tools are on and the shell's "proxy-only" network mode still lets curl reach github.com, so the agent fetched the real fix during evaluation (8.7% of main runs). Muse already has controls (--sandbox-network restricted, tools.web_fetch.enabled=false, tools.web_search.mode="off"), but we found them only in the binary and a third-party post, not in Meta's docs. Fix: document these flags, and recommend them for benchmarks and evaluations.
-3. A Stop-hook block on the final step never reaches the agent, though logged as fired. Fix: deliver or report it; document.
-4. Muse Spark hidden reasoning can use the whole output budget (4K) and return nothing. Fix: document; clear "out of tokens" signal.
-5. Muse exits 1 in some runs that still produced a valid patch. Fix: document exit codes (e.g. step limit).
-Also: one sentence in the video; a short friendly Discord post linking the section. Optional (if time): package the leak audit + network block as a reusable module for anyone evaluating Muse Code.
+Status (Nov 2): checked against Meta's docs and Uplift's logs; final text is in README § Notes for Muse developers. Platform observations for Meta: see that section.
+1. `.muse/hooks.json` with events at the top level is ignored with no warning (docs promise a startup warning). Confirmed from saved probes and live on Nov 2 (Muse Code 1.4.14). REPORTABLE: send via `/feedback`.
+2. Network leak (80 of 924 main runs; web_fetch only 37, shell only 30, both 13). Main runs used `--disable-approval` with default proxy-only; docs don't say how proxy-only behaves when approval is bypassed. `--sandbox-network restricted` IS documented; the web-tool switches (tools.web_fetch.enabled, tools.web_search.mode) are not. Docs gap, not a bug.
+3. Stop-hook block on the final step: all 8 cases (6 main, 2 dev) were at step 40 of 40, so nothing could deliver it (expected). Remaining point: Muse's JSONL has no hook events, so the loss is invisible. Feature request.
+4. Reasoning budget: at max_tokens 4,000 a judge call stopped with finish_reason: length and truncated, unparseable output (NOT "returned nothing"); reasoning was 97-99% of completion tokens. Documented; kept as a tip.
+(Dropped: "exits 1 with a valid patch". All 16 exit-1 runs hit the 40-step cap, which the docs list under exit 1.)
+Also: one sentence in the video. No official Muse Code Discord found; post in the hackathon's own channel if it has one. Optional (if time): package the leak audit + network block as a reusable module for anyone evaluating Muse Code.
 
 ## Limitations to state honestly (decided Oct 31)
 
