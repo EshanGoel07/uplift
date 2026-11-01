@@ -66,7 +66,7 @@ What each criterion needs from us:
 
 A highlighted README section "Notes for Muse developers": what we observed in 1,228 Muse Code runs, the evidence, and a suggested fix for each. Check Meta's docs first; report only what is undocumented; phrase as "we observed".
 Status (Nov 2): checked against Meta's docs and Uplift's logs; final text is in README § Notes for Muse developers. Platform observations for Meta: see that section.
-1. `.muse/hooks.json` with events at the top level is ignored with no warning (docs promise a startup warning). Confirmed from saved probes and live on Nov 2 (Muse Code 1.4.14). REPORTABLE: send via `/feedback`.
+1. `.muse/hooks.json` with events at the top level is ignored with no warning (docs promise a startup warning). Confirmed from saved probes and live on Nov 2 (Muse Code 1.4.14). REPORTED via `/feedback` on Nov 2 (id mbfb_c6osmehlmvsaxlcluinsseg6km, sent without attachments).
 2. Network leak (80 of 924 main runs; web_fetch only 37, shell only 30, both 13). Main runs used `--disable-approval` with default proxy-only; docs don't say how proxy-only behaves when approval is bypassed. `--sandbox-network restricted` IS documented; the web-tool switches (tools.web_fetch.enabled, tools.web_search.mode) are not. Docs gap, not a bug.
 3. Stop-hook block on the final step: all 8 cases (6 main, 2 dev) were at step 40 of 40, so nothing could deliver it (expected). Remaining point: Muse's JSONL has no hook events, so the loss is invisible. Feature request.
 4. Reasoning budget: at max_tokens 4,000 a judge call stopped with finish_reason: length and truncated, unparseable output (NOT "returned nothing"); reasoning was 97-99% of completion tokens. Documented; kept as a tip.
