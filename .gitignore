@@ -34,3 +34,6 @@ mine_logs/
 .private/
 CLAUDE.md
 .claude/
+
+# --- Local credentials file (never commit) ---
+/.credentials.json

@@ -207,3 +207,154 @@ was run, and `data/results.json` is unchanged (sha256 `5f69ac40…7e34f7`).
 - Screenshots of every section at desktop, tablet and phone sizes, plus the pinned states.
 - The repo-root `python -m pytest -q` couldn't run on this machine: pytest isn't installed and no
   virtualenv is present. Nothing outside `site/` changed, so the Python suite isn't affected.
+
+## Phase 1 (2026-11-03): data sync and research accuracy · complete
+
+Content only; layout and styling unchanged.
+
+- `npm run data` re-run: all 80 files under `public/data/` came out byte-identical (source sha
+  `42364bef…`).
+- Arm descriptions now come from `results.json` (`Arm.description`); the hardcoded `src/data/arms.ts`
+  was removed. Labels are the data's own.
+- Featured WINDOW note: the 7 shortcut / 4 look-ahead / 1 other story, the `SELECT col window FROM t`
+  assertion (sourced to README and PHASE_LOG, not to public data), and the documented web-clean audit
+  result in place of "could not be verified". A unit test checks the run counts and hook messages
+  against `results.json`.
+- Web-leak card, investigation and Limitations: the Phase 6 network block (new runs only; the 924 were
+  not re-run) and the open filesystem gap.
+- Dates: Oct 27 – Nov 4, 2026. Licence sentence matches NOTICE.md (SWE-rebench issue texts included
+  under CC-BY-4.0).
+- Repository link in the header and footer, NOTICE.md link, and a demo-video placeholder, all from
+  `src/data/links.ts`.
+- Provenance comments no longer cite the removed `SUBMISSION.md`.
+- Checks: `npm run typecheck`, `npm test` (28/28), `npm run build`, `npm run e2e` (15/15).
+
+## Phase 2 (2026-11-03): design foundation, navigation, hero and findings · complete
+
+- **Identity.** Publication palette and type scale in `tokens.css` (`--p-*`), styles in
+  `styles/publication.css`, scoped to the new header, hero and findings (`.pub`). Sections not yet
+  redesigned keep the dark tokens until their phase.
+- **Header.** "Uplift" wordmark, six sentence-case links in page order (Overview, Findings,
+  Experiment, Worked example, Explore runs, Integrity), GitHub and a demo-video placeholder. Below
+  981 px a Menu disclosure (Escape closes and returns focus). Page order now follows the nav.
+- **Hero.** Question, the central finding with its 5.4–9.1 point qualification, four study numbers,
+  the two Muse models, byline. Figure 1 is an SVG drawn from the data's dimensions: 77 bug columns ×
+  6 condition rows × 2 run ticks = 924, with one bug highlighted across every condition.
+- **Removed:** Signal Field, Experiment Streams, hero hotspots, floating scene controls, the hero pin,
+  the blinking caret, the poster image and its capture script. The 3D chunk now loads only near the
+  method and matrix sections.
+- **Findings.** The dot-and-whisker chart is kept (zero line, 95% paired intervals, per-setup
+  detectable ticks, 5.4–9.1 band), redrawn on white with no entrance animation and one colour for all
+  rows. The floating tooltip became a readout below the plot. Paired-design passage, a prominent
+  smallest-detectable-effect panel, captions, Table 1 with a sticky first column on phones.
+- **Checks.** typecheck, `npm test` 28/28, `npm run build`, `npm run e2e` 15/15 (tests rewritten for
+  the new header, hero figure, readout, mobile menu and no-WebGL hero). Review screenshots:
+  `scripts/qa/review-shots.mjs`.
+
+## Phase 2b (2026-11-04): a data-driven 3D hero · complete
+
+Review feedback: the light redesign read as generic and plain once the 3D was gone. The 3D came back
+as the data itself, not as decoration.
+
+- **Run lattice** (`scenes/RunLattice/RunLattice.tsx`, `components/figures/HeroStage.tsx`): all 924
+  runs as instanced cubes, six condition lanes crossing all 77 bugs, two cubes per bug per lane.
+  Landscape frames show two blocks (39 test bugs in front, 38 fresh behind); portrait frames look down
+  the lanes. A fitted camera (projected corners and a view offset) frames it at any size.
+- **Two views.** Design: neutral, with the featured bug as a blue band across every lane (pairing).
+  Outcomes: each cube takes its run's real result. It switches once on its own after the build-in,
+  only when on screen; the reader's choice wins after that. The caption states the data-backed
+  reading: in 54 of 77 bugs all 12 runs agree; only the 23 mixed bugs can separate setups.
+- **Interaction:** hover lifts a bug's band and fills the readout (per-setup results from the data);
+  click opens the bug in the explorer; arrow buttons step through bugs without a pointer. The camera
+  follows the pointer slightly and rises toward a plan view as the hero scrolls (no pin).
+- **Dark stage** hero with a technical grid; the header turns dark while over it. Findings gained a
+  grid-paper background and intervals that draw in from zero (skipped for reduced motion).
+- Fallbacks: no WebGL, or a WebGL failure, shows the SVG version of Figure 1. Reduced motion starts on
+  Outcomes with no animation.
+- Cost: three.js and R3F now load for the hero (shared chunk 919 KB, 243 KB gzip), after first paint.
+- Checks: typecheck, `npm test` 28/28, build, `npm run e2e` 15/15 (new lattice test).
+
+## Phase 3 (2026-11-04): the experiment workbench · complete
+
+Replaces the Methodology section, its 260% pin, the PipelineEngine scene and the three repeated
+stage lists.
+
+- **One authoritative method file**, `src/data/method.ts`: the agent prompt (runner.PROMPT, verbatim),
+  the stripped agent files (workspace.AGENT_PATHS), workspace and grading steps, what each side of the
+  information barrier sees, task sources, and what each condition installs. `tests/unit/method.test.ts`
+  checks the prompt, the stripped paths, tips/hooks per arm (generate.ARMS) and the 60-line generic file
+  against the Python source. Labels and descriptions still come from results.json.
+- **3D model** (`scenes/Workbench/`) in the shared ExperienceCanvas, laid out over a DOM stage:
+  A task source (77 tiles in test | fresh, the 40 dev tasks on a separate tray with a dashed link to the
+  tuned lane only); B six lanes, each with a setup module showing what it installs (AGENTS.md plate,
+  hook ring, both, a generic plate) and two repeat channels; C twelve glass workspaces (snapshot, issue
+  card, assigned setup, patch); D the barrier wall with one patch slot per run; E the evaluator with the
+  hidden-test block and one lamp per run; F the paired analysis bars against No setup's score. Lamps and
+  bars come from the selected bug's real task file. Gentle perspective (drawn far back, scaled up).
+- **Labels are real buttons** projected onto the model, so every module, lane and side is reachable by
+  keyboard. Clicks reach the model only on the bare stage (the shared canvas listens page-wide and
+  three.js raycasts hidden objects); a regression test covers it.
+- **Barrier switch** ("What the agent sees | What the evaluator sees"): the other side steps back, and the
+  inspector shows the verbatim prompt and what is never given to the agent, or the grading steps.
+- **2D diagram** (`WorkbenchDiagram.tsx`), the default on phones and without WebGL: the same modules as an
+  HTML schematic, every part a button, rows per condition with the real outcomes.
+- **Inspector** below the stage; one written method (5 short steps) under it. Normal scrolling, no pins.
+  Task files load only when the section approaches.
+- Checks: typecheck, `npm test` 32/32, build, `npm run e2e` 17/17 (two new workbench tests).
+
+## Phase 4 (2026-11-04): the WINDOW worked example and the explorer upgrade · complete
+
+- **Worked example** (`sections/WorkedExample/`, `#explorer`): the bug and its compatibility
+  requirement (`SELECT col window FROM t`), the task card with the sanitised issue, Figure 4 (all twelve
+  runs in six equal condition groups, results 0/2 0/2 0/2 2/2 1/2 1/2 from the task file, an approach
+  tag per run, nothing preselected), Figure 5 (Shortcut 7/0, Look-ahead 4/4, Other 1/0, each with a
+  real patch and a run switcher; A and B side by side), the hook evidence (the verbatim co-change
+  message and the four runs that received it, from the data), the web-audit line with its provenance
+  (README, PHASE_LOG; no raw traces in the JSON), and the central point.
+- **Approach labels**: `FEATURED_APPROACHES` in `reportFigures.ts`, sourced to the README;
+  `tests/unit/tasks.test.ts` re-derives them from the diffs and checks all 77 task files (924 runs).
+- **Explorer** (`#explorer-all`): searchable picker of all 77 bugs grouped by outcome band with each
+  bug's six-condition pattern; shared `RunBoard`; neutral default (No setup, repeat 1); A/B compare;
+  phones get a collapsible picker, condition accordions and collapsible run details. `openTask` from the
+  hero, workbench and matrix now lands here.
+- **Diff viewer**: per-file blocks with sticky paths, hunk headers, old/new line numbers and a small
+  safe Python highlighter (text spans only). Hook messages are styled as messages, not code; the
+  `verify` line tag no longer matches any line containing "test".
+- Legacy dark explorer CSS removed; styles in `styles/explorer.css`.
+- Checks: typecheck, `npm test` 36/36, build, `npm run e2e` 19/19 (three new explorer tests).
+
+## Phase 5 (2026-11-04): the rest of the page and the visitor journey · complete
+
+- **Journey**: Question → Findings → Experiment → Worked example → Explore runs (matrix, then the
+  explorer) → Integrity → Limitations, Built vs used, Future work → Footer. Each section ends with a
+  one-line `Bridge` to the next. Nav gains **Limitations**; with seven links the bar switches to the
+  menu below 1060px (CSS and the menu's close-on-widen query agree).
+- **Matrix** (`#matrix`): 3D intro and the 150% scroll pin removed. A data-driven ceiling bar
+  (43 · 23 · 11) explains why only the 23 mixed bugs can separate conditions; on phones it shows the
+  counts only and the caption names the groups. Filters, search, keyboard navigation and
+  open-in-explorer kept.
+- **Integrity** (`#trust`): "We checked for ways the experiment could mislead us." The six trust cards
+  are kept as the overview. The leak card is shortened to a link into the investigation, so the
+  network-block detail isn't said twice. The investigation is a six-step timeline: default network,
+  the audit (80 of 924, a lower bound; 37 web fetch only, 30 shell only, 13 both), the four
+  sensitivity views, the probe-verified block, not re-run, and the filesystem gap. Below it: grader,
+  screening, contamination controls, metering, and the failure-rule table, each linked to its source file.
+- **Method**: an 8-part technical explanation under the workbench, each part linked to the real file.
+- **Limitations**: 13 points in four groups, synced with the README and PHASE_LOG. Artifacts is
+  placed before Measurement so the two CSS columns balance (6 and 7 points).
+- **Built vs used**, **Future work** (five items, each "Planned, not built") and **Footer** rewritten.
+  The demo video stays plain text until `DEMO_VIDEO_URL` is set.
+- **Phones**: wide integrity tables scroll inside their frame with a swipe hint instead of squeezing
+  labels to one word per line. Table 2's caption sits outside the scroll frame. The probe output
+  wraps. The credits table becomes one block per tool.
+- **Number check**: every figure written into these sections was checked against README.md,
+  PHASE_LOG.md and reports/main.md: exposure tiers and per-arm counts, Table 2, failure rules, hook
+  delivery, screening, repeat noise, 5.4–9.1 detectable range, 0.65, 1,220, $21.31. All match.
+- The meta description no longer reads "No setup was shown to differ from no setup".
+- Legacy section CSS removed from `app.css`; new styles in `styles/sections.css`.
+  `SectionHead` deleted (unused).
+- QA: `scripts/qa/page-shots.mjs` captures each later section and the full page at desktop, tablet
+  and mobile, and reports console errors and horizontal overflow (none).
+- Checks: typecheck, `npm test` 36/36, build, `npm run e2e` 22/22. Three new tests: ceiling bar,
+  limitations order, footer links. The integrity test now also covers the timeline, the source links
+  and the failure table.

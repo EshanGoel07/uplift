@@ -1,13 +1,16 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { ArmId, Summary, Task } from '../../data/types';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import type { ArmId, Summary, Task, TaskMeta } from '../../data/types';
 import { loadTask } from '../../data/load';
-import { GROUP_LABEL, groupOf, githubUrl, shortId, sortForMatrix } from '../../data/classify';
+import { GROUP_LABEL, GROUP_ORDER, githubUrl, groupOf, shortId, sortForMatrix } from '../../data/classify';
 import { usd } from '../../data/format';
 import { FEATURED_TASK } from '../../data/reportFigures';
+import { CONDITIONS } from '../../data/method';
 import { useInView } from '../../hooks/useInView';
-import { scheduleRefresh } from '../../hooks/useGsap';
-import { SectionHead } from '../../components/interface/SectionHead';
-import { RunPanel, StatusBadge } from '../../components/explorer/RunPanel';
+import { useMedia, WIDE } from '../../hooks/useMedia';
+import { RunBoard, type RunPick } from '../../components/explorer/RunBoard';
+import { RunPanel } from '../../components/explorer/RunPanel';
+import { Issue } from '../../components/explorer/Issue';
+import { Bridge } from '../../components/navigation/Bridge';
 
 interface Props {
   summary: Summary | null;
@@ -15,19 +18,18 @@ interface Props {
   onSelectTask: (id: string) => void;
 }
 
-interface Pick { arm: ArmId; run: number }
-
+/** Explore any of the 77 bugs: pick one, see its twelve runs, open or compare any two. */
 export function BugExplorer({ summary, taskId, onSelectTask }: Props) {
   const root = useRef<HTMLElement>(null);
-  // The featured task is fetched only when the explorer approaches the viewport (or a task is opened).
+  // Task files load only when the explorer approaches (or a task is opened from elsewhere).
   const near = useInView(root, '600px 0px');
+  const wide = useMedia(WIDE);
   const [task, setTask] = useState<Task | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [requested, setRequested] = useState(false);
 
   useEffect(() => { if (taskId !== FEATURED_TASK) setRequested(true); }, [taskId]);
   useEffect(() => { if (near) setRequested(true); }, [near]);
-
   useEffect(() => {
     if (!requested) return;
     let live = true;
@@ -36,76 +38,133 @@ export function BugExplorer({ summary, taskId, onSelectTask }: Props) {
     return () => { live = false; };
   }, [taskId, requested]);
 
-  useEffect(() => { if (task) scheduleRefresh(); }, [task]);
-
   const meta = summary?.tasks.find((t) => t.id === taskId) ?? null;
-  const featured = taskId === FEATURED_TASK;
 
   return (
-    <section id="explorer" ref={root} className="section explorer-section" aria-labelledby="explorer-title">
-      <div className="container">
-        <SectionHead index="03" eyebrow="Inside the experiment" id="explorer-title" title="Open any bug. Read every run."
-          lead="The GitHub issue the agent saw, then all twelve runs: each setup's two repeats, whether the real tests passed, what it cost, what the hooks told the agent, and the patch it wrote." />
+    <section id="explorer-all" ref={root} className="pub explorer" aria-labelledby="explorer-title">
+      <div className="pub-container">
+        <header className="pub-head">
+          <p className="pub-eyebrow">Explore any bug</p>
+          <h2 id="explorer-title" className="pub-title">Every bug, every run.</h2>
+          <p className="pub-lead">
+            Pick any of the {summary?.tasks.length ?? 77} bugs to see the issue the agent saw and all twelve runs: each condition's two
+            repeats, whether the real tests passed, the hook messages it received and the patch it wrote.
+          </p>
+        </header>
 
         <div className="ex">
-          <div className="ex-top">
-            {summary && (
-              <label className="ex-picker">
-                <span className="label">Bug</span>
-                <select value={taskId} onChange={(e) => onSelectTask(e.target.value)}>
-                  {(['always', 'mixed', 'never'] as const).map((g) => (
-                    <optgroup key={g} label={GROUP_LABEL[g]}>
-                      {sortForMatrix(summary.tasks).filter((t) => groupOf(t.solved) === g).map((t) => (
-                        <option key={t.id} value={t.id}>{shortId(t.id)} · {t.title.slice(0, 70)}</option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
-              </label>
-            )}
-            {!featured && <button type="button" className="btn btn--small btn--ghost" onClick={() => onSelectTask(FEATURED_TASK)}>Back to the featured example</button>}
-          </div>
-
-          {featured && (
-            <aside className="featured-note" aria-label="About the featured example">
-              <p className="label label--ember">Featured example: what a run looks like</p>
-              <p>No setup failed both runs; Tips + hooks solved both. In those two runs the hooks sent co-change warnings (and, in one, a ruff format reminder), and the agent still changed only <code>sqlglot/parser.py</code> (plus a test in one run). <strong>This shows what a run looks like. It does not show that hooks caused the fix:</strong> it is one bug and two runs, the agent did not act on the warning, and Hooks (generated) also received messages here and failed both of its runs.</p>
-              <p className="featured-note__foot">Web exposure for this task could not be verified: the per-run web audit is not in the published data, so we can't rule out that a run looked up the fix.</p>
-            </aside>
+          {summary && (
+            wide
+              ? <TaskPicker tasks={summary.tasks} arms={summary.arms.map((a) => a.id)} value={taskId} onChange={onSelectTask} />
+              : (
+                <details className="ex-picker-acc">
+                  <summary>Choose a bug <span>({summary.tasks.length})</span></summary>
+                  <TaskPicker tasks={summary.tasks} arms={summary.arms.map((a) => a.id)} value={taskId} onChange={onSelectTask} />
+                </details>
+              )
           )}
-
-          {error && <p className="load-error" role="alert">Could not load this bug ({error}).</p>}
-          {!task || task.id !== taskId
-            ? <div className="skeleton skeleton--explorer" role="status" aria-busy="true" aria-label="Loading bug" />
-            : <TaskView key={task.id} task={task} summary={summary} groupLabel={meta ? GROUP_LABEL[groupOf(meta.solved)] : ''} featured={featured} />}
+          <div className="ex-main">
+            {error && <p className="load-error" role="alert">Could not load this bug ({error}).</p>}
+            {!task || task.id !== taskId
+              ? <div className="pub-skeleton pub-skeleton--explorer" role="status" aria-busy="true" aria-label="Loading bug" />
+              : <TaskView key={task.id} task={task} summary={summary} groupLabel={meta ? GROUP_LABEL[groupOf(meta.solved)] : ''} accordion={!wide} />}
+          </div>
         </div>
+        <Bridge to="trust">Could any of this be an artifact? See the integrity checks →</Bridge>
       </div>
     </section>
   );
 }
 
-function TaskView({ task, summary, groupLabel, featured }: { task: Task; summary: Summary | null; groupLabel: string; featured: boolean }) {
+/** Searchable list of all bugs, grouped by outcome band, with each bug's six-condition pattern. */
+function TaskPicker({ tasks, arms, value, onChange }: { tasks: TaskMeta[]; arms: ArmId[]; value: string; onChange: (id: string) => void }) {
+  const [q, setQ] = useState('');
+  const list = useRef<HTMLDivElement>(null);
+  const sorted = useMemo(() => sortForMatrix(tasks), [tasks]);
+  const shown = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    return s ? sorted.filter((t) => t.title.toLowerCase().includes(s) || t.id.toLowerCase().includes(s)) : sorted;
+  }, [sorted, q]);
+  const idx = sorted.findIndex((t) => t.id === value);
+  const step = (d: number) => onChange(sorted[(idx + d + sorted.length) % sorted.length].id);
+
+  const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    const items = [...(list.current?.querySelectorAll<HTMLButtonElement>('.tp-item') ?? [])];
+    const i = items.indexOf(document.activeElement as HTMLButtonElement);
+    const next = items[Math.max(0, Math.min(items.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))];
+    next?.focus();
+    e.preventDefault();
+  };
+
+  return (
+    <div className="tp">
+      <div className="tp__top">
+        <label className="tp__search">
+          <span className="visually-hidden">Search bugs by title or id</span>
+          <input type="search" placeholder={`Search ${tasks.length} bugs by title or id`} value={q} onChange={(e) => setQ(e.target.value)} />
+        </label>
+        <div className="tp__nav">
+          <button type="button" aria-label="Previous bug" onClick={() => step(-1)}>←</button>
+          <button type="button" aria-label="Next bug" onClick={() => step(1)}>→</button>
+        </div>
+      </div>
+      <p className="tp__count" aria-live="polite">{shown.length} of {tasks.length} bugs</p>
+      <div className="tp__list" ref={list} onKeyDown={onKey} role="listbox" aria-label="Bugs">
+        {GROUP_ORDER.map((g) => {
+          const items = shown.filter((t) => groupOf(t.solved) === g);
+          if (!items.length) return null;
+          return (
+            <div key={g} role="group" aria-label={GROUP_LABEL[g]} className="tp__group">
+              <p className={`tp__band tp__band--${g}`}>{GROUP_LABEL[g]} · {items.length}</p>
+              {items.map((t) => {
+                const total = arms.reduce((a, id) => a + t.solved[id], 0);
+                return (
+                  <button key={t.id} type="button" role="option" aria-selected={t.id === value} className={`tp-item${t.id === value ? ' is-sel' : ''}`}
+                    onClick={() => onChange(t.id)}>
+                    <span className="tp-item__top">
+                      <span className={`tag tag--${t.set}`}>{t.set}</span>
+                      <span className="tp-item__id">{shortId(t.id)}</span>
+                      <span className="tp-item__cells" aria-label={`${total} of 12 runs solved`}>
+                        {arms.map((id) => <i key={id} className={`mc mc--${t.solved[id]}`} />)}
+                      </span>
+                    </span>
+                    <span className="tp-item__title">{t.title}</span>
+                  </button>
+                );
+              })}
+            </div>
+          );
+        })}
+        {!shown.length && <p className="tp__empty">No bug matches “{q}”.</p>}
+      </div>
+    </div>
+  );
+}
+
+function TaskView({ task, summary, groupLabel, accordion }: { task: Task; summary: Summary | null; groupLabel: string; accordion: boolean }) {
   const arms = summary?.arms ?? [];
   const label = (id: ArmId) => arms.find((a) => a.id === id)?.label ?? id;
-  const [pick, setPick] = useState<Pick>({ arm: featured ? 'both' : 'none', run: 0 });
+  // The baseline's first repeat opens first: neutral, not the answer.
+  const [pick, setPick] = useState<RunPick>({ arm: 'none', run: 0 });
   const [compare, setCompare] = useState(false);
-  const [pickB, setPickB] = useState<Pick>({ arm: featured ? 'none' : 'tuned', run: 0 });
+  const [pickB, setPickB] = useState<RunPick>({ arm: 'tuned', run: 0 });
   const url = githubUrl(task);
   const cost = Object.values(task.results).reduce((a, r) => a + r.runs.reduce((b, x) => b + x.cost_usd, 0), 0);
+  const solved = arms.reduce((a, x) => a + task.results[x.id].runs.filter((r) => r.resolved).length, 0);
 
-  const select = (p: Pick) => {
-    if (compare) setPickB(p);
-    else setPick(p);
-  };
+  const panel = (p: RunPick) => (
+    <RunPanel run={task.results[p.arm].runs[p.run]} armLabel={label(p.arm)} runIndex={p.run} taskId={shortId(task.id)} hasHooks={CONDITIONS[p.arm].hasHooks} collapsible={accordion} />
+  );
 
   return (
     <div className="ex-task">
       <header className="ex-head">
         <div className="ex-head__ids">
           <span className={`tag tag--${task.set}`}>{task.set}</span>
-          <span className="mono ex-head__id">{task.id}</span>
-          {groupLabel && <span className="chip">{groupLabel}</span>}
-          <span className="chip mono">12 runs · {usd(cost, 3)}</span>
+          <span className="ex-head__id">{task.id}</span>
+          {groupLabel && <span className="ex-chip">{groupLabel}</span>}
+          <span className="ex-chip">{solved} of 12 runs solved · {usd(cost, 3)}</span>
         </div>
         <h3 className="ex-head__title">{task.title}</h3>
         {url
@@ -113,105 +172,22 @@ function TaskView({ task, summary, groupLabel, featured }: { task: Task; summary
           : <p className="ex-head__nolink">Fresh 2026 bug mined from sqlglot's history; no upstream link is recorded for it.</p>}
       </header>
 
-      <div className="ex-body">
-        <Issue text={task.issue} />
+      <Issue text={task.issue} />
 
-        <div className="ex-runs">
-          <div className="ex-rail" role="group" aria-label="Setups and their two runs">
-            <div className="ex-rail__head">
-              <span className="label">Setup</span>
-              <span className="label">Run 1</span>
-              <span className="label">Run 2</span>
-            </div>
-            {arms.map((a) => (
-              <div key={a.id} className={`ex-arm${pick.arm === a.id ? ' is-a' : ''}${compare && pickB.arm === a.id ? ' is-b' : ''}`}>
-                <span className="ex-arm__label">{a.label}</span>
-                {task.results[a.id].runs.map((r, i) => {
-                  const isA = pick.arm === a.id && pick.run === i;
-                  const isB = compare && pickB.arm === a.id && pickB.run === i;
-                  return (
-                    <button key={i} type="button" className={`run-pill${r.resolved ? ' is-ok' : ' is-fail'}${isA ? ' is-a' : ''}${isB ? ' is-b' : ''}`}
-                            aria-pressed={isA || isB}
-                            aria-label={`${a.label}, run ${i + 1}: ${r.resolved ? 'resolved' : 'failed'}${r.hooks.length ? `, ${r.hooks.length} hook message${r.hooks.length > 1 ? 's' : ''}` : ''}`}
-                            onClick={() => select({ arm: a.id, run: i })}>
-                      <span aria-hidden="true">{r.resolved ? '✓' : '✗'}</span>
-                      {r.hooks.length > 0 && <span className="hook-dot" aria-hidden="true" />}
-                      {isA && compare && <span className="run-pill__tag" aria-hidden="true">A</span>}
-                      {isB && <span className="run-pill__tag" aria-hidden="true">B</span>}
-                    </button>
-                  );
-                })}
-              </div>
-            ))}
-            <div className="ex-rail__foot">
-              <button type="button" className="btn btn--small" aria-pressed={compare} onClick={() => setCompare(!compare)}>
-                {compare ? 'Exit compare' : 'Compare two runs'}
-              </button>
-              <span className="ex-rail__hint">{compare ? 'A stays fixed; click a run to set B.' : 'Click a run to inspect it.'}</span>
-            </div>
-          </div>
-        </div>
+      <div className="ex-boardbar">
+        <p className="ex-boardbar__hint">{compare ? 'Run A stays fixed; select a run to set B.' : 'Select a run to inspect it.'}</p>
+        <button type="button" className="ex-more" aria-pressed={compare} onClick={() => setCompare(!compare)}>
+          {compare ? 'Exit compare' : 'Compare two runs'}
+        </button>
       </div>
+      <RunBoard task={task} arms={arms} a={pick} b={compare ? pickB : undefined} accordion={accordion}
+        onSelect={(p) => (compare ? setPickB(p) : setPick(p))} />
 
       <div className={`ex-detail${compare ? ' is-compare' : ''}`}>
-        {compare ? (
-          <>
-            <div className="ex-col"><p className="ex-col__tag label">A</p><RunPanel run={task.results[pick.arm].runs[pick.run]} armLabel={label(pick.arm)} runIndex={pick.run} /></div>
-            <div className="ex-col"><p className="ex-col__tag label">B</p><RunPanel run={task.results[pickB.arm].runs[pickB.run]} armLabel={label(pickB.arm)} runIndex={pickB.run} /></div>
-          </>
-        ) : (
-          <RunPanel run={task.results[pick.arm].runs[pick.run]} armLabel={label(pick.arm)} runIndex={pick.run} />
-        )}
+        {compare
+          ? <><div className="ex-col"><p className="ex-col__tag">A</p>{panel(pick)}</div><div className="ex-col"><p className="ex-col__tag">B</p>{panel(pickB)}</div></>
+          : panel(pick)}
       </div>
-
-      <p className="ex-summary">
-        {arms.map((a) => (
-          <span key={a.id} className="ex-summary__item">
-            {a.label}: {task.results[a.id].runs.map((r, i) => <StatusBadgeMini key={i} ok={r.resolved} />)}
-          </span>
-        ))}
-      </p>
     </div>
   );
 }
-
-const StatusBadgeMini = ({ ok }: { ok: boolean }) => (
-  <span className={`mini ${ok ? 'mini--ok' : 'mini--fail'}`} role="img" aria-label={ok ? 'resolved' : 'failed'}>{ok ? '✓' : '✗'}</span>
-);
-
-// marked + DOMPurify load with the explorer, not with the first paint.
-let mdModule: Promise<typeof import('../../utils/markdown')> | null = null;
-const loadMarkdown = () => (mdModule ??= import('../../utils/markdown'));
-
-function Issue({ text }: { text: string }) {
-  const [html, setHtml] = useState<string | null>(null);
-  useEffect(() => {
-    let live = true;
-    loadMarkdown().then((m) => { if (live) setHtml(m.renderIssueMarkdown(text)); });
-    return () => { live = false; };
-  }, [text]);
-  const body = useRef<HTMLDivElement>(null);
-  const [long, setLong] = useState(false);
-  const [open, setOpen] = useState(false);
-  useLayoutEffect(() => {
-    const el = body.current;
-    if (el) setLong(el.scrollHeight > el.clientHeight + 4);
-  }, [html]);
-  return (
-    <div className="ex-issue">
-      <div className="ex-issue__bar"><span className="label">GitHub issue · what the agent saw</span></div>
-      {html === null
-        ? <pre className="md md--plain is-collapsed">{text}</pre>
-        : <div ref={body} className={`md${open ? '' : ' is-collapsed'}${long && !open ? ' has-more' : ''}`}
-               // Sanitised by DOMPurify in renderIssueMarkdown: no images, scripts, handlers or unsafe links.
-               dangerouslySetInnerHTML={{ __html: html }} />}
-      {(long || open) && (
-        <button type="button" className="btn btn--small btn--ghost" aria-expanded={open} onClick={() => { setOpen(!open); scheduleRefresh(); }}>
-          {open ? 'Collapse issue' : 'Show the full issue'}
-        </button>
-      )}
-    </div>
-  );
-}
-
-export { StatusBadge };

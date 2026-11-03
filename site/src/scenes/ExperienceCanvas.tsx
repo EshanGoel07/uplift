@@ -5,23 +5,14 @@ import { HalfFloatType, PerspectiveCamera, WebGLRenderTarget } from 'three';
 import type { Summary } from '../data/types';
 import { live, requestFrame, setInvalidator, ui, useUi, type SceneName } from '../state/sceneStore';
 import { OFF, clientToWorld, pointerWorld } from './layout';
-import { SignalField } from './SignalField/SignalField';
-import { ExperimentStreams } from './ExperimentStreams/ExperimentStreams';
-import { MatrixSurface } from './MatrixSurface/MatrixSurface';
-import { PipelineEngine } from './PipelineEngine/PipelineEngine';
-import { HeroHotspots } from '../components/interface/HeroHotspots';
+import { WorkbenchScene } from './Workbench/WorkbenchScene';
 
 export const frameCount = { n: 0 };
 if (typeof window !== 'undefined') (window as unknown as { __upliftFrames: typeof frameCount }).__upliftFrames = frameCount;
 
 /** Which scene is on screen, from the scroll-driven visibility values. */
 function computeActive(): SceneName | null {
-  const hero = window.scrollY < window.innerHeight * 3 ? 1 - live.heroOut : 0;
-  const matrix = live.matrix >= 0.999 ? 0 : live.matrixVis;
-  const pipeline = live.pipelineVis * (1 - live.pipelineOut);
-  const best = Math.max(hero, matrix, pipeline);
-  if (best < 0.05) return null;
-  return best === hero ? 'hero' : best === matrix ? 'matrix' : 'pipeline';
+  return live.workbenchVis >= 0.05 ? 'workbench' : null;
 }
 
 /** Advances simulation time, tracks the pointer and the active scene, and wires on-demand frames. */
@@ -132,17 +123,7 @@ function useNear(selector: string, margin: string): boolean {
 export default function ExperienceCanvas({ summary }: { summary: Summary | null }) {
   const [compiled, setCompiled] = useState(false);
   // Scenes mount as their sections approach, so start-up work is split into small pieces.
-  const needMatrix = useNear('#matrix', '120% 0px');
-  const needPipeline = useNear('#method', '120% 0px');
-  const [needStreams, setNeedStreams] = useState(false);
-
-  useEffect(() => {
-    if (!compiled) return;
-    const id = window.setTimeout(() => setNeedStreams(true), 900);
-    const early = () => setNeedStreams(true);
-    window.addEventListener('scroll', early, { once: true, passive: true });
-    return () => { window.clearTimeout(id); window.removeEventListener('scroll', early); };
-  }, [compiled]);
+  const needWorkbench = useNear('#method', '120% 0px');
   const paused = useUi((s) => s.paused);
   const reduced = useUi((s) => s.reducedMotion);
   const active = useUi((s) => s.activeScene);
@@ -155,8 +136,7 @@ export default function ExperienceCanvas({ summary }: { summary: Summary | null 
   useEffect(() => { if (reduced) live.time = 14; }, [reduced]);
 
   return (
-    <>
-      <div className={`experience${compiled ? ' is-ready' : ''}`} aria-hidden="true" style={{ visibility: active ? 'visible' : 'hidden' }}>
+    <div className={`experience${compiled ? ' is-ready' : ''}`} aria-hidden="true" style={{ visibility: active ? 'visible' : 'hidden' }}>
         <Canvas
           eventSource={document.getElementById('root')!}
           eventPrefix="client"
@@ -168,14 +148,9 @@ export default function ExperienceCanvas({ summary }: { summary: Summary | null 
         >
           <Driver />
           <Precompile offscreen={bloom} onDone={() => { setCompiled(true); window.setTimeout(requestFrame, 30); }} />
-          <SignalField />
-          {needStreams && !OFF.has('streams') && <ExperimentStreams />}
-          {needMatrix && summary && <MatrixSurface summary={summary} />}
-          {needPipeline && <PipelineEngine />}
+          {needWorkbench && summary && <WorkbenchScene summary={summary} />}
           {bloom && <FadeInBloom target={0.95} levels={6} />}
         </Canvas>
-      </div>
-      <HeroHotspots summary={summary} />
-    </>
+    </div>
   );
 }

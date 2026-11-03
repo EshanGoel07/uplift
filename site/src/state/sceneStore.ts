@@ -7,23 +7,11 @@
 
 import { useSyncExternalStore } from 'react';
 
-export type SceneName = 'hero' | 'matrix' | 'pipeline';
+export type SceneName = 'workbench';
 
 export interface Live {
-  /** 0..1 progress through the pinned hero sequence. */
-  hero: number;
-  /** 0..1 how far the hero has scrolled out (fades the scene). */
-  heroOut: number;
-  /** 0..1 progress through the matrix unfolding sequence. */
-  matrix: number;
-  /** 0..1 visibility of the matrix stage. */
-  matrixVis: number;
-  /** 0..1 progress through the methodology sequence. */
-  pipeline: number;
-  /** 0..1 visibility of the pipeline stage (approach). */
-  pipelineVis: number;
-  /** 0..1 how far the pipeline stage has scrolled away. */
-  pipelineOut: number;
+  /** 0..1 how much of the workbench's 3D stage is on screen (0 when the 2D diagram is shown). */
+  workbenchVis: number;
   /** Pointer in normalised device coords (-1..1), and whether it is over the page. */
   pointer: { x: number; y: number; active: boolean };
   /** User rotation (radians) and zoom per scene; Reset tweens these back to 0 / 1. */
@@ -34,16 +22,10 @@ export interface Live {
 }
 
 export const live: Live = {
-  hero: 0,
-  heroOut: 0,
-  matrix: 0,
-  matrixVis: 0,
-  pipeline: 0,
-  pipelineVis: 0,
-  pipelineOut: 0,
+  workbenchVis: 0,
   pointer: { x: 0, y: 0, active: false },
-  rot: { hero: { x: 0, y: 0 }, matrix: { x: 0, y: 0 }, pipeline: { x: 0, y: 0 } },
-  zoom: { hero: 1, matrix: 1, pipeline: 1 },
+  rot: { workbench: { x: 0, y: 0 } },
+  zoom: { workbench: 1 },
   time: 0,
 };
 
@@ -54,11 +36,6 @@ export interface UiState {
   webgl: boolean;
   /** Which 3D scene is currently on screen, if any (drives the controls bar). */
   activeScene: SceneName | null;
-  /** Pipeline stage 0..4 driven by scroll; `pipelinePick` overrides it after a click. */
-  pipelineStage: number;
-  pipelinePick: number | null;
-  /** Hero hotspot opened by a click (index), or null. */
-  hotspot: number | null;
   /** Bumped by Reset so scenes can restart their tweens. */
   resetTick: number;
   /** Mobile/low tier: fewer particles and segments. */
@@ -88,9 +65,6 @@ let state: UiState = {
   reducedMotion: !!prefersReduced,
   webgl: detectWebGL(),
   activeScene: null,
-  pipelineStage: 0,
-  pipelinePick: null,
-  hotspot: null,
   resetTick: 0,
   lowTier: detectLowTier(),
 };
@@ -129,7 +103,7 @@ export function resetView(): void {
     live.rot[k].y = 0;
     live.zoom[k] = 1;
   }
-  ui.set({ resetTick: ui.get().resetTick + 1, hotspot: null, pipelinePick: null });
+  ui.set({ resetTick: ui.get().resetTick + 1 });
   requestFrame();
 }
 

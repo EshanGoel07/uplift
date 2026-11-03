@@ -37,15 +37,17 @@ The script checks that the source hash is unchanged and refuses inconsistent dat
 not two runs, `solved` not matching resolved runs).
 
 Figures that are **not** in `results.json` (detectable effect, web-leak tiers, robustness table,
-failure facts, project spend) live in `src/data/reportFigures.ts`. Each one is copied verbatim from
-`reports/main.md` or `SUBMISSION.md`, with a comment naming its source. Unit tests cross-check the
-overlapping values against `results.json`.
+failure facts, project spend, the network block) live in `src/data/reportFigures.ts`. Each one is
+taken verbatim from `reports/main.md`, `README.md` or `PHASE_LOG.md`, with a comment naming its source.
+Unit tests cross-check the overlapping values against `results.json`. Arm labels and descriptions
+are shown exactly as `results.json` gives them. External links (repository, NOTICE.md, demo video)
+live in `src/data/links.ts`.
 
 ## Build, test, preview
 
 ```bash
 npm run typecheck   # tsc --noEmit
-npm test            # Vitest: data integrity, formatting, diff parser, markdown sanitiser (25 tests)
+npm test            # Vitest: data integrity, formatting, diff parser, markdown sanitiser (28 tests)
 npm run build       # typecheck + vite build -> dist/
 npm run preview     # serves dist/ under /uplift/ on http://localhost:4173/uplift/
 npm run e2e         # Playwright against the preview server (15 tests)
@@ -59,10 +61,11 @@ QA helpers (not part of the build):
 ```bash
 node scripts/qa/shot.mjs http://localhost:4173/uplift/ out.png 1440 900 "pin:.hero__pin:0.9" 2000
 node scripts/qa/fps.mjs           # steady-state fps per section
-node scripts/capture-poster.mjs   # regenerate public/assets/signal-field-fallback.jpg from the live render
+node scripts/qa/review-shots.mjs http://localhost:5173/ qa-screenshots/review   # hero + findings at 1440/768/390/375
+node scripts/qa/workbench-shots.mjs http://localhost:5173/ qa-screenshots/workbench --video   # workbench states + video
 ```
 
-Debug switches: `?nowebgl` forces the static fallback, and `?off=bloom,fill,lines,dust,strands,streams,core`
+Debug switches: `?nowebgl` turns the 3D layer off, and `?off=bloom,fill,lines,dust,strands,core`
 turns off individual 3D parts for profiling.
 
 ## Deploy (Vercel)
@@ -99,14 +102,15 @@ build without Python.
 
 ```
 src/
-  app/App.tsx              page shell; lazy-loads the 3D chunk on idle; WebGL error boundary
+  app/App.tsx              page shell; loads the 3D chunk only near the method/matrix sections; WebGL error boundary
   state/sceneStore.ts      shared state: scroll progress in mutable refs (read in useFrame),
                            UI state (paused, interact, stage) via useSyncExternalStore
   data/                    types, loader (+ per-task cache), formatters, classification, report figures
   sections/                Hero, Results, BugMatrix, BugExplorer, Trust, Methodology, BuiltVsUsed,
                            Limitations, FutureWork, Footer
-  components/              nav, scene controls, interval chart, diff viewer, run panel, hotspots
-  scenes/                  ONE shared <Canvas>: SignalField, ExperimentStreams, MatrixSurface,
+  components/              nav, experiment overview (hero figure), interval chart, diff viewer, run panel
+  scenes/                  RunLattice (hero: all 924 runs, own canvas, loaded after first paint);
+                           ONE shared fixed <Canvas>: Workbench (the experiment, #method) and MatrixSurface,
                            PipelineEngine, custom GLSL (simplex noise, spectral ramp)
   utils/                   unified-diff parser, sanitised markdown, linear scale
 ```
@@ -115,7 +119,6 @@ src/
   scroll progress and lays itself out over a DOM "stage" rectangle, so 3D and HTML stay aligned.
   When no scene is on screen the canvas renders nothing.
 - **Scroll storytelling** uses GSAP ScrollTrigger inside `gsap.context` (reverted on unmount):
-  - Pinned sequence A: the field splits into six streams, desktop only.
   - Pinned sequence B: the 3D matrix sheet unfolds into the grid.
   - Pinned sequence C: the pipeline builds stage by stage, desktop only.
 - **Start-up.** Shaders are compiled with `compileAsync` (KHR_parallel_shader_compile) before the
@@ -127,7 +130,8 @@ src/
   in the DOM:
   - The matrix is a real ARIA grid with arrow-key navigation.
   - Reduced motion: no pins, and the scene starts paused (Resume is a real opt-in).
-  - Without WebGL: a still poster captured from the real render.
+  - Without WebGL: the hero and findings are SVG and HTML, so nothing is lost; only the two
+    remaining 3D scenes are skipped.
 
 ## Credits
 

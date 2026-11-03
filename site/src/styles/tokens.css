@@ -1,4 +1,9 @@
-/* Uplift design tokens: OBSIDIAN x EMBER interface. Spectral colours live only in the 3D scenes
+/* Uplift design tokens.
+   The publication palette (--p-*) is the site's identity: hero, navigation and findings use it now,
+   and the remaining sections move to it as they are redesigned. The OBSIDIAN x EMBER tokens below
+   it serve those older sections until then.
+
+   Legacy: OBSIDIAN x EMBER interface. Spectral colours live only in the 3D scenes
    (src/scenes/palette.ts) and are mirrored here solely for the static fallback poster. */
 :root {
   /* Foundations */
@@ -64,7 +69,44 @@
   --radius-sm: 6px;
   --maxw: 1240px;
   --gutter: clamp(18px, 4vw, 40px);
-  --nav-h: 60px;
+  --nav-h: 64px;
 
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Publication identity ------------------------------------------------------------------------- */
+:root {
+  --p-canvas: #f4f3ef;
+  --p-surface: #ffffff;
+  --p-ink: #191d23;
+  --p-ink-2: #5f6773;        /* #69717D darkened slightly: 4.9:1 on the canvas for small text */
+  --p-ink-3: #8a919b;        /* rules, ticks and decoration only, never body text */
+  --p-border: #dfe1e3;
+  --p-border-2: #c8cdd3;
+  --p-blue: #4269d5;
+  --p-blue-ink: #3156bd;     /* blue used as text on white */
+  --p-blue-8: rgba(66, 105, 213, 0.08);
+  --p-blue-16: rgba(66, 105, 213, 0.16);
+  --p-success: #278a76;
+  --p-mixed: #d49a42;
+  --p-failure: #be625c;
+
+  /* Dark visualization stage */
+  --p-stage: #141a22;
+  --p-stage-2: #1b232d;
+  --p-stage-rule: #2b3541;
+  --p-stage-ink: #e8ecf1;
+  --p-stage-ink-2: #a3adb9;
+  --p-stage-blue: #7d9cf2;
+
+  --p-maxw: 1280px;
+  --p-gutter: clamp(20px, 4vw, 48px);
+  --p-display: clamp(2.5rem, 1.35rem + 4vw, 4.6rem);
+  --p-h2: clamp(1.85rem, 1.25rem + 2.1vw, 2.9rem);
+  --p-h3: clamp(1.15rem, 1.05rem + 0.4vw, 1.35rem);
+  --p-lead: clamp(1.1rem, 1rem + 0.45vw, 1.3rem);
+  --p-body: 1.0625rem;
+  --p-small: 0.9rem;
+  --p-caption: 0.875rem;
+  --p-radius: 6px;
 }

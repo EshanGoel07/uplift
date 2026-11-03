@@ -1,11 +1,8 @@
 import { useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import type { ArmId, Group, Summary, TaskMeta, TaskSet } from '../../data/types';
 import { GROUP_LABEL, GROUP_ORDER, groupCounts, groupOf, shortId, sortForMatrix } from '../../data/classify';
-import { gsap, useGsap } from '../../hooks/useGsap';
-import { live, requestFrame, useUi } from '../../state/sceneStore';
 import { useInView } from '../../hooks/useInView';
-import { SectionHead } from '../../components/interface/SectionHead';
-import { FEATURED_TASK as FEATURED } from '../../data/reportFigures';
+import { Bridge } from '../../components/navigation/Bridge';
 
 interface Props {
   summary: Summary | null;
@@ -17,74 +14,57 @@ type SetFilter = 'all' | TaskSet;
 type GroupFilter = 'all' | Group;
 type HookFilter = 'all' | 'fired' | 'none';
 
+const BAND_NOTE: Record<Group, string> = {
+  always: 'every run of every condition solved them, so they cannot separate conditions',
+  mixed: 'the only bugs that can separate conditions in this design',
+  never: 'no run of any condition solved them',
+};
+
 export function BugMatrix({ summary, onOpenTask, selectedTask }: Props) {
   const root = useRef<HTMLElement>(null);
-  const webgl = useUi((s) => s.webgl);
-  const reduced = useUi((s) => s.reducedMotion);
-  const cinematic = webgl && !reduced;
-  // The 539-cell grid renders when the section approaches, keeping first paint light.
+  // The 462-cell grid renders when the section approaches, keeping first paint light.
   const near = useInView(root, '1200px 0px');
 
-  // Pinned sequence B: a curved 3D sheet of the same 462 cells unfolds flat, then hands over to this grid.
-  useGsap(root, () => {
-    if (!cinematic || !summary) return;
-    const intro = root.current!.querySelector('.matrix-intro') as HTMLElement;
-    gsap.timeline({
-      scrollTrigger: {
-        trigger: intro, start: 'top bottom', end: 'top top', scrub: true,
-        onUpdate: (s) => { live.matrixVis = s.progress; requestFrame(); },
-      },
-    });
-    const copy = intro.querySelector<HTMLElement>('.matrix-intro__copy');
-    const bands = intro.querySelector<HTMLElement>('.matrix-intro__bands');
-    const ramp = (a: number, b: number, x: number) => Math.min(1, Math.max(0, (x - a) / (b - a)));
-    const paint = (p: number) => {
-      if (copy) { copy.style.opacity = String(1 - ramp(0.16, 0.4, p)); copy.style.transform = `translateY(${-30 * ramp(0.16, 0.4, p)}px)`; }
-      if (bands) bands.style.opacity = String(ramp(0.52, 0.68, p) * (1 - ramp(0.86, 0.97, p)));
-    };
-    paint(0);
-    gsap.timeline({
-      scrollTrigger: {
-        trigger: intro, start: 'top top', end: '+=150%', pin: true, scrub: 0.6,
-        onUpdate: (s) => { live.matrix = s.progress; paint(s.progress); requestFrame(); },
-      },
-    });
-  }, [cinematic, !!summary]);
-
   return (
-    <section id="matrix" ref={root} className="section matrix-section" aria-labelledby="matrix-title">
-      {cinematic && summary && <MatrixIntro summary={summary} />}
-      <div className="container">
-        <SectionHead index="02" eyebrow="Where a difference could show" id="matrix-title" title={<>77 bugs × 6 setups.</>}
-          lead="Each cell is one bug under one setup: how many of its two runs were resolved by the repo's real tests. Rows are grouped by what happened across all twelve runs." />
-        {summary && (near || selectedTask !== FEATURED)
+    <section id="matrix" ref={root} className="pub runs" aria-labelledby="matrix-title">
+      <div className="pub-container">
+        <header className="pub-head">
+          <p className="pub-eyebrow">Explore runs</p>
+          <h2 id="matrix-title" className="pub-title">All 77 bugs under all six conditions.</h2>
+          <p className="pub-lead">
+            Each cell is one bug under one condition: how many of its two runs the repository's real tests resolved. That is
+            {' '}{summary ? summary.tasks.length * summary.arms.length : 462} cells and {summary?.summary.runs ?? 924} runs. Most bugs
+            behave the same under every condition, which is why the study could only detect large effects.
+          </p>
+        </header>
+        {summary && <Ceiling summary={summary} />}
+        {summary && near
           ? <Matrix summary={summary} onOpenTask={onOpenTask} selectedTask={selectedTask} />
-          : <div className="skeleton skeleton--matrix" role="status" aria-busy="true" aria-label="Loading the matrix" />}
+          : <div className="pub-skeleton pub-skeleton--matrix" role="status" aria-busy="true" aria-label="Loading the matrix" />}
       </div>
     </section>
   );
 }
 
-function MatrixIntro({ summary }: { summary: Summary }) {
-  const counts = groupCounts(summary.tasks);
-  const total = summary.tasks.length;
+/** The ceiling effect as one bar: how many bugs can separate conditions at all. */
+function Ceiling({ summary }: { summary: Summary }) {
+  const c = groupCounts(summary.tasks);
+  const n = summary.tasks.length;
   return (
-    <div className="matrix-intro" aria-hidden="true">
-      <div className="matrix-intro__copy container">
-        <p className="label">The full experiment, one cell per bug and setup</p>
-        <p className="matrix-intro__big">{total * summary.arms.length} cells. {summary.summary.runs} runs.</p>
-        <p className="matrix-intro__sub">Each tile is one bug under one setup. Warm tiles are the 1-of-2 outcomes, where repeats disagree.</p>
+    <figure className="ceiling" aria-labelledby="ceiling-cap">
+      <div className="ceiling__bar" aria-hidden="true">
+        {GROUP_ORDER.map((g) => (
+          <span key={g} className={`ceiling__seg ceiling__seg--${g}`} style={{ flex: `${c[g]} 1 0` }}>
+            <b>{c[g]}</b> <span className="ceiling__w">{GROUP_LABEL[g].toLowerCase()}</span>
+          </span>
+        ))}
       </div>
-      <div className="matrix-intro__bands container">
-        <div className="matrix-intro__bands-inner">
-          {GROUP_ORDER.map((g) => (
-            <div key={g} className={`band-label band-label--${g}`} style={{ flex: `${counts[g]} 1 0` }}>
-              <span className="mono">{counts[g]}</span> {GROUP_LABEL[g].toLowerCase()}
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
+      <figcaption id="ceiling-cap" className="caption">
+        <span className="caption__n">The ceiling effect.</span> {c.always} of {n} bugs were solved by every run of every condition
+        and {c.never} by none, so only the <strong>{c.mixed} mixed bugs</strong> can show a difference between conditions. Repeats of
+        the same condition also disagree, which is why every comparison is paired and uses both repeats.
+      </figcaption>
+    </figure>
   );
 }
 
@@ -160,23 +140,23 @@ function Matrix({ summary, onOpenTask, selectedTask }: { summary: Summary } & Om
       </div>
 
       <div className="mx-meta">
-        <p className="mx-count mono" aria-live="polite">Showing {flat.length} of {summary.tasks.length} bugs</p>
+        <p className="mx-count" aria-live="polite">Showing {flat.length} of {summary.tasks.length} bugs</p>
         <ul className="mx-legend" aria-label="Legend">
-          <li><span className="mx-swatch" data-v="2">2/2</span> both runs resolved</li>
+          <li><span className="mx-swatch" data-v="2">2/2</span> both runs solved</li>
           <li><span className="mx-swatch" data-v="1">1/2</span> one of two</li>
           <li><span className="mx-swatch" data-v="0">0/2</span> neither</li>
-          <li><span className="tag tag--test">test</span><span className="tag tag--fresh">fresh</span> task set</li>
-          <li><span className="hook-dot" aria-hidden="true" /> a hook spoke to the agent</li>
+          <li><span className="tag tag--test">test</span> <span className="tag tag--fresh">fresh</span> task set</li>
+          <li><span className="hook-dot" aria-hidden="true" /> a hook message reached the agent</li>
         </ul>
       </div>
 
-      <p className="mx-swipe" aria-hidden="true">Swipe sideways to see all six setups →</p>
+      <p className="mx-swipe" aria-hidden="true">Swipe sideways to see all six conditions →</p>
       <div className="mx-scroll" ref={wrapRef} onScroll={() => setTip(null)}>
-        <div ref={gridRef} className="mx-grid" role="grid" aria-label="Bugs by setup: resolved runs out of 2" aria-rowcount={flat.length + 1}
+        <div ref={gridRef} className="mx-grid" role="grid" aria-label="Bugs by condition: resolved runs out of 2" aria-rowcount={flat.length + 1}
              style={{ ['--cols' as string]: cols }} onMouseLeave={() => setTip(null)}>
           <div className="mx-row mx-row--head" role="row">
             <div className="mx-th mx-th--task" role="columnheader">Bug</div>
-            {arms.map((a) => <div key={a.id} className="mx-th" role="columnheader">{a.label}</div>)}
+            {arms.map((a, i) => <div key={a.id} className="mx-th" role="columnheader"><span className="mx-th__n">{i + 1}</span>{a.label}</div>)}
           </div>
 
           {bands.map((b) => (
@@ -184,11 +164,7 @@ function Matrix({ summary, onOpenTask, selectedTask }: { summary: Summary } & Om
               <div className="mx-band__head" role="row">
                 <div role="columnheader" aria-colspan={cols + 1} className="mx-band__title">
                   <span className="mono">{b.rows.length}</span> {GROUP_LABEL[b.g]}
-                  <span className="mx-band__note">
-                    {b.g === 'always' && 'every run of every setup resolved it'}
-                    {b.g === 'mixed' && 'the only bugs that can tell setups apart'}
-                    {b.g === 'never' && 'no run of any setup resolved it'}
-                  </span>
+                  <span className="mx-band__note">{BAND_NOTE[b.g]}</span>
                 </div>
               </div>
               {b.rows.map((t) => {
@@ -202,8 +178,8 @@ function Matrix({ summary, onOpenTask, selectedTask }: { summary: Summary } & Om
                          title={`Open ${t.title} in the explorer`}>
                       <span className={`tag tag--${t.set}`}>{t.set}</span>
                       <span className="mx-task__title">{t.title}</span>
-                      <span className="mx-task__id mono">{shortId(t.id)}</span>
-                      {t.hooksFired && <span className="hook-dot" title="A hook spoke to the agent in at least one run" />}
+                      <span className="mx-task__id">{shortId(t.id)}</span>
+                      {t.hooksFired && <span className="hook-dot" title="A hook message reached the agent in at least one run" />}
                     </div>
                     {arms.map((a, i) => {
                       const v = t.solved[a.id];
@@ -229,15 +205,20 @@ function Matrix({ summary, onOpenTask, selectedTask }: { summary: Summary } & Om
           {flat.length === 0 && <p className="mx-empty">No bugs match these filters.</p>}
         </div>
         {tip && (
-          <div className="tooltip mx-tooltip" style={{ left: tip.x, top: tip.y }} role="status">
-            <p className="tooltip__title">{tip.task.title}</p>
-            <p className="mono tooltip__sub">{shortId(tip.task.id)} · {tip.task.set} · {GROUP_LABEL[groupOf(tip.task.solved)]}</p>
+          <div className="mx-tooltip" style={{ left: tip.x, top: tip.y }} role="status">
+            <p className="mx-tooltip__title">{tip.task.title}</p>
+            <p className="mx-tooltip__sub">{shortId(tip.task.id)} · {tip.task.set} · {GROUP_LABEL[groupOf(tip.task.solved)]}</p>
             <p><strong>{arms.find((a) => a.id === tip.arm)!.label}:</strong> {tip.task.solved[tip.arm]} of 2 runs resolved</p>
-            <p className="tooltip__note">Click or press Enter to open in the explorer</p>
+            <p className="mx-tooltip__note">Click or press Enter to open in the explorer</p>
           </div>
         )}
       </div>
-      <p className="mx-caption">Only the {counts.mixed} mixed bugs can tell setups apart. The agent is strong enough that most bugs are always or never solved.</p>
+      <p className="caption mx-caption">
+        <span className="caption__n">Figure 6.</span> Resolved runs out of 2 for each bug (rows) under each condition (columns), grouped by
+        what happened across all twelve runs. Only the {counts.mixed} mixed bugs can tell conditions apart. Select any row or cell to open
+        that bug's twelve runs below.
+      </p>
+      <Bridge to="explorer-all">Open the run explorer ↓</Bridge>
     </div>
   );
 }
@@ -245,7 +226,7 @@ function Matrix({ summary, onOpenTask, selectedTask }: { summary: Summary } & Om
 function Seg<T extends string>({ label, value, onChange, options }: { label: string; value: T; onChange: (v: T) => void; options: [T, string][] }) {
   return (
     <div className="seg" role="group" aria-label={label}>
-      <span className="seg__label label" aria-hidden="true">{label}</span>
+      <span className="seg__label" aria-hidden="true">{label}</span>
       {options.map(([v, text]) => (
         <button key={v} type="button" aria-pressed={value === v} className="seg__btn" onClick={() => onChange(v)}>{text}</button>
       ))}
