@@ -57,7 +57,7 @@ export const STAGES: Stage[] = [
       'Generated AGENTS.md: 13 lines citing review comments',
       'Hooks: ruff lint and format after edits, co-change warnings, and a verify step that runs related tests before finishing (at most 2 blocks)',
       'Tuned setup: Muse Spark rewrote it from dev failures only (11 lines, co-change dropped)',
-      'Generic copied tips file as a control',
+      'A generic tips file, written by us in the style commonly shared online, as a control',
     ],
     command: 'paid.sh generate · paid.sh tune',
   },

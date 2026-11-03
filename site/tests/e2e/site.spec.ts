@@ -56,7 +56,7 @@ test('results chart: five intervals, a zero baseline, the detectable effect, and
   await page.locator('.ic-row').nth(0).click();
   await page.locator('.ic-row').nth(3).click();
   await expect(page.locator('.compare__col')).toHaveCount(2);
-  await expect(page.locator('.compare')).toContainText('Generic copied tips file');
+  await expect(page.locator('.compare')).toContainText('Generic tips file');
 });
 
 test('matrix: 77 rows in 43/23/11 bands, working filters, and cell opens the explorer', async ({ page }) => {

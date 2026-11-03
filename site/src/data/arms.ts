@@ -20,7 +20,7 @@ export const ARM_INFO: Record<ArmId, { short: string; detail: string }> = {
   },
   handwritten: {
     short: 'Control',
-    detail: 'A typical blog-style AGENTS.md that is not specific to the repo: the control for “copy someone else’s setup”.',
+    detail: 'A generic best-practice AGENTS.md, written by us in the style commonly shared online and not specific to the repo: the control for “use a generic setup”.',
   },
   tuned: {
     short: 'Hypothesis',

@@ -45,7 +45,7 @@ export function Results({ summary }: { summary: Summary | null }) {
               </aside>
               <aside className="callout">
                 <p className="label">Takeaway</p>
-                <p className="callout__big">No setup was shown to differ from no setup. The generic copied tips file came out lowest. Smaller real effects under about 5–9 points can't be ruled out.</p>
+                <p className="callout__big">No setup was shown to differ from no setup. The generic tips file came out lowest. Smaller real effects under about 5–9 points can't be ruled out.</p>
               </aside>
               <details className="callout explainer">
                 <summary>What does a 95% interval mean here?</summary>
