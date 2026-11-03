@@ -11,8 +11,11 @@ It uses the following third-party data and code:
 
 Changes to SWE-rebench data: Uplift uses only the sqlglot tasks, re-validates them, splits them by
 date, and screens their `FAIL_TO_PASS` lists (a test is left out when Muse Spark judges that the
-issue does not describe it). The dataset itself is not redistributed in this repository, and
-neither is sqlglot: both are downloaded at run time into a git-ignored folder.
+issue does not describe it). The issue texts (problem statements) of the 39 SWE-rebench test tasks
+used in the main batch are included in `site/data/results.json`, under CC-BY-4.0 with the
+attribution above; the other 38 tasks there are fresh tasks Uplift mined from sqlglot's public
+GitHub issues. The rest of the dataset (fix and test patches, test lists) is not redistributed, and
+neither is the sqlglot source code: both are downloaded at run time into a git-ignored folder.
 
 Each SWE-rebench task also carries the licence of the repository it comes from;
 Uplift keeps that field (`license_name`) on every task record. All sqlglot tasks are MIT.

@@ -13,15 +13,11 @@ until the check passes.** Total time: about 45 minutes.
 
 ---
 
-## Step 1: Lock the card (bank app, 2 min)
+## Step 1: Billing (2 min)
 
-1. Add the card on Meta's billing page (needed to get the API key).
-2. In your bank app: turn **off international transactions**. If the ₹1,200
-   verification hold showed an Indian merchant in INR, also turn off
-   **domestic online transactions**.
-3. Refunds still come back; only new charges are blocked.
+1. Add a card on Meta's billing page (needed to get the API key).
 
-**Check:** the bank app shows international transactions OFF.
+**Check:** Meta's billing page shows the card and your free credit.
 
 ## Step 2: Put the files in place (5 min)
 
@@ -218,7 +214,7 @@ budget_log.csv
 
 1. `curl -s http://127.0.0.1:8787/__budget` and compare with Meta's billing page.
 2. If they differ, restart the proxy with `--set-spent <billing figure>`.
-3. Glance at the bank app: no new international charges.
+3. Glance at your card statement: no unexpected charges.
 
 ## Emergency stop
 

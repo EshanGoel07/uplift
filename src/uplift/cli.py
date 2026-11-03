@@ -793,7 +793,8 @@ def main(argv: list[str] | None = None) -> int:
     rp.add_argument("--plan", type=Path, required=True)
     rp.add_argument("--dev-plan", type=Path, required=True)
     rp.add_argument("--out", type=Path, default=Path("reports"))
-    rp.add_argument("--submission", type=Path, default=Path("SUBMISSION.md"))
+    rp.add_argument("--limits-from", "--submission", dest="submission", type=Path, default=Path("README.md"),
+                    help="markdown file whose '## Limitations' section is copied into the report")
     rp.set_defaults(func=cmd_report)
 
     lp = sub.add_parser("label-plan", help="what `paid.sh label` will ask and its estimated cost (free)")

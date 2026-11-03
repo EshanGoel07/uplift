@@ -1,6 +1,6 @@
 # Phase log
 
-Built for the Meta Global AI Developer Hackathon (Oct 26 – Nov 4, 2026).
+Built Oct 27 – Nov 4, 2026, for the Meta Global AI Developer Hackathon.
 
 ## Phase 0: budget guard (Oct 27–28)
 
@@ -128,8 +128,9 @@ Built for the Meta Global AI Developer Hackathon (Oct 26 – Nov 4, 2026).
 - Path check against the fresh snapshot `7660486c4cc6`: only `sqlglot/expressions.py` no longer exists
   (now a package); it appears in AGENTS.md, 3 co-change rules and a verify mapping. Reported, not fixed.
   (A first version of the check flagged short paths like `dialects/x.py`; it now also resolves `sqlglot/`.)
-- Arms: none, prose, sensors, both, handwritten (generic blog-style AGENTS.md in `arms/`), and dev-only
-  ablations lint-only / cochange-only / verify-only. Before any arm is installed, the repo's own agent
+- Arms: none, prose, sensors, both, handwritten (`arms/handwritten/AGENTS.md`: a generic best-practice
+  file, written by us in the style commonly shared online), and dev-only ablations lint-only /
+  cochange-only / verify-only. Before any arm is installed, the repo's own agent
   files are removed: sqlglot added CLAUDE.md (2026-02) and AGENTS.md (2026-03), so every fresh task
   would otherwise start with them and "none" would not be none. Arm files never count as the agent's patch.
 - **Smoke test** (dev task sqlglot-4109, seed 1, one run per arm): none, prose, sensors, both,
@@ -289,3 +290,20 @@ Built for the Meta Global AI Developer Hackathon (Oct 26 – Nov 4, 2026).
   saved traces name it, but nothing blocks it. Blocked runs also can't `pip install` missing test dependencies, and past agents
   sometimes tried, so new runs should not be pooled with the 924.
 
+## Phase 7: public-repo prep (Nov 3)
+
+- README rewritten for judges; Apache-2.0 `LICENSE` added. Internal submission notes moved to the
+  git-ignored `.private/` (they stay in earlier commits; history is kept as is).
+- **Bug avoided:** `uplift report` read its Limitations list from the notes file, so moving it would
+  have broken the report. It now reads the README's `## Limitations` section (`--limits-from`). Regenerated
+  from saved results with no model calls: every number and chart identical; only the limitations text changed.
+- The handwritten arm's label was "Generic copied tips file", which implied copying. It is a generic
+  best-practice file written by us in the style commonly shared online; label now "Generic tips file",
+  and `results.json` arms carry a one-line `description`. Re-exported and re-reported: numbers unchanged.
+- Worked example for the README and video: fresh-63296846 (`SELECT 1 WINDOW a AS (...)`), web-clean in all
+  12 runs. 7 runs took a one-line shortcut that broke `window` as a plain alias (all failed on that
+  assertion, per `grade_pytest.txt`); 4 used a look-ahead and passed. Tips + hooks 2/2 vs none 0/2, but the
+  hook messages were generic co-change warnings that the failed hooks-only runs also got: approach choice,
+  not setup, decided it.
+- Personal billing lines removed from `tools/budget_guard/SETUP.md`; NOTICE.md now says the SWE-rebench
+  issue texts in `results.json` are included under CC-BY-4.0.

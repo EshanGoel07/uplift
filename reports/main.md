@@ -16,7 +16,7 @@
 | Tips file (generated) | 112/154 | 72.7% | 63.0% to 81.8% | 0 | 0 | $3.55 | $0.0317 |
 | Hooks (generated) | 111/154 | 72.1% | 62.3% to 81.2% | 5 | 0 | $3.48 | $0.0313 |
 | Tips + hooks | 111/154 | 72.1% | 62.3% to 81.2% | 3 | 1 | $3.64 | $0.0328 |
-| Generic copied tips file | 107/154 | 69.5% | 59.7% to 78.6% | 0 | 2 | $3.63 | $0.0339 |
+| Generic tips file | 107/154 | 69.5% | 59.7% to 78.6% | 0 | 2 | $3.63 | $0.0339 |
 | Tuned by Muse Spark | 113/154 | 73.4% | 64.3% to 82.5% | 3 | 0 | $3.51 | $0.0310 |
 
 Intervals come from a task-level bootstrap (10,000 resamples, seed 20261101). Regressions are runs with any PASS_TO_PASS failure.
@@ -30,7 +30,7 @@ Intervals come from a task-level bootstrap (10,000 resamples, seed 20261101). Re
 | Tips file (generated) | +0.0 | -5.8 to +4.5 | 6 | 4 | ±5.2 | 7.4 |
 | Hooks (generated) | -0.6 | -6.5 to +4.5 | 7 | 6 | ±5.5 | 8.0 |
 | Tips + hooks | -0.6 | -7.1 to +5.8 | 6 | 7 | ±6.5 | 9.1 |
-| Generic copied tips file | -3.2 | -9.1 to +1.3 | 4 | 7 | ±5.2 | 7.5 |
+| Generic tips file | -3.2 | -9.1 to +1.3 | 4 | 7 | ±5.2 | 7.5 |
 | Tuned by Muse Spark | +0.6 | -2.6 to +4.5 | 3 | 3 | ±3.6 | 5.4 |
 
 Won or lost means the arm solved more or fewer of a task's repeats than no setup.
@@ -49,14 +49,14 @@ Workspaces have no git history, but Muse Code has web tools and its shell has ne
 | Another sqlglot PR or issue | 16 | 10 |
 | Docs only, or no web | 821 | 572 |
 
-- **By arm:** No setup 13, Tips file (generated) 12, Hooks (generated) 16, Tips + hooks 12, Generic copied tips file 15, Tuned by Muse Spark 12 exposed runs of 154 each. The spread is 2.6 points at most, so this is unlikely to explain the comparison, and the table below tests that.
+- **By arm:** No setup 13, Tips file (generated) 12, Hooks (generated) 16, Tips + hooks 12, Generic tips file 15, Tuned by Muse Spark 12 exposed runs of 154 each. The spread is 2.6 points at most, so this is unlikely to explain the comparison, and the table below tests that.
 - **By set:** test 73 of 468 runs, fresh 7 of 456. The older test tasks are far more exposed, which clouds the test vs fresh comparison.
 - **Dev batch:** 69 of 304 runs exposed, so the tuned arm also learned from runs with this leak.
 - **This is a lower bound:** URLs built at run time and search snippets are not detected.
 
 **Does the result survive?** Difference vs no setup in points, with 95% CI:
 
-| View | Tasks | Tips file (generated) | Hooks (generated) | Tips + hooks | Generic copied tips file | Tuned by Muse Spark |
+| View | Tasks | Tips file (generated) | Hooks (generated) | Tips + hooks | Generic tips file | Tuned by Muse Spark |
 | --- | --- | --- | --- | --- | --- | --- |
 | All tasks | 77 | +0.0 (-5.8 to +4.5) | -0.6 (-6.5 to +4.5) | -0.6 (-7.1 to +5.8) | -3.2 (-9.1 to +1.3) | +0.6 (-2.6 to +4.5) |
 | Without tasks where any run saw the fix or newer code | 51 | +0.0 (-5.9 to +4.9) | -1.0 (-6.9 to +4.9) | +1.0 (-5.9 to +7.8) | -2.9 (-8.8 to +2.0) | +0.0 (-3.9 to +3.9) |
@@ -80,7 +80,7 @@ Workspaces have no git history, but Muse Code has web tools and its shell has ne
 | Tips file (generated) | 76.9% (64.1% to 88.5%) | 68.4% (53.9% to 81.6%) |
 | Hooks (generated) | 74.4% (62.8% to 85.9%) | 69.7% (55.3% to 82.9%) |
 | Tips + hooks | 71.8% (59.0% to 84.6%) | 72.4% (57.9% to 85.5%) |
-| Generic copied tips file | 69.2% (56.4% to 82.1%) | 69.7% (56.6% to 82.9%) |
+| Generic tips file | 69.2% (56.4% to 82.1%) | 69.7% (56.6% to 82.9%) |
 | Tuned by Muse Spark | 76.9% (64.1% to 89.7%) | 69.7% (55.3% to 82.9%) |
 
 ## Cost per solved bug
@@ -111,7 +111,7 @@ Delivered means the text is in a later model request, checked against each run's
 | Tips file (generated) | 42 | 2 | 0 | 6 | 0 |
 | Hooks (generated) | 43 | 3 | 0 | 7 | 5 |
 | Tips + hooks | 43 | 1 | 1 | 10 | 3 |
-| Generic copied tips file | 47 | 3 | 2 | 7 | 0 |
+| Generic tips file | 47 | 3 | 2 | 7 | 0 |
 | Tuned by Muse Spark | 41 | 4 | 0 | 6 | 2 |
 
 **Muse Spark labels, runs per arm**
@@ -122,7 +122,7 @@ Delivered means the text is in a later model request, checked against each run's
 | Tips file (generated) | 2 | 27 | 1 | 12 | 0 | 0 |
 | Hooks (generated) | 2 | 30 | 2 | 8 | 1 | 0 |
 | Tips + hooks | 1 | 29 | 2 | 11 | 0 | 0 |
-| Generic copied tips file | 2 | 31 | 3 | 11 | 0 | 0 |
+| Generic tips file | 2 | 31 | 3 | 11 | 0 | 0 |
 | Tuned by Muse Spark | 3 | 27 | 3 | 8 | 0 | 0 |
 
 **Agreement with the rules**
@@ -148,13 +148,14 @@ Dev tasks only, screened, one repeat per task, so this is what shaped the tuned 
 
 ## Limitations
 
-- One repo (sqlglot) and one agent (Muse Code on muse-spark-1.3-contributor).
+- One repo (sqlglot) and one agent (Muse Code on muse-spark-1.3-contributor). The method is repo-independent, but this study shows it on one repo only.
 - 40-step agent budget for every arm (Muse wind-down starts at step 30); the verify hook arrives late in that budget.
 - "Seeds" are repeats: the seed labels the run but isn't passed to Muse.
 - Screening rule fixed before seeing results, no overrides: task 4516 was probably dropped wrongly and stays dropped.
 - Ceiling effect: 43/77 tasks solved by every run of every arm, 11 by none; only ~23 tasks can show a difference.
 - The tuned arm was chosen from one-seed dev differences: a hypothesis, not a proven improvement.
-- Agents had web and shell network access: at least 80 of 924 runs reached the real fix or newer upstream code, 12-16 per arm and mostly on test tasks. Removing them doesn't change the conclusion, but solve rates are somewhat inflated, and test vs fresh is not a clean comparison.
+- Agents in the 924 main-batch runs had web and shell network access: at least 80 of 924 runs reached the real fix or newer upstream code, 12-16 per arm and mostly on test tasks. Removing them doesn't change the conclusion, but solve rates are somewhat inflated, and test vs fresh is not a clean comparison. Uplift now blocks this for new runs; none of the 924 were re-run.
+- The network block does not cover the filesystem: an agent could still read the full-history clone on the build machine. 0 of 1,220 saved traces name it, but nothing blocks it.
 - The 5 comparisons vs none are not adjusted for multiplicity, and the intervals move by up to one step (0.65 points) with the bootstrap seed.
 - 6 verify blocks fired on the last step and never reached the agent.
 - Global gitignore on the build machine keeps a few agent files (CLAUDE.md, .claude/, .cursor/) out of start commits; grading is unaffected.

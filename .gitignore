@@ -29,3 +29,6 @@ build/
 validation/logs/
 mine_logs/
 .DS_Store
+
+# --- Private notes (internal strategy; never public) ---
+.private/

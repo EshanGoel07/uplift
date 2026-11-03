@@ -20,7 +20,15 @@ from pathlib import Path
 from . import batch as batch_mod, screen
 
 ARM_LABELS = {"none": "No setup", "prose": "Tips file (generated)", "sensors": "Hooks (generated)",
-              "both": "Tips + hooks", "handwritten": "Generic copied tips file", "tuned": "Tuned by Muse Spark"}
+              "both": "Tips + hooks", "handwritten": "Generic tips file", "tuned": "Tuned by Muse Spark"}
+ARM_DESCRIPTIONS = {
+    "none": "No setup files: the agent sees only the issue and the code.",
+    "prose": "An AGENTS.md tips file for this repo, written by Muse Spark from history before the test period.",
+    "sensors": "Hooks generated for this repo: lint after edits, co-change warnings, and a test check before stopping.",
+    "both": "The generated tips file and the generated hooks together.",
+    "handwritten": "A generic best-practice file, written by us in the style commonly shared online.",
+    "tuned": "Tips and hooks revised by Muse Spark from failures on dev tasks only.",
+}
 AGENT = "Muse Code (muse-spark-1.3-contributor)"
 BOOTSTRAP_N = 10_000
 BOOTSTRAP_SEED = 20261101
@@ -137,7 +145,7 @@ def arm_rows(batch: Batch) -> list[dict]:
         runs = [r for (_, arm, _), r in batch.results.items() if arm == a]
         solved = sum(bool(r["resolved"]) for r in runs)
         s = stats[a]
-        rows.append({"id": a, "label": ARM_LABELS.get(a, a), "solved": solved, "attempts": len(runs),
+        rows.append({"id": a, "label": ARM_LABELS.get(a, a), "description": ARM_DESCRIPTIONS.get(a, ""), "solved": solved, "attempts": len(runs),
                      "rate": round(solved / len(runs), 5), "diff_vs_none": round(s["diff"], 5),
                      "ci_low": round(s["diff_ci"][0], 5), "ci_high": round(s["diff_ci"][1], 5),
                      "cost_per_solved": round(run_cost(batch, a) / solved, 4) if solved else None,

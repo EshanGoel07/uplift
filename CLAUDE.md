@@ -46,5 +46,6 @@ Hackathon: **every model the project calls at runtime must be a Meta (Muse) mode
 
 ## Submission
 
-- Before any README, writeup or demo work, read `SUBMISSION.md` (official rules, what must appear, findings to remember).
+- Before any README, writeup or demo work, read `.private/SUBMISSION.md` (official rules, what must appear,
+  findings to remember). It is git-ignored and must never be made public; don't copy its strategy notes into tracked files.
 - Never modify scripts/paid.sh, .claude/settings.json or tools/budget_guard/ with a shell or Python script; only with the Edit tool, so the user is asked.
