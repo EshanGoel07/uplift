@@ -32,3 +32,5 @@ mine_logs/
 
 # --- Private notes (internal strategy; never public) ---
 .private/
+CLAUDE.md
+.claude/
