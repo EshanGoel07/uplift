@@ -106,6 +106,7 @@ function repo(f: Extract<Form, { kind: 'repo' }>): Built {
     const cx = t.x + t.w / 2, cz = t.z + t.d / 2, top = base + h;
     k.box(cx, base + h / 2, cz, t.w, h, t.d);
     k.quad(cx, top + 0.001, cz, t.w * 0.94, t.d * 0.94, { ink: [t.path.startsWith('tests/') ? SPECTRAL.cyan : SPECTRAL.blue, 0.02 + Math.min(0.05, h * 0.2)] });
+    if (f.scan && t.path.startsWith('tests/')) k.quad(cx, top + 0.002, cz, t.w * 0.94, t.d * 0.94, { ink: [SPECTRAL.cyan, 0.26], gate: [0.72 + 0.27 * ((cx + f.width / 2) / f.width), 0] });
     const l = lit.get(t.path);
     if (l) k.quad(cx, top + 0.003, cz, t.w * 0.98, t.d * 0.98, { ink: [l.color, 1.6], gate: [l.seq, 0] });
   }
@@ -272,6 +273,74 @@ function spine(f: Extract<Form, { kind: 'spine' }>): Built {
   return k.done();
 }
 
+/** A section cut through one workspace: floor, back wall, and the cut ends of its structure. There is only ever one room. */
+function room(f: Extract<Form, { kind: 'room' }>): Built {
+  const k = new Kit();
+  const { width: w, depth: d, height: h } = f, t = 0.16, back = -d / 2 + t / 2;
+  k.box(0, -t / 2, 0, w, t, d, { edged: true });
+  k.box(0, h / 2, back, w, h, t, { edged: true });
+  k.box(-w / 2 + t / 2, h * 0.24, -d * 0.2, t, h * 0.48, d * 0.6, { edged: true });
+  k.box(w / 2 - t, h / 2, back + t, t * 2, h, t * 2, { edged: true });
+  k.box(0, h - t / 2, back + 0.5, w, t, 1, { edged: true });
+  for (let x = -w / 2 + 1; x < w / 2; x += 1) k.quad(x, 0.002, 0, 0.012, d - 0.1, { ink: [INTERFACE.text3, 0.1] });
+  for (let z = -d / 2 + 1; z < d / 2; z += 1) k.quad(0, 0.002, z, w - 0.1, 0.012, { ink: [INTERFACE.text3, 0.1] });
+  return k.done();
+}
+
+/** Time, left to right. Warm while the agent can run; cool from the moment it has exited. */
+function rail(f: Extract<Form, { kind: 'rail' }>): Built {
+  const k = new Kit();
+  const x0 = f.ticks[0], x1 = f.ticks[f.ticks.length - 1], top = 0.05;
+  k.box((x0 + x1) / 2, 0, 0, x1 - x0 + 1, 0.08, 0.26, { edged: true });
+  k.quad((x0 + f.split) / 2, top, 0, f.split - x0, 0.03, { ink: [SPECTRAL.amber, 1.1] });
+  k.quad((f.split + x1) / 2, top, 0, x1 - f.split, 0.03, { ink: [SPECTRAL.cyan, 0.9] });
+  f.ticks.forEach((x) => {
+    const major = x === f.split;
+    k.box(x, 0.06, 0, major ? 0.05 : 0.03, major ? 0.2 : 0.12, major ? 0.3 : 0.2, { ink: [major ? INTERFACE.text : INTERFACE.text2, 0.9] });
+  });
+  return k.done();
+}
+
+function marker(): Built {
+  const k = new Kit();
+  k.add(new CylinderGeometry(0.15, 0, 0.26, 3), { ink: [INTERFACE.ember, 1.4] });
+  return k.done();
+}
+
+/** The hidden test patch: closed by a band until it is applied, its own added lines inside. */
+function sealed(f: Extract<Form, { kind: 'sealed' }>): Built {
+  const k = new Kit();
+  const w = 1.5, d = 1.1, h = 0.3, top = h / 2 + 0.003;
+  k.add(plate((s) => rounded(s, w, d, 0.08), h), { edged: true });
+  for (let i = 0; i < 7; i++) k.quad(-0.16 + ((i * 3) % 5) * 0.03, top, -0.36 + i * 0.12, 0.72 + ((i * 3) % 5) * 0.09, 0.03, { ink: [f.color, 1.1], gate: [0.5, 0] });
+  k.quad(0, top + 0.001, 0, 0.3, d, { ink: [SPECTRAL.violet, 1.1], gate: [-0.5, 0] });
+  k.quad(0, top + 0.002, 0, w, 0.16, { ink: [SPECTRAL.violet, 1.1], gate: [-0.5, 0] });
+  return k.done();
+}
+
+/** Where pytest has reached: one line across the repository. */
+function scan(f: Extract<Form, { kind: 'scan' }>): Built {
+  const k = new Kit();
+  k.box(0, 0, 0, 0.03, 0.03, f.depth, { ink: [SPECTRAL.cyan, 1.5] });
+    return k.done();
+}
+
+/** The recorded outcome, a closed ring with a mark that means only one thing. */
+function seal(f: Extract<Form, { kind: 'seal' }>): Built {
+  const k = new Kit();
+  const c = f.outcome === 'unresolved' ? OUTCOME.failed : f.outcome === 'resolved' ? OUTCOME.solved : INTERFACE.text2, top = 0.07;
+  k.add(new CylinderGeometry(0.72, 0.72, 0.1, 64), { edged: true });
+  k.add(new TorusGeometry(0.72, 0.024, 10, 96), { m: at(0, 0.03, 0, Math.PI / 2), ink: [c, 1.3] });
+  if (f.outcome === 'resolved') {
+    k.bar(-0.3, 0.02, -0.08, 0.26, top, 0.05, { ink: [c, 1.5] });
+    k.bar(-0.08, 0.26, 0.34, -0.26, top, 0.05, { ink: [c, 1.5] });
+  } else if (f.outcome === 'unresolved') {
+    k.bar(-0.26, -0.26, 0.26, 0.26, top, 0.05, { ink: [c, 1.5] });
+    k.bar(-0.26, 0.26, 0.26, -0.26, top, 0.05, { ink: [c, 1.5] });
+  }
+  return k.done();
+}
+
 function solid(p: Part): Built {
   const k = new Kit();
   const [w, h, d] = p.size;
@@ -292,5 +361,11 @@ export function buildForm(p: Part): Built {
     case 'core': return core();
     case 'diff': return diff(f);
     case 'spine': return spine(f);
+    case 'room': return room(f);
+    case 'rail': return rail(f);
+    case 'marker': return marker();
+    case 'sealed': return sealed(f);
+    case 'scan': return scan(f);
+    case 'seal': return seal(f);
   }
 }

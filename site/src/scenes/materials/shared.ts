@@ -138,7 +138,7 @@ export function graphiteMaterial(accent: string, key: KeyLight): ShaderMaterial 
         float rim = pow(1.0 - max(dot(N, V), 0.0), 3.0);
         vec3 c = mix(uBase, uTop, sky * 0.7);
         c += uWarmColor * (diff * 0.042 + spec * 0.2);
-        c += mix(uCoolA, uCoolB, smoothstep(-6.0, 6.0, vWorld.x + vWorld.y)) * rim * (0.05 + uCool * 0.26);
+        c += mix(uCoolA, uCoolB, smoothstep(-6.0, 6.0, vWorld.x + vWorld.y)) * rim * (0.03 + uCool * 0.13);
         c += uAccent * (rim * 0.1 + uGlow * (0.003 + sky * 0.008));
         c += vInk.rgb * vInk.a * open * mix(uInkRest, 1.3, uGlow);
         c = mix(c, c + uSelectColor * (0.02 + rim * 0.34), uSelect);

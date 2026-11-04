@@ -5,7 +5,7 @@ import { expect, test, type Page } from '@playwright/test';
 interface Spec { section: string; id: string; states: string[] }
 const MODELS: Spec[] = [
   { section: 'workspace', id: 'workspace', states: ['assembled', 'exploded', 'issue', 'setup', 'running', 'patch'] },
-  { section: 'cutaway', id: 'cutaway', states: ['agent-input', 'hidden', 'patch', 'prepare', 'run', 'result'] },
+  { section: 'cutaway', id: 'cutaway', states: ['received', 'working', 'exit', 'hidden', 'grading', 'result'] },
   { section: 'grading', id: 'grading', states: ['check-the-run-finished', 'reset-the-test-files', 'apply-the-hidden-tests', 'clear-stale-bytecode', 'run-pytest', 'parse-each-test', 'cross-check-the-counts', 'check-both-test-lists', 'record-the-verdict'] },
 ];
 
@@ -105,15 +105,19 @@ test('workspace: each condition shows only what it really installed', async ({ p
   await expect(pick).toHaveCount(0);
 });
 
-test('cutaway: the hidden tests stay on the evaluator side, and the agent is gone before they are used', async ({ page }) => {
+test('cutaway: one workspace in two phases, and the hidden tests arrive only after the exit', async ({ page }) => {
   await page.goto('./?diag', { waitUntil: 'networkidle' });
-  const parts = page.locator('#cutaway .assembly__parts button');
+  const caption = page.locator('#cutaway .assembly__caption');
   await go(page, 'cutaway', 1);
-  await expect(parts.filter({ hasText: 'FAIL_TO_PASS' })).toHaveCount(1);
-  await expect(parts.filter({ hasText: 'Muse Code' })).toHaveCount(1);
+  await expect(caption).toContainText('Phase A');
+  await expect(page.locator('#cutaway .story__step.is-active')).toContainText('not there');
+  await go(page, 'cutaway', 2);
+  await expect(page.locator('#cutaway .story__step.is-active')).toContainText('does not run again');
   await go(page, 'cutaway', 3);
-  await expect(parts.filter({ hasText: 'Muse Code' })).toHaveCount(0);
-  await expect(page.locator('#cutaway .story__step.is-active')).toContainText('exited');
+  await expect(caption).toContainText('Phase B');
+  await expect(page.locator('#cutaway .story__step.is-active')).toContainText('Only now');
+  await page.locator('#cutaway .assembly__parts button').filter({ hasText: 'Hidden tests' }).first().evaluate((b: HTMLElement) => b.click());
+  await expect(page.locator('#cutaway .assembly__detail')).toContainText('tests/test_parser.py');
 });
 
 test('grading: the verdict appears only at the last step, and any gate can be inspected', async ({ page }) => {

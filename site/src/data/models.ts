@@ -1,6 +1,6 @@
 import { CONDITION_COLOR, INTERFACE, OUTCOME, SPECTRAL } from '../scenes/colors';
 import { sheetDepth, type Form, type Light, type Link, type Model, type Part, type PartPose, type Stroke, type Vec3, type View } from '../state/assemblyStore';
-import { AGENT_SEES, CONDITIONS, workspaceLayers } from './method';
+import { AGENT_SEES, CONDITIONS, NETWORK_NOTE, workspaceLayers } from './method';
 import type { ArmId, Task } from './types';
 
 // The story models, built from the same facts as the text. Nothing here invents a part: every part is a
@@ -147,52 +147,112 @@ export function workspaceModel(arm: ArmId, task?: Task | null): Model {
   };
 }
 
-const OUTCOME_ACCENT = { pass: OUTCOME.solved, keep: OUTCOME.mixed };
+export const CUTAWAY_STATES = ['received', 'working', 'exit', 'hidden', 'grading', 'result'] as const;
 
-export const CUTAWAY_STATES = ['agent-input', 'hidden', 'patch', 'prepare', 'run', 'result'] as const;
+/** On the time rail: start, agent exits, tests applied, grading, result. */
+const TICKS = [-5, -2.6, 0, 2.6, 5];
+const RAIL: Vec3 = [0, -2.72, 3.5];
+const REPO_AT: Vec3 = [-1.2, -1.72, 0.3];
+const REPO_SCALE = 0.8;
+/** Where tests/test_parser.py, the file the WINDOW bug's real fix tests, sits on the repository. */
+export const TEST_FILE_TILE: [number, number] = [-0.624, 0.977];
+export const CUTAWAY_ROOM = { width: 12, depth: 6.4, height: 4.6 };
 
 /**
- * The information barrier, as a conceptual cutaway. The real separation is one of timing: hidden tests
- * reach the workspace only after the agent has exited. So the workspace crosses to the evaluator's side
- * once the agent is gone, and the tests never appear on the agent's side at all.
+ * One workspace from beginning to end. The separation is timing, so there is no wall: the hidden tests sit on
+ * the time rail at their own moment, and reach the room only after the agent has exited. Everything in the
+ * workspace keeps its place in every state, because grading happens in the workspace the agent left.
  */
-export function cutawayModel(): Model {
-  const six = <T,>(v: (i: number) => T): T[] => [0, 1, 2, 3, 4, 5].map(v);
-  const place = (from: number, p: Vec3, opts: { until?: number; glowAt?: number[]; moved?: { at: number; p: Vec3 } } = {}): PartPose[] => six((i) => ({
-    p: opts.moved && i >= opts.moved.at ? opts.moved.p : p,
-    on: i >= from && i <= (opts.until ?? 5) ? 1 : 0,
-    glow: opts.glowAt?.includes(i) ? 1 : 0,
-  }));
+export function cutawayModel(arm: ArmId = 'both', task?: Task | null): Model {
+  const STATES = [0, 1, 2, 3, 4, 5];
+  const [RECEIVED, WORKING, EXIT, HIDDEN, GRADING, RESULT] = STATES;
+  const c = CONDITIONS[arm];
+  const color = CONDITION_COLOR[arm];
+  const run = task?.results[arm]?.runs[0];
+  const files = changedFiles(run?.diff);
   const sees = (k: string) => AGENT_SEES.find((x) => x.k === k)?.v ?? '';
+  const fixed = (p: Vec3, pose: (s: number) => Partial<PartPose> = () => ({})): PartPose[] => STATES.map((s) => ({ p, on: 1, ...pose(s) }));
+  const WALL: Vec3 = [Math.PI / 2, 0, 0];
+  const docLines = c.agentsLines ?? 13;
+  const issueLines = issueStrokes(task?.issue);
+  const after = (s: number, at: number) => (s >= at ? 1 : 0);
+  const quietLater = (s: number) => (s >= HIDDEN ? 0.5 : 1);
+  const test: Vec3 = [REPO_AT[0] + TEST_FILE_TILE[0] * REPO_SCALE, REPO_AT[1] + 0.34, REPO_AT[2] + TEST_FILE_TILE[1] * REPO_SCALE];
+
   const parts: Part[] = [
-    { id: 'barrier', title: 'Information barrier', detail: 'A conceptual wall. The real separation is timing: hidden tests reach the workspace only after the agent has exited.', source: 'src/uplift/runner.py', shape: 'wall', glass: true, size: [0.1, 3.6, 4.6], accent: SPECTRAL.violet, poses: place(0, [0, 0.1, 0], { glowAt: [1] }) },
-    { id: 'agent-floor', title: 'Agent side', detail: 'What exists while the agent runs.', size: [5.8, 0.14, 4.4], accent: SPECTRAL.blue, poses: place(0, [-3.2, -1.7, 0]) },
-    { id: 'eval-floor', title: 'Evaluator side', detail: 'What exists only after the agent has exited.', size: [5.8, 0.14, 4.4], accent: SPECTRAL.cyan, poses: place(0, [3.2, -1.7, 0]) },
-    { id: 'snapshot', title: 'Repository snapshot', detail: sees('Repository snapshot'), source: 'src/uplift/workspace.py', size: [3.2, 0.2, 2.6], accent: SPECTRAL.blue, poses: place(0, [-3.4, -1.45, 0.2], { moved: { at: 3, p: [3.2, -1.45, 0.2] }, glowAt: [0, 3] }) },
-    { id: 'setup', title: 'Installed setup', detail: sees('Assigned setup'), source: 'src/uplift/workspace.py', size: [3.2, 0.14, 2.6], accent: SPECTRAL.magenta, poses: place(0, [-3.4, -1.2, 0.2], { moved: { at: 3, p: [3.2, -1.2, 0.2] }, glowAt: [0] }) },
-    { id: 'issue', title: 'Task issue', detail: sees('Task issue'), source: 'src/uplift/runner.py', size: [1.5, 0.12, 1.1], accent: SPECTRAL.amber, poses: place(0, [-4.9, 0.4, -0.9], { until: 2, glowAt: [0] }) },
-    { id: 'muse', title: 'Muse Code', detail: 'The agent under test. It works with the issue, the code and its setup, and it has exited before anything on the other side begins.', source: 'src/uplift/runner.py', shape: 'column', size: [0.9, 1.7, 0.9], accent: SPECTRAL.core, poses: place(0, [-3.4, -0.1, 0.2], { until: 2, glowAt: [0, 2] }) },
-    { id: 'patch', title: 'Produced patch', detail: 'The diff of the agent\'s changes, excluding agent files. It is recorded when the agent stops. Grading then uses the workspace itself, as the agent left it.', source: 'src/uplift/workspace.py', size: [2.4, 0.1, 1.9], accent: INTERFACE.ember, poses: place(2, [-3.4, -0.98, 0.2], { moved: { at: 3, p: [3.2, -0.98, 0.2] }, glowAt: [2] }) },
-    { id: 'hidden-f2p', title: 'FAIL_TO_PASS tests', detail: 'The bug\'s own tests from the real fix. They fail before it and must pass after it.', source: 'src/uplift/grade.py', size: [1.5, 0.3, 1.1], accent: OUTCOME_ACCENT.pass, poses: place(1, [1.9, 1, -0.9], { moved: { at: 3, p: [2.4, -0.62, 0.2] }, glowAt: [1, 3] }) },
-    { id: 'hidden-p2p', title: 'PASS_TO_PASS tests', detail: 'Existing tests that must still pass, so a fix cannot break what worked.', source: 'src/uplift/grade.py', size: [1.5, 0.3, 1.1], accent: OUTCOME_ACCENT.keep, poses: place(1, [4.5, 1, -0.9], { moved: { at: 3, p: [4, -0.62, 0.2] }, glowAt: [1, 3] }) },
-    { id: 'pytest', title: 'Pytest', detail: 'The tests run with the workspace\'s own interpreter and an isolated config.', source: 'src/uplift/grade.py', shape: 'column', size: [0.8, 1.5, 0.8], accent: SPECTRAL.cyan, poses: place(4, [3.2, 0.4, 0.2], { glowAt: [4] }) },
-    { id: 'verdict', title: 'Result', detail: 'Resolved or not resolved. Nothing else is scored, and the agent never learns which.', source: 'src/uplift/screen.py', size: [2.2, 0.2, 1.3], accent: INTERFACE.ember, poses: place(5, [3.2, 1.5, 0.2], { glowAt: [5] }) },
+    { id: 'room', title: 'The workspace', detail: '', inert: true, form: { kind: 'room', key: 'room', ...CUTAWAY_ROOM }, size: [12, 4.6, 6.4], accent: SPECTRAL.blue, poses: fixed([0, -1.9, 0]) },
+    {
+      id: 'timeline', title: 'Timeline', detail: 'Time, left to right: the run starts, the agent exits, the hidden tests are applied, grading runs, the result is recorded. The separation between agent and evaluator is this order, not a wall.', source: 'src/uplift/runner.py',
+      form: { kind: 'rail', key: 'rail', ticks: TICKS, split: TICKS[1] }, size: [11, 0.2, 0.3], accent: SPECTRAL.violet, focus: { dist: 10, el: 0.36, yaw: 0 }, poses: fixed(RAIL),
+    },
+    { id: 'playhead', title: 'Now', detail: '', inert: true, form: { kind: 'marker', key: 'marker' }, size: [0.3, 0.5, 0.3], accent: INTERFACE.ember, poses: STATES.map((s) => ({ p: [TICKS[Math.max(0, s - 1)] + (s === RECEIVED ? -0.3 : s === WORKING ? 1.2 : 0), RAIL[1] + 0.34, RAIL[2]], on: 1, glow: 1 })) },
+    {
+      id: 'snapshot', title: 'Repository snapshot', detail: `${sees('Repository snapshot')} It stays in this one workspace from start to finish.`, source: 'src/uplift/workspace.py',
+      form: { kind: 'repo', key: `cut-repo:${files.join()}`, width: 6.2, depth: 4.4, scan: true, lit: [...files.map((path) => ({ path, color: INTERFACE.ember, seq: 0.3 })), { path: 'tests/test_parser.py', color: OUTCOME.solved, seq: 0.6 }] } as Form,
+      size: [5, 0.5, 3.5], accent: SPECTRAL.blue, focus: { dist: 8, el: 0.66 },
+      poses: fixed(REPO_AT, (s) => ({ scale: REPO_SCALE, reveal: s >= GRADING ? 1 : s === HIDDEN ? 0.7 : s === EXIT ? 0.35 : 0, glow: s === RECEIVED ? 0.5 : 0 })),
+    },
+    {
+      id: 'issue', title: 'Task issue', detail: sees('Task issue'), source: 'src/uplift/runner.py',
+      form: { kind: 'sheet', key: `cut-issue:${issueLines.length}:${task ? 1 : 0}`, shape: 'ticket', width: 2.5, lines: issueLines, color: SPECTRAL.amber },
+      size: [2.5, 0.1, sheetDepth(issueLines.length)], accent: SPECTRAL.amber, focus: { dist: 6.6, el: 0.1, yaw: 0 },
+      poses: fixed([-4.1, 1.05, -2.72], (s) => ({ rot: WALL, scale: 0.86, dim: quietLater(s), glow: s === RECEIVED ? 0.6 : 0 })),
+    },
+    {
+      id: 'agents', title: 'AGENTS.md', detail: `${sees('Assigned setup')} ${docLines} lines in this condition; it stays where it was installed.`, source: 'src/uplift/workspace.py',
+      form: { kind: 'sheet', key: `cut-agents:${docLines}:${color}`, shape: 'doc', width: 2.1, lines: blankLines(docLines), color },
+      size: [2.1, 0.1, sheetDepth(docLines)], accent: color, focus: { dist: 6.6, el: 0.1, yaw: 0 },
+      poses: fixed([1.5, 1.05, -2.72], (s) => ({ on: c.hasTips ? 1 : 0, rot: WALL, scale: (c.agentsLines ?? 0) > 20 ? 0.56 : 0.86, dim: quietLater(s), glow: s === RECEIVED ? 0.6 : 0 })),
+    },
+    {
+      id: 'hooks', title: 'Hook configuration', detail: `${sees('Runtime feedback')} They run only while the agent works.`, source: 'src/uplift/arm_hooks/uplift_hook.py',
+      form: { kind: 'hooks', key: `cut-hooks:${(c.hookChecks ?? []).join()}:${color}`, checks: c.hookChecks ?? [], color }, size: [3.2, 0.3, 2.4], accent: color, focus: { dist: 7, el: 0.1, yaw: 0 },
+      poses: fixed([3.95, 1.05, -2.72], (s) => ({ on: c.hasHooks ? 1 : 0, rot: WALL, scale: 0.72, dim: quietLater(s), glow: s === RECEIVED ? 0.6 : 0 })),
+    },
+    {
+      id: 'muse', title: 'Muse Code', detail: 'The agent under test. It works in this workspace, and when it exits it is gone: nothing here can reach it again.', source: 'src/uplift/runner.py',
+      form: { kind: 'core', key: 'core' }, size: [2.8, 2.8, 2.8], accent: SPECTRAL.core, halo: 6, inkRest: 0.1, focus: { dist: 6.6, el: 0.3 },
+      poses: fixed([-1.2, 0.72, 0.3], (s) => ({ scale: 0.72, glow: s === WORKING ? 1 : s === RECEIVED ? 0.3 : 0, rot: s >= EXIT ? [0.5, 0, 0.4] : [0, 0, 0], dim: s >= EXIT ? 0.6 : 1 })),
+    },
+    {
+      id: 'patch', title: 'Produced patch', detail: 'The diff of the agent\'s changes, excluding agent files, recorded when the agent stops. Grading then uses the workspace itself, as the agent left it.', source: 'src/uplift/workspace.py',
+      form: { kind: 'diff', key: `cut-diff:${arm}:${task ? 1 : 0}`, width: 3.3, lines: diffStrokes(run?.diff) }, size: [3.3, 0.14, 2.8], accent: INTERFACE.ember, focus: { dist: 6.4, el: 0.7 },
+      poses: fixed([3.75, -1.62, 0.9], (s) => ({ on: after(s, EXIT), scale: 0.72, glow: s === EXIT ? 1 : 0, rot: [0.16, -0.2, 0], dim: s > EXIT ? 0.65 : 1 })),
+    },
+    {
+      id: 'hidden', title: 'Hidden tests', detail: `The real fix's test patch. It is not in the workspace while the agent runs, and it is applied only after the agent has exited. For the WINDOW bug the real fix's tests are in tests/test_parser.py. ${NETWORK_NOTE}`, source: 'src/uplift/grade.py',
+      form: { kind: 'sealed', key: 'sealed', color: OUTCOME.solved }, size: [1.5, 0.34, 1.1], accent: OUTCOME.solved, focus: { dist: 6.4, el: 0.42 },
+      poses: STATES.map((s) => (s < HIDDEN
+        ? { p: [TICKS[2], RAIL[1] + 0.34, RAIL[2]], on: 1, glow: s === WORKING ? 0.6 : 0.2, reveal: 0, dim: s === EXIT ? 0.8 : 1 }
+        : { p: test, on: 1, scale: 0.5, reveal: 1, glow: s === HIDDEN ? 1 : 0.3 })),
+    },
+    {
+      id: 'pytest', title: 'Pytest', detail: 'The tests run in this workspace, with its own interpreter and an isolated config. The next section takes this step apart.', source: 'src/uplift/grade.py',
+      form: { kind: 'scan', key: 'scan', depth: 3.8 }, size: [0.4, 0.2, 3.8], accent: SPECTRAL.cyan, focus: { dist: 8.5, el: 0.6 },
+      poses: STATES.map((s) => ({ p: [s >= GRADING ? 1.45 : -3.8, -1.4, 0.3], on: s === GRADING ? 1 : 0, glow: 1 })),
+    },
+    {
+      id: 'verdict', title: 'Result', detail: `Resolved or not resolved. Nothing else is scored, and the agent never learns which.${run ? ` This run: ${run.resolved ? 'resolved' : 'not resolved'}, from the published record of the WINDOW bug.` : ''}`, source: 'src/uplift/screen.py',
+      form: { kind: 'seal', key: `seal:${run ? run.resolved : 'none'}`, outcome: run ? (run.resolved ? 'resolved' : 'unresolved') : 'unknown' }, size: [1.6, 0.2, 1.6], accent: run && !run.resolved ? OUTCOME.failed : OUTCOME.solved, focus: { dist: 6, el: 0.2, yaw: 0 },
+      poses: fixed([3.75, -0.25, 1.1], (s) => ({ on: s === RESULT ? 1 : 0, rot: [1.15, 0, 0], scale: 0.9, glow: 1 })),
+    },
   ];
-  const near: Vec3 = [-1.2, 0, 0], far: Vec3 = [1.2, 0, 0];
+
+  const feed = (to: string): Link => ({ from: 'muse', to, accent: SPECTRAL.amber, on: [0, 1, 0, 0, 0, 0] });
+  const views: View[] = [
+    { target: [0, -0.5, 0], dist: 15.2, yaw: -0.3, el: 0.26 },
+    { target: [0, -0.5, 0.4], dist: 15, yaw: -0.16, el: 0.24 },
+    { target: [0, -0.6, 0.6], dist: 15, yaw: 0.1, el: 0.26 },
+    { target: [0, -0.8, 1], dist: 14.6, yaw: 0.14, el: 0.36 },
+    { target: [0, -0.9, 0.4], dist: 14.6, yaw: 0.02, el: 0.42 },
+    { target: [0, -0.6, 0.4], dist: 15, yaw: -0.08, el: 0.3 },
+  ];
+  const lights: Light[] = STATES.map((s) => (s <= WORKING
+    ? { p: [-1.2, 1.1, 1], warm: s === WORKING ? 1.25 : 0.7, cool: 0.2 }
+    : s === EXIT ? { p: [-1.2, 1.1, 1], warm: 0.18, cool: 0.34 } : { p: [0, 2.2, 2], warm: 0.32, cool: 1 }));
   return {
-    parts,
-    links: [
-      { from: 'muse', to: 'patch', accent: INTERFACE.ember, on: [0, 0, 1, 0, 0, 0] },
-      { from: 'pytest', to: 'verdict', accent: INTERFACE.ember, on: [0, 0, 0, 0, 0, 1] },
-    ],
-    views: [
-      { target: near, dist: 14, yaw: -0.34, el: 0.34 },
-      { target: [0, 0, 0], dist: 15.5, yaw: 0.1, el: 0.32 },
-      { target: near, dist: 14, yaw: -0.3, el: 0.3 },
-      { target: [0.6, 0, 0], dist: 15, yaw: 0.16, el: 0.34 },
-      { target: far, dist: 13, yaw: 0.34, el: 0.3 },
-      { target: far, dist: 13, yaw: 0.28, el: 0.26 },
-    ],
+    parts, views, lights,
+    links: [feed('snapshot'), feed('issue'), feed('agents'), feed('hooks')],
+    steps: [['snapshot', 'issue', 'agents', 'hooks'], ['muse', 'hidden'], ['muse', 'patch'], ['hidden', 'timeline'], ['pytest'], ['verdict']],
   };
 }
-

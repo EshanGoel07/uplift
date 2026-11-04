@@ -53,6 +53,7 @@
 .story__body p { margin: 0; }
 .story__body code { color: var(--text); }
 .story__action { margin-top: 20px !important; }
+.story__body .story__note { margin-top: 10px; font-size: 0.86rem; line-height: 1.5; color: var(--text-3); }
 
 .story__figure { display: block; width: 100%; height: auto; margin-bottom: 16px; }
 .sf__path { stroke-dasharray: 1; stroke-dashoffset: 0; }

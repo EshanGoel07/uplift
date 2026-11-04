@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { changedFiles, cutawayModel, diffStrokes, issueStrokes, workspaceModel } from '../../src/data/models';
+import { changedFiles, CUTAWAY_ROOM, CUTAWAY_STATES, cutawayModel, diffStrokes, issueStrokes, TEST_FILE_TILE, workspaceModel } from '../../src/data/models';
 import { repoLayout, type RepoFile } from '../../src/data/repoLayout';
 import tree from '../../src/data/repoTree.json';
 import { gradingModel } from '../../src/data/gradingModel';
@@ -83,26 +83,54 @@ describe('repository treemap', () => {
 });
 
 describe('cutaway model', () => {
-  const m = cutawayModel();
+  const m = cutawayModel('both', task);
   const part = (id: string) => m.parts.find((p) => p.id === id)!;
-  const hidden = m.parts.filter((p) => p.id.startsWith('hidden'));
+  const HIDDEN = CUTAWAY_STATES.indexOf('hidden'), EXIT = CUTAWAY_STATES.indexOf('exit');
+  const inRoom = (p: number[]) => Math.abs(p[0]) <= CUTAWAY_ROOM.width / 2 && Math.abs(p[2]) <= CUTAWAY_ROOM.depth / 2;
 
-  it('never puts a hidden test on the agent side of the barrier', () => {
-    expect(hidden).toHaveLength(2);
-    for (const p of hidden) for (const q of p.poses) expect(q.p[0]).toBeGreaterThan(0);
-  });
-  it('has the agent gone before the tests reach the workspace', () => {
-    const applied = hidden[0].poses.findIndex((q, i) => i > 0 && q.p[0] !== hidden[0].poses[0].p[0]);
-    expect(applied).toBeGreaterThan(0);
-    expect(part('muse').poses[applied].on).toBe(0);
-    expect(part('muse').poses[applied - 1].on).toBe(1);
-  });
-  it('moves the workspace across, not only the patch', () => {
-    const last = m.views.length - 1;
-    for (const id of ['snapshot', 'setup', 'patch']) {
-      expect(part(id).poses[last].on).toBe(1);
-      expect(part(id).poses[last].p[0]).toBeGreaterThan(0);
+  it('is one workspace: nothing in it ever moves, in any state', () => {
+    for (const id of ['room', 'snapshot', 'issue', 'agents', 'hooks', 'muse', 'patch']) {
+      const at = part(id).poses.map((q) => q.p.join());
+      expect(new Set(at).size, id).toBe(1);
     }
+  });
+  it('has no wall, barrier or second side', () => {
+    expect(m.parts.map((p) => p.id).join()).not.toMatch(/barrier|wall|floor|side/);
+    expect(m.parts.some((p) => p.shape === 'wall')).toBe(false);
+  });
+  it('keeps the hidden tests out of the workspace until after the agent has exited', () => {
+    const h = part('hidden');
+    h.poses.forEach((q, s) => expect(inRoom(q.p), `state ${s}`).toBe(s >= HIDDEN));
+    expect(HIDDEN).toBeGreaterThan(EXIT);
+  });
+  it('has the agent inactive from its exit on, and active before', () => {
+    const glow = part('muse').poses.map((q) => q.glow ?? 0);
+    expect(glow[CUTAWAY_STATES.indexOf('working')]).toBe(1);
+    glow.slice(EXIT).forEach((g) => expect(g).toBe(0));
+    for (let i = EXIT; i < glow.length; i++) for (const l of m.links) if (l.from === 'muse' && i > EXIT) expect(l.on[i]).toBe(0);
+  });
+  it('lands the tests on the file the real fix tests', () => {
+    const t = repoLayout(tree.files as RepoFile[], 6.2, 4.4).tiles.find((x) => x.path === 'tests/test_parser.py')!;
+    expect(TEST_FILE_TILE[0]).toBeCloseTo(t.x + t.w / 2, 2);
+    expect(TEST_FILE_TILE[1]).toBeCloseTo(t.z + t.d / 2, 2);
+  });
+  it('records the patch at the exit, and a result only at the end, from the published run', () => {
+    expect(part('patch').poses.map((q) => q.on)).toEqual([0, 0, 1, 1, 1, 1]);
+    expect(part('verdict').poses.map((q) => q.on)).toEqual([0, 0, 0, 0, 0, 1]);
+    for (const arm of ARMS) {
+      const f = cutawayModel(arm, task).parts.find((p) => p.id === 'verdict')!.form;
+      expect(f?.kind === 'seal' && f.outcome).toBe(task.results[arm].runs[0].resolved ? 'resolved' : 'unresolved');
+    }
+  });
+  it.each(ARMS)('%s installs only its own artifacts', (arm) => {
+    const c = cutawayModel(arm);
+    const on = (id: string) => c.parts.find((p) => p.id === id)!.poses.some((q) => q.on > 0.5);
+    expect(on('agents')).toBe(CONDITIONS[arm].hasTips);
+    expect(on('hooks')).toBe(CONDITIONS[arm].hasHooks);
+  });
+  it('moves time forward only', () => {
+    const xs = part('playhead').poses.map((q) => q.p[0]);
+    expect([...xs].sort((a, b) => a - b)).toEqual(xs);
   });
 });
 

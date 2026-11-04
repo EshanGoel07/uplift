@@ -33,14 +33,20 @@ export const sheetDepth = (lines: number): number => 0.62 + lines * LINE_PITCH;
 
 /** What a part is made of. `key` changes exactly when the geometry must be rebuilt. */
 export type Form =
-  | { kind: 'repo'; key: string; width: number; depth: number; lit: { path: string; color: string; seq: number }[] }
+  | { kind: 'repo'; key: string; width: number; depth: number; lit: { path: string; color: string; seq: number }[]; scan?: boolean }
   | { kind: 'sheet'; key: string; shape: 'ticket' | 'doc'; width: number; lines: Stroke[]; color: string }
   | { kind: 'ghost'; key: string; width: number; depth: number; color: string }
   | { kind: 'commit'; key: string; color: string }
   | { kind: 'hooks'; key: string; checks: string[]; color: string }
   | { kind: 'core'; key: string }
   | { kind: 'diff'; key: string; width: number; lines: Stroke[] }
-  | { kind: 'spine'; key: string; height: number };
+  | { kind: 'spine'; key: string; height: number }
+  | { kind: 'room'; key: string; width: number; depth: number; height: number }
+  | { kind: 'rail'; key: string; ticks: number[]; split: number }
+  | { kind: 'marker'; key: string }
+  | { kind: 'sealed'; key: string; color: string }
+  | { kind: 'scan'; key: string; depth: number }
+  | { kind: 'seal'; key: string; outcome: 'resolved' | 'unresolved' | 'unknown' };
 
 export interface Part {
   id: string;
