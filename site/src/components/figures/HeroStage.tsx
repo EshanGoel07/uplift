@@ -54,6 +54,9 @@ export function HeroStage({ summary }: Props) {
   const [ready, setReady] = useState(false);
   const selected = useAtlas((s) => s.task);
   const condition = useAtlas((s) => s.condition);
+  const repeat = useAtlas((s) => s.repeat);
+  const [isoBug, setIsoBug] = useState(false);
+  useEffect(() => { lattice.set({ isolateBug: isoBug }); }, [isoBug]);
   const focus = Math.max(0, tasks.findIndex((t) => t.id === selected));
   const [hovered, setHovered] = useState<number | null>(null);
   const stage = useRef<HTMLDivElement>(null);
@@ -170,6 +173,25 @@ export function HeroStage({ summary }: Props) {
             {arms.map((a) => (
               <button key={a.id} type="button" className="lens-cond" style={condStyle(a.id)} aria-pressed={condition === a.id} onClick={() => atlas.set({ condition: a.id })}><i aria-hidden="true" />{a.label}</button>
             ))}
+          </div>
+        )}
+
+        {heroMode === 'runs' && (
+          <div className="iso" >
+            <div className="lens-conds" role="group" aria-label="Isolate a condition">
+              <button type="button" className="lens-cond" aria-pressed={!condition} onClick={() => atlas.set({ condition: null })}>All</button>
+              {arms.map((a) => (
+                <button key={a.id} type="button" className="lens-cond" style={condStyle(a.id)} aria-pressed={condition === a.id} onClick={() => atlas.set({ condition: a.id })}><i aria-hidden="true" />{a.label}</button>
+              ))}
+            </div>
+            <div className="iso__row">
+              <div className="seg-dark" role="group" aria-label="Isolate a repeat">
+                <button type="button" aria-pressed={repeat === null} onClick={() => atlas.set({ repeat: null })}>Both</button>
+                <button type="button" aria-pressed={repeat === 0} onClick={() => atlas.set({ repeat: 0 })}>R1</button>
+                <button type="button" aria-pressed={repeat === 1} onClick={() => atlas.set({ repeat: 1 })}>R2</button>
+              </div>
+              <ToolButton icon="focus" pressed={isoBug} onClick={() => setIsoBug(!isoBug)}>Isolate this bug</ToolButton>
+            </div>
           </div>
         )}
 

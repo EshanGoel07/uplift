@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import { BoxGeometry, Color, InstancedBufferAttribute, InstancedMesh, MeshStandardMaterial, Object3D, PerspectiveCamera, PlaneGeometry, ShaderChunk, Vector3 } from 'three';
 import type { Arm } from '../../data/types';
+import { atlas } from '../../state/atlasStore';
 import { lattice, latticeHandlers, latticeLabels, latticeScroll, useLattice } from '../../state/latticeStore';
 import { requestFrame, scenes } from '../../state/sceneStore';
 import { CONDITION_COLOR, INTERFACE, OUTCOME, SPECTRAL } from '../palette';
@@ -55,11 +56,17 @@ export function RunLatticeScene() {
   const geo = useMemo(() => {
     const g = new BoxGeometry(CUBE, CUBE, CUBE);
     // Which bug each instance belongs to: static, and read by the vertex shader to apply the lift.
-    const bug = new Float32Array(count);
-    for (let n = 0; n < count; n++) bug[n] = Math.floor(n / perBug);
+    const bug = new Float32Array(count), lane = new Float32Array(count), rep = new Float32Array(count);
+    for (let n = 0; n < count; n++) {
+      bug[n] = Math.floor(n / perBug);
+      lane[n] = Math.floor((n % perBug) / repeats);
+      rep[n] = n % repeats;
+    }
     g.setAttribute('aBug', new InstancedBufferAttribute(bug, 1));
+    g.setAttribute('aLane', new InstancedBufferAttribute(lane, 1));
+    g.setAttribute('aRep', new InstancedBufferAttribute(rep, 1));
     return g;
-  }, [count, perBug]);
+  }, [count, perBug, repeats]);
   const laneGeo = useMemo(() => new PlaneGeometry(LANE - 0.1, span + 0.5), [span]);
   const laneGeoW = useMemo(() => new PlaneGeometry(LANE - 0.1, blockW + 0.45), [blockW]);
   const laneColors = useMemo(() => arms.map((a) => laneColor(a.id)), [arms]);
@@ -74,6 +81,8 @@ export function RunLatticeScene() {
     glow: new Float32Array(tasks.length),     // 1 = the focused bug in ember
     switchAt: new Float32Array(tasks.length),
     designTarget: 1,
+    iso: new Vector3(-1, -1, -1),
+    fade: { value: 0 },
     t0: -1,
     ready: false,
     built: false,
@@ -93,7 +102,13 @@ export function RunLatticeScene() {
       shader.uniforms.uGlow = { value: st.glow };
       shader.uniforms.uDesignColor = { value: COLORS.design };
       shader.uniforms.uFocusColor = { value: COLORS.focus };
+      shader.uniforms.uIso = { value: st.iso };
+      shader.uniforms.uFade = st.fade;
       shader.vertexShader = `attribute float aBug;
+attribute float aLane;
+attribute float aRep;
+uniform vec3 uIso;
+uniform float uFade;
 uniform float uLift[${bugs}];
 uniform float uDesign[${bugs}];
 uniform float uGlow[${bugs}];
@@ -102,7 +117,9 @@ uniform vec3 uFocusColor;
 ` + shader.vertexShader
         .replace('#include <color_vertex>', `#include <color_vertex>
 	int bugIndex = int(aBug + 0.5);
-	vColor.xyz = mix(mix(vColor.xyz, uDesignColor, uDesign[bugIndex]), uFocusColor, uGlow[bugIndex]);`)
+	vColor.xyz = mix(mix(vColor.xyz, uDesignColor, uDesign[bugIndex]), uFocusColor, uGlow[bugIndex]);
+	bool isoIn = (uIso.x < 0.0 || abs(aBug - uIso.x) < 0.5) && (uIso.y < 0.0 || abs(aLane - uIso.y) < 0.5) && (uIso.z < 0.0 || abs(aRep - uIso.z) < 0.5);
+	if (!isoIn) vColor.xyz = mix(vColor.xyz, vec3(0.012), uFade);`)
         .replace('#include <project_vertex>', ShaderChunk.project_vertex.replace(
           'mvPosition = instanceMatrix * mvPosition;',
           'mvPosition = instanceMatrix * mvPosition;\n\tmvPosition.y += uLift[bugIndex];',
@@ -155,11 +172,17 @@ uniform vec3 uFocusColor;
 
   // Hover and focus change which bug lifts: wake the renderer for them.
   useEffect(() => {
-    let { hovered, focus } = lattice.get();
-    return lattice.subscribe(() => {
+    let { hovered, focus, isolateBug } = lattice.get();
+    let { condition, repeat } = atlas.get();
+    const a = lattice.subscribe(() => {
       const s = lattice.get();
-      if (s.hovered !== hovered || s.focus !== focus) { hovered = s.hovered; focus = s.focus; requestFrame('state'); }
+      if (s.hovered !== hovered || s.focus !== focus || s.isolateBug !== isolateBug) { ({ hovered, focus, isolateBug } = s); requestFrame('state'); }
     });
+    const b = atlas.subscribe(() => {
+      const s = atlas.get();
+      if (s.condition !== condition || s.repeat !== repeat) { ({ condition, repeat } = s); requestFrame('state'); }
+    });
+    return () => { a(); b(); };
   }, []);
 
   // New arrangement or size: write every matrix once and refit the camera.
@@ -249,6 +272,17 @@ uniform vec3 uFocusColor;
         place(labels[lanes], laneAt(lanes - 1) + LANE * 0.7, 0, -bugAt(0) - 0.6);
         place(labels[lanes + 1], laneAt(lanes - 1) + LANE * 0.7, 0, -bugAt(nTest));
       }
+    }
+
+    // Isolation: everything outside the chosen bug, condition and repeat recedes. Uniforms only.
+    {
+      const at = atlas.get(), lat = lattice.get();
+      const lane = at.condition ? arms.findIndex((a) => a.id === at.condition) : -1;
+      const rep = at.repeat ?? -1, bug = lat.isolateBug ? focused : -1;
+      if (lane >= 0 || rep >= 0 || bug >= 0) st.iso.set(bug, lane, rep);
+      const want = lane >= 0 || rep >= 0 || bug >= 0 ? 0.9 : 0;
+      const d = want - st.fade.value;
+      if (Math.abs(d) > 2e-3) { st.fade.value = reduced ? want : st.fade.value + d * (1 - Math.exp(-dt * 9)); busy = true; } else st.fade.value = want;
     }
 
     const buildEnd = reduced ? 0 : BUILD_DELAY + (tasks.length - 1) * BUILD_STAGGER + BUILD_LENGTH;

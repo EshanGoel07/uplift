@@ -7,16 +7,19 @@ import { scenes, useUi } from '../../state/sceneStore';
 import { sideOf, wb, wbLabels, useWb } from '../../state/workbenchStore';
 import { useMedia, WIDE } from '../../hooks/useMedia';
 import { useInView } from '../../hooks/useInView';
-import { LANES, MODULE_LABELS } from '../../scenes/Workbench/layout';
+import { LANES, MODULE_LABELS, PRESET_LABELS, presetFor } from '../../scenes/Workbench/layout';
 import { Inspector } from './Inspector';
 import { Bridge } from '../../components/navigation/Bridge';
 import { DOC_LINKS, SOURCE_LINKS } from '../../data/links';
 import { WorkbenchDiagram } from './WorkbenchDiagram';
 import { condStyle } from '../../utils/condition';
+import { AGENT_SEES, EVALUATOR_SEES, HIDDEN_FROM_AGENT, workspaceLayers } from '../../data/method';
+import { ToolButton } from '../../components/atlas/Primitives';
 
 interface Props { summary: Summary | null; onOpenTask: (id: string) => void }
 
 const MODULE_TEXT: Record<string, string> = {
+  M: 'Muse Code', 
   A: 'A · Task source', B: 'B · Six conditions × 2 repeats', C: 'C · Isolated workspaces', D: 'D · Information barrier',
   E: 'E · Evaluator', F: 'F · Paired analysis', dev: 'Dev · 40 tasks · tuning only', tests: 'Hidden tests: F2P + P2P',
   agentSide: 'What the agent receives', evalSide: 'What the evaluator uses',
@@ -72,6 +75,17 @@ export function Methodology({ summary, onOpenTask }: Props) {
     return scenes.request('workbench', stage.current, { reducedMotion: 'full', lowTier: false });
   }, [use3d, summary]);
 
+  // Selecting a module eases the model to it.
+  useEffect(() => { wb.set({ preset: presetFor(focus) }); }, [focus]);
+  const preset = useWb((s) => s.preset);
+  const showLabels = useWb((s) => s.labels);
+  const explode = useWb((s) => s.explode);
+  const layer = useWb((s) => s.layer);
+  const hiddenLayers = useWb((s) => s.hiddenLayers);
+  const cutaway = useWb((s) => s.cutaway);
+  const armSel = useAtlas((s) => s.condition) ?? 'both';
+  const layers = workspaceLayers(armSel);
+
   const step = (d: number) => atlas.set({ task: tasks[(idx + d + tasks.length) % tasks.length].id });
   const label = (k: string, i?: number) => (i !== undefined ? `${i + 1} ${summary?.arms[i].label ?? ''}` : MODULE_TEXT[k]);
   const pressed = (k: string) => {
@@ -117,7 +131,21 @@ export function Methodology({ summary, onOpenTask }: Props) {
                   <button type="button" aria-pressed={view === '2d'} onClick={() => wb.set({ view: '2d' })}>2D diagram</button>
                 </div>
               )}
-              <button type="button" className="wb__reset" onClick={() => wb.set({ focus: { kind: 'overview' } })}>Reset to overview</button>
+              <button type="button" className="wb__reset" onClick={() => wb.set({ focus: { kind: 'overview' }, preset: 'full', explode: false, cutaway: false, layer: null, hiddenLayers: [] })}>Reset to overview</button>
+            </div>
+            <div className="wb__presets">
+              {use3d && (
+                <div className="seg" role="group" aria-label="Camera preset">
+                  {PRESET_LABELS.map(([id, name]) => (
+                    <button key={id} type="button" className="seg__btn" aria-pressed={preset === id} onClick={() => wb.set({ preset: id })}>{name}</button>
+                  ))}
+                </div>
+              )}
+              <div className="wb__toggles">
+                {use3d && <ToolButton pressed={showLabels} onClick={() => wb.set({ labels: !showLabels })}>Labels</ToolButton>}
+                <ToolButton icon="layers" pressed={explode} onClick={() => wb.set(explode ? { explode: false, layer: null } : { explode: true, preset: 'workspace' })}>{explode ? 'Reassemble' : 'Explode workspace'}</ToolButton>
+                <ToolButton pressed={cutaway} onClick={() => wb.set(cutaway ? { cutaway: false } : { cutaway: true, preset: 'barrier' })}>Barrier cross-section</ToolButton>
+              </div>
             </div>
 
             <div className="wb__body">
@@ -127,7 +155,7 @@ export function Methodology({ summary, onOpenTask }: Props) {
                     3D model of the experiment. Every part shown here is also available as buttons: the labels on the model,
                     the toolbar above and the 2D diagram.
                   </p>
-                  <div className="wb__labels">
+                  <div className={`wb__labels${showLabels ? '' : ' is-off'}`}>
                     {MODULE_LABELS.map((l) => (
                       <span key={l.key} className={`wb-label wb-label--${l.kind} a-${l.align}`} ref={(el) => { wbLabels[l.key] = el; }}>
                         <button type="button" aria-pressed={pressed(l.key)} onClick={() => l.focus && wb.set({ focus: l.focus })}>
@@ -148,6 +176,41 @@ export function Methodology({ summary, onOpenTask }: Props) {
                 </div>
               ) : (
                 <WorkbenchDiagram summary={summary} tasks={tasks} />
+              )}
+              {explode && (
+                <section className="wslayers" aria-label="Layers of one isolated workspace">
+                  <div className="wslayers__head">
+                    <p className="kicker">One isolated workspace · {summary.arms.find((a) => a.id === armSel)?.label}</p>
+                    <div className="lens-conds" role="group" aria-label="Condition of this workspace">
+                      {summary.arms.map((a) => <button key={a.id} type="button" className="lens-cond" style={condStyle(a.id)} aria-pressed={armSel === a.id} onClick={() => atlas.set({ condition: a.id })}><i aria-hidden="true" />{a.label}</button>)}
+                    </div>
+                  </div>
+                  <ol className="wslayers__list">
+                    {layers.map((l, i) => (
+                      <li key={l.id} className={`is-${l.kind}${layer === i ? ' is-sel' : ''}`} style={condStyle(armSel)}>
+                        <button type="button" className="wslayers__pick" aria-pressed={layer === i} onClick={() => wb.set({ layer: layer === i ? null : i })}>
+                          <span className="wslayers__n">{i + 1}</span><span>{l.title}</span>
+                        </button>
+                        {use3d && <button type="button" className="wslayers__eye" aria-pressed={hiddenLayers.includes(i)} onClick={() => wb.set({ hiddenLayers: hiddenLayers.includes(i) ? hiddenLayers.filter((x) => x !== i) : [...hiddenLayers, i] })}>{hiddenLayers.includes(i) ? 'Show' : 'Hide'}</button>}
+                        {layer === i && <p className="wslayers__detail">{l.detail} <code>{l.source}</code></p>}
+                      </li>
+                    ))}
+                  </ol>
+                </section>
+              )}
+              {cutaway && (
+                <section className="barrier" aria-label="Information barrier cross-section">
+                  <div className="barrier__side">
+                    <p className="kicker">Agent input</p>
+                    <ul>{AGENT_SEES.map((x) => <li key={x.k}><strong>{x.k}</strong> {x.v}</li>)}</ul>
+                  </div>
+                  <div className="barrier__wall" aria-hidden="true"><span>Only the patch crosses</span></div>
+                  <div className="barrier__side">
+                    <p className="kicker">Evaluator input</p>
+                    <ul>{EVALUATOR_SEES.map((x) => <li key={x.k}><strong>{x.k}</strong> {x.v}</li>)}</ul>
+                  </div>
+                  <p className="barrier__hidden"><strong>Never shown to the agent:</strong> {HIDDEN_FROM_AGENT.join('; ')}.</p>
+                </section>
               )}
               <Inspector summary={summary} tasks={tasks} onOpenTask={onOpenTask} />
             </div>

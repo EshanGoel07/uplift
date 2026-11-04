@@ -3,7 +3,7 @@ import { scaleLinear } from '../../utils/scale';
 import type { Arm, ArmId, TaskMeta } from '../../data/types';
 import { ci, pct, pts, signedPoints } from '../../data/format';
 import { winsLosses } from '../../data/classify';
-import { DETECTABLE, DETECTABLE_MAX, DETECTABLE_MIN } from '../../data/reportFigures';
+import { DETECTABLE, DETECTABLE_MAX, DETECTABLE_MIN, ROBUSTNESS } from '../../data/reportFigures';
 import { useWidth } from '../../hooks/useWidth';
 import { useInView } from '../../hooks/useInView';
 import { useUi } from '../../state/sceneStore';
@@ -13,9 +13,11 @@ interface Props {
   tasks: TaskMeta[];
   /** id of the chart's caption, for screen readers. */
   describedBy?: string;
+  /** Index into ROBUSTNESS: 0 is the full cohort; the others are the report's sensitivity views. */
+  view?: number;
 }
 
-const DOMAIN: [number, number] = [-10, 10];
+const DOMAIN: [number, number] = [-12, 12];
 const COMPACT = 700;
 
 /** True when the 95% interval includes zero: the setup can't be told apart from No setup. */
@@ -26,11 +28,14 @@ export const crossesZero = (a: Arm): boolean => a.ci_low <= 0 && a.ci_high >= 0;
  * detectable effect and the 5.4–9.1 point band. All rows share one colour: a nominally higher
  * estimate is not drawn as an improvement. Details appear in a readout below the plot, never over it.
  */
-export function IntervalChart({ arms, tasks, describedBy }: Props) {
+export function IntervalChart({ arms, tasks, describedBy, view = 0 }: Props) {
   const wrap = useRef<HTMLDivElement>(null);
   const width = useWidth(wrap, 1000, 300);
   const [hover, setHover] = useState<ArmId | null>(null);
   const [pinned, setPinned] = useState<ArmId | null>(null);
+  const [second, setSecond] = useState<ArmId | null>(null);
+  const [compare, setCompare] = useState(false);
+  const [explain, setExplain] = useState<'zero' | 'band' | null>(null);
   const reduced = useUi((s) => s.reducedMotion);
   const drawn = useInView(wrap, '0px 0px -20% 0px');
 
@@ -49,8 +54,22 @@ export function IntervalChart({ arms, tasks, describedBy }: Props) {
   const shown = hover ?? pinned;
   const info = shown ? arms.find((a) => a.id === shown)! : null;
   const infoWL = info ? winsLosses(tasks, info.id) : null;
+  const full = view === 0;
+  /** A condition's estimate and interval, as fractions, in the chosen view. */
+  const est = (a: Arm) => {
+    if (full) return { d: a.diff_vs_none, lo: a.ci_low, hi: a.ci_high };
+    const [d, lo, hi] = ROBUSTNESS[view].cells[a.id as Exclude<ArmId, 'none'>];
+    return { d: d / 100, lo: lo / 100, hi: hi / 100 };
+  };
+  const crosses = (a: Arm) => { const e = est(a); return e.lo <= 0 && e.hi >= 0; };
+  const nCross = rows.filter(crosses).length;
 
-  const toggle = (id: ArmId) => setPinned((p) => (p === id ? null : id));
+  const toggle = (id: ArmId) => {
+    setExplain(null);
+    if (compare && pinned && pinned !== id) { setSecond((s) => (s === id ? null : id)); return; }
+    setPinned((p) => (p === id ? null : id));
+    if (pinned === id) setSecond(null);
+  };
   const onKey = (e: KeyboardEvent, id: ArmId) => {
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(id); }
   };
@@ -94,10 +113,11 @@ export function IntervalChart({ arms, tasks, describedBy }: Props) {
             const cy = top + i * rowH + (compact ? rowH * 0.62 : rowH / 2);
             const det = DETECTABLE[a.id as Exclude<ArmId, 'none'>];
             const active = shown === a.id;
+            const e = est(a);
             return (
-              <g key={a.id} className={`ic-row${active ? ' is-active' : ''}${pinned === a.id ? ' is-pinned' : ''}`}
-                 role="button" tabIndex={0} aria-pressed={pinned === a.id}
-                 aria-label={`${a.label}: ${pts(a.diff_vs_none)} points versus No setup, 95% interval ${ci(a.ci_low, a.ci_high)}${crossesZero(a) ? ', crosses zero' : ''}.`}
+              <g key={a.id} className={`ic-row${active ? ' is-active' : ''}${pinned === a.id || second === a.id ? ' is-pinned' : ''}`}
+                 role="button" tabIndex={0} aria-pressed={pinned === a.id || second === a.id}
+                 aria-label={`${a.label}: ${pts(e.d)} points versus No setup, 95% interval ${ci(e.lo, e.hi)}${crosses(a) ? ', crosses zero' : ''}.`}
                  onClick={() => toggle(a.id)} onKeyDown={(e) => onKey(e, a.id)}
                  onMouseEnter={() => setHover(a.id)} onMouseLeave={() => setHover(null)}
                  onFocus={() => setHover(a.id)} onBlur={() => setHover(null)}>
@@ -105,17 +125,17 @@ export function IntervalChart({ arms, tasks, describedBy }: Props) {
                 {compact
                   ? <text x={left} y={cy - 17} className="ic-label">{a.label}</text>
                   : <text x={left - 20} y={cy + 5} textAnchor="end" className="ic-label">{a.label}</text>}
-                <line x1={x(-det.detectable)} x2={x(-det.detectable)} y1={cy - 8} y2={cy + 8} className="ic-det" />
-                <line x1={x(det.detectable)} x2={x(det.detectable)} y1={cy - 8} y2={cy + 8} className="ic-det" />
+                {full && <line x1={x(-det.detectable)} x2={x(-det.detectable)} y1={cy - 8} y2={cy + 8} className="ic-det" />}
+                {full && <line x1={x(det.detectable)} x2={x(det.detectable)} y1={cy - 8} y2={cy + 8} className="ic-det" />}
                 <g className="ic-ci" style={{ transformOrigin: `${x(0)}px ${cy}px`, transitionDelay: `${i * 110}ms` }}>
-                  <line x1={x(a.ci_low * 100)} x2={x(a.ci_high * 100)} y1={cy} y2={cy} className="ic-ci-line" />
-                  <line x1={x(a.ci_low * 100)} x2={x(a.ci_low * 100)} y1={cy - 6} y2={cy + 6} className="ic-ci-cap" />
-                  <line x1={x(a.ci_high * 100)} x2={x(a.ci_high * 100)} y1={cy - 6} y2={cy + 6} className="ic-ci-cap" />
+                  <line x1={x(e.lo * 100)} x2={x(e.hi * 100)} y1={cy} y2={cy} className="ic-ci-line" />
+                  <line x1={x(e.lo * 100)} x2={x(e.lo * 100)} y1={cy - 6} y2={cy + 6} className="ic-ci-cap" />
+                  <line x1={x(e.hi * 100)} x2={x(e.hi * 100)} y1={cy - 6} y2={cy + 6} className="ic-ci-cap" />
                 </g>
-                <circle cx={x(a.diff_vs_none * 100)} cy={cy} r={compact ? 5.5 : 6.5} className="ic-dot" style={{ transitionDelay: `${i * 110 + 650}ms` }} />
+                <circle cx={x(e.d * 100)} cy={cy} r={compact ? 5.5 : 6.5} className="ic-dot" style={{ transitionDelay: `${i * 110 + 650}ms` }} />
                 <text x={compact ? width - right : width - right + 20} y={compact ? cy - 17 : cy + 5} textAnchor={compact ? 'end' : 'start'} className="ic-value" style={{ transitionDelay: `${i * 110 + 650}ms` }}>
-                  <tspan className="ic-value-est">{pts(a.diff_vs_none)}</tspan>
-                  <tspan className="ic-value-ci"> [{pts(a.ci_low)}, {pts(a.ci_high)}]</tspan>
+                  <tspan className="ic-value-est">{pts(e.d)}</tspan>
+                  <tspan className="ic-value-ci"> [{pts(e.lo)}, {pts(e.hi)}]</tspan>
                 </text>
               </g>
             );
@@ -123,9 +143,47 @@ export function IntervalChart({ arms, tasks, describedBy }: Props) {
         </svg>
       </div>
 
+      <div className="ic-tools" role="group" aria-label="Explain the chart">
+        <button type="button" className="tool" aria-pressed={explain === 'zero'} onClick={() => setExplain(explain === 'zero' ? null : 'zero')}>The zero line</button>
+        <button type="button" className="tool" aria-pressed={explain === 'band'} onClick={() => setExplain(explain === 'band' ? null : 'band')}>Detectable range</button>
+        <button type="button" className="tool" aria-pressed={compare} onClick={() => { setCompare(!compare); setSecond(null); }}>Compare two conditions</button>
+        <span className="ic-tools__status" role="status"><b>{nCross} of {rows.length}</b> intervals cross zero{full ? '' : ' in this view'}</span>
+      </div>
+
       <div className="ic-readout" aria-live="polite">
-        {!info || !infoWL ? (
-          <p className="ic-readout__hint">Hover, tap or focus a row to read its numbers. Every interval crosses zero.</p>
+        {explain === 'zero' ? (
+          <p className="ic-readout__explain"><strong>Zero means no difference from the No setup baseline.</strong> A dot to the right of zero is a nominally
+            higher solve rate, to the left a lower one. An interval that spans zero is compatible with no difference at all.</p>
+        ) : explain === 'band' ? (
+          <p className="ic-readout__explain"><strong>The hatched range is the study's sensitivity, not a result.</strong> A real effect of about {DETECTABLE_MIN}–{DETECTABLE_MAX} points
+            would have been detected 80% of the time. The intervals are what was measured; this range is what the study could have seen. Smaller effects remain unresolved.</p>
+        ) : compare && pinned && second ? (
+          <div className="ic-pair">
+            {[pinned, second].map((id) => {
+              const a = arms.find((x) => x.id === id)!, e = est(a);
+              return (
+                <div key={id}>
+                  <p className="ic-readout__name">{a.label}</p>
+                  <dl className="ic-readout__kv">
+                    <div><dt>vs No setup</dt><dd>{pts(e.d)} pts</dd></div>
+                    <div><dt>95% interval</dt><dd>{ci(e.lo, e.hi)}</dd></div>
+                  </dl>
+                </div>
+              );
+            })}
+            <p className="ic-readout__verdict">Each interval compares one setup with No setup. Seeing two together is not a test of one against the other, and the study did not run that test.</p>
+          </div>
+        ) : !info || !infoWL ? (
+          <p className="ic-readout__hint">{compare ? 'Select two rows to read them together.' : 'Hover, tap or focus a row to read its numbers.'} {nCross === rows.length ? 'Every interval crosses zero.' : ''}</p>
+        ) : !full ? (
+          <>
+            <p className="ic-readout__name">{info.label}</p>
+            <dl className="ic-readout__kv">
+              <div><dt>Difference vs No setup</dt><dd>{pts(est(info).d)} pts</dd></div>
+              <div><dt>95% interval</dt><dd>{ci(est(info).lo, est(info).hi)}</dd></div>
+            </dl>
+            <p className="ic-readout__verdict">From the report's sensitivity table. Detectable effects were published for the full cohort only.</p>
+          </>
         ) : (
           <>
             <p className="ic-readout__name">{info.label}</p>

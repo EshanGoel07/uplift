@@ -1,14 +1,20 @@
+import { useState } from 'react';
+import { EvidenceBadge } from '../../components/atlas/Evidence';
 import type { ArmId, Summary } from '../../data/types';
 import { ci, int, pct, pts, usd } from '../../data/format';
 import { winsLosses } from '../../data/classify';
 import {
   BOOTSTRAP, BUDGET_CAP, COST_PER_RUN, DETECTABLE, DETECTABLE_MAX, DETECTABLE_MIN,
-  HALF_WIDTH_MAX, HALF_WIDTH_MIN, PROJECT_SPEND, RATE_CI,
+  HALF_WIDTH_MAX, HALF_WIDTH_MIN, PROJECT_SPEND, RATE_CI, ROBUSTNESS,
 } from '../../data/reportFigures';
 import { IntervalChart } from '../../components/charts/IntervalChart';
 import { Bridge } from '../../components/navigation/Bridge';
 
+/** Short labels for the report's four sensitivity views, in the order of ROBUSTNESS. */
+const VIEW_LABEL = ['Full cohort', 'Exposed tasks excluded', 'Own-PR pages excluded too', 'Exposed runs counted as failed'];
+
 export function Results({ summary }: { summary: Summary | null }) {
+  const [view, setView] = useState(0);
   const baseline = summary?.arms.find((a) => a.id === 'none');
   const nTasks = summary?.tasks.length ?? 77;
 
@@ -50,6 +56,7 @@ export function Results({ summary }: { summary: Summary | null }) {
 
         {!summary || !baseline ? <div className="pub-skeleton pub-skeleton--chart" role="status" aria-busy="true" aria-label="Loading results" /> : (
           <>
+            <p className="findstrip" aria-label="Findings summary"><span><b>5</b> comparisons</span><span><b>5</b> intervals cross zero</span><span>No detectable difference</span><EvidenceBadge id="E04" /><EvidenceBadge id="E05" /></p>
             <figure className="pub-figure results__figure">
               <p className="pub-figure__title">Difference in solve rate versus No setup, by setup</p>
               <ul className="ic-legend" aria-label="Chart legend">
@@ -58,7 +65,14 @@ export function Results({ summary }: { summary: Summary | null }) {
                 <li><i className="lg-det" aria-hidden="true" /> Smallest effect detectable for that setup</li>
                 <li><i className="lg-hatch" aria-hidden="true" /> {DETECTABLE_MIN}–{DETECTABLE_MAX} pts: where effects become reliably detectable</li>
               </ul>
-              <IntervalChart arms={summary.arms} tasks={summary.tasks} describedBy="results-caption" />
+              <div className="seg" role="group" aria-label="Sensitivity view">
+                <span className="seg__label">View</span>
+                {ROBUSTNESS.map((r, i) => (
+                  <button key={r.view} type="button" className="seg__btn" aria-pressed={view === i} onClick={() => setView(i)}>{VIEW_LABEL[i]}</button>
+                ))}
+              </div>
+              {view > 0 && <p className="note" role="status">{ROBUSTNESS[view].view}: {ROBUSTNESS[view].tasks} bugs. These are the report's published sensitivity figures, not a new calculation.<EvidenceBadge id="E06" /></p>}
+              <IntervalChart arms={summary.arms} tasks={summary.tasks} describedBy="results-caption" view={view} />
               <figcaption id="results-caption" className="caption">
                 <span className="caption__n">Figure 2.</span> Each setup's difference in solve rate from No setup
                 ({baseline.solved}/{baseline.attempts} solved, {pct(baseline.rate)}), in percentage points, on the same {nTasks} bugs

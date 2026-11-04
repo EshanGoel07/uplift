@@ -14,6 +14,7 @@ import { BugMatrix } from '../sections/BugMatrix/BugMatrix';
 import { BugExplorer } from '../sections/BugExplorer/BugExplorer';
 import { WorkedExample } from '../sections/WorkedExample/WorkedExample';
 import { Trust } from '../sections/Trust/Trust';
+import { Conditions } from '../sections/Conditions/Conditions';
 import { Methodology } from '../sections/Methodology/Methodology';
 import { BuiltVsUsed } from '../sections/BuiltVsUsed/BuiltVsUsed';
 import { Limitations } from '../sections/Limitations/Limitations';
@@ -68,6 +69,7 @@ export function App() {
         <Hero summary={summary} />
         {error && <p className="pub-container load-error" role="alert">Could not load the study data ({error}). The raw file is at <a href="./data/results.json">data/results.json</a>.</p>}
         <Results summary={summary} />
+        <Conditions summary={summary} />
         <Methodology summary={summary} onOpenTask={openTask} />
         <WorkedExample summary={summary} />
         <BugMatrix summary={summary} onOpenTask={openTask} selectedTask={taskId} />

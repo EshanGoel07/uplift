@@ -13,9 +13,11 @@ export interface LatticeState {
   focus: number;              // bug index shown in the readout (stepped to)
   hovered: number | null;
   reduced: boolean;
+  /** Fade everything except the selected bug's twelve runs. */
+  isolateBug: boolean;
 }
 
-let state: LatticeState = { tasks: [], arms: [], mode: 'design', focus: 0, hovered: null, reduced: false };
+let state: LatticeState = { tasks: [], arms: [], mode: 'design', focus: 0, hovered: null, reduced: false, isolateBug: false };
 const listeners = new Set<() => void>();
 
 export const lattice = {

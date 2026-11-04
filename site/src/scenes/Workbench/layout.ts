@@ -75,6 +75,37 @@ export function fitToStage(pts: ArrayLike<number>, cam: FitCamera, st: FitStage)
   return { scale, x, y, left, right, top, bottom };
 }
 
+/** Where the model can be viewed from. Each preset is a pose the model eases to, never a jump. */
+export type PresetId = 'full' | 'top' | 'source' | 'conditions' | 'workspace' | 'barrier' | 'grading' | 'analysis';
+export interface Pose { tilt: number; yaw: number; zoom: number; x: number; z: number }
+export const BOARD_CENTRE = { x: (BOUNDS.x0 + BOUNDS.x1) / 2, z: (BOUNDS.z0 + BOUNDS.z1) / 2 };
+export const POSES: Record<PresetId, Pose> = {
+  full: { tilt: 0.86, yaw: -0.26, zoom: 1, ...BOARD_CENTRE },
+  top: { tilt: 1.5, yaw: 0, zoom: 1, ...BOARD_CENTRE },
+  source: { tilt: 0.9, yaw: -0.2, zoom: 2.1, x: X.tray, z: 0.6 },
+  conditions: { tilt: 0.92, yaw: -0.18, zoom: 1.75, x: -3.7, z: 0 },
+  workspace: { tilt: 0.78, yaw: -0.3, zoom: 2, x: X.ws, z: 0 },
+  barrier: { tilt: 0.74, yaw: -0.52, zoom: 1.8, x: X.wall + 0.3, z: 0 },
+  grading: { tilt: 0.9, yaw: -0.2, zoom: 1.9, x: X.bench, z: 0.7 },
+  analysis: { tilt: 0.92, yaw: -0.18, zoom: 2, x: X.analysis, z: 0 },
+};
+export const PRESET_LABELS: [PresetId, string][] = [
+  ['full', 'Full apparatus'], ['top', 'Top-down'], ['source', 'Task source'], ['conditions', 'Six conditions'],
+  ['workspace', 'Workspace'], ['barrier', 'Agent / evaluator'], ['grading', 'Grading'], ['analysis', 'Paired analysis'],
+];
+/** The preset that shows a selected module. */
+export function presetFor(f: Focus): PresetId {
+  switch (f.kind) {
+    case 'source': return 'source';
+    case 'lane': return 'conditions';
+    case 'run': case 'workspace': return 'workspace';
+    case 'agent': return 'barrier';
+    case 'evaluator': return 'grading';
+    case 'analysis': return 'analysis';
+    default: return 'full';
+  }
+}
+
 export interface LabelDef {
   key: string;
   at: [number, number, number];
@@ -87,6 +118,7 @@ export interface LabelDef {
 export const MODULE_LABELS: LabelDef[] = [
   { key: 'A', at: [X.tray, 0, -3.15], align: 'center', kind: 'module', focus: { kind: 'source', group: 'main' } },
   { key: 'B', at: [-3.3, 0, -4.0], align: 'center', kind: 'module', focus: { kind: 'lane', arm: 'none' } },
+  { key: 'M', at: [X.ws - 1.1, 0.3, -3.75], align: 'center', kind: 'module', focus: { kind: 'agent' } },
   { key: 'C', at: [X.ws, 0, 3.4], align: 'center', kind: 'module', focus: { kind: 'workspace' } },
   { key: 'D', at: [X.wall, 1.5, -3.35], align: 'center', kind: 'module', focus: { kind: 'agent' } },
   { key: 'E', at: [X.bench, 0, -3.4], align: 'center', kind: 'module', focus: { kind: 'evaluator' } },

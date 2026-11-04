@@ -42,6 +42,28 @@ export const GRADING_STEPS: { title: string; detail: string }[] = [
 /** screen.resolved: the definition of a solved run. */
 export const RESOLVED_RULE = 'Resolved = every kept FAIL_TO_PASS test passes and every PASS_TO_PASS test still passes.';
 
+/** One layer of an isolated workspace, for the exploded view. */
+export interface WorkspaceLayer { id: string; title: string; detail: string; source: string; kind: 'base' | 'setup' | 'output' }
+
+/**
+ * The real make-up of one run's workspace (workspace.py create and install_arm, runner.py). Optional
+ * layers appear only for a condition that had them: No setup has neither guidance nor hooks.
+ */
+export function workspaceLayers(arm: ArmId): WorkspaceLayer[] {
+  const c = CONDITIONS[arm];
+  const out: WorkspaceLayer[] = [
+    { id: 'snapshot', title: 'Repository snapshot', detail: 'A git archive of the task\'s base commit, unpacked into a fresh folder.', source: 'src/uplift/workspace.py', kind: 'base' },
+    { id: 'history', title: 'Git history removed', detail: 'The folder is a new repository with one commit, so past fixes cannot be looked up in it.', source: 'src/uplift/workspace.py', kind: 'base' },
+    { id: 'cleanup', title: 'Original agent files removed', detail: `The repository's own ${STRIPPED_AGENT_FILES.slice(0, 2).join(' and ')} and similar files are deleted before any setup is installed.`, source: 'src/uplift/workspace.py', kind: 'base' },
+    { id: 'issue', title: 'Issue input', detail: 'The linked GitHub issue, inserted into the same fixed prompt for every condition.', source: 'src/uplift/runner.py', kind: 'base' },
+  ];
+  if (c.hasTips) out.push({ id: 'agents', title: arm === 'handwritten' ? 'AGENTS.md (handwritten)' : 'AGENTS.md (generated)', detail: c.receives[0], source: arm === 'handwritten' ? 'arms/handwritten/AGENTS.md' : 'src/uplift/generate.py', kind: 'setup' });
+  if (c.hasHooks) out.push({ id: 'hooks', title: 'Hook configuration', detail: 'Hooks that run while the agent works, under .muse/, delivering messages back to it.', source: 'src/uplift/arm_hooks/uplift_hook.py', kind: 'setup' });
+  out.push({ id: 'agent', title: 'Muse Code execution', detail: 'muse exec with at most 40 model steps and 2,400 seconds. Network access was not blocked in the 924 runs.', source: 'src/uplift/runner.py', kind: 'output' });
+  out.push({ id: 'patch', title: 'Produced patch', detail: 'The diff of the agent\'s changes, excluding agent files. This is the only thing that crosses to the evaluator.', source: 'src/uplift/workspace.py', kind: 'output' });
+  return out;
+}
+
 /** What crosses the information barrier in each direction (runner.py, grade.py). */
 export const AGENT_SEES = [
   { k: 'Repository snapshot', v: 'The code at the bug\'s base commit, with no git history.' },

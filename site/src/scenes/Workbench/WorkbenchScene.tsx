@@ -2,13 +2,15 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import {
   BoxGeometry, Color, EdgesGeometry, Group, InstancedMesh, LineBasicMaterial, LineDashedMaterial, MathUtils, Matrix4, Mesh,
-  MeshStandardMaterial, Object3D, PerspectiveCamera, TorusGeometry, Vector3, BufferGeometry, Float32BufferAttribute,
+  MeshStandardMaterial, Object3D, PerspectiveCamera, Plane, TorusGeometry, Vector3, BufferGeometry, Float32BufferAttribute,
 } from 'three';
 import type { ArmId, Summary } from '../../data/types';
 import { CONDITIONS } from '../../data/method';
 import { requestFrame, scenes, ui } from '../../state/sceneStore';
 import { sideOf, wb, wbLabels, workbenchBounds, type Focus } from '../../state/workbenchStore';
-import { BACK, BOUNDS, LANES, MODULE_LABELS, X, Z, fitToStage, laneLabelAt, laneZ, repZ } from './layout';
+import { BACK, BOARD_CENTRE, BOUNDS, LANES, MODULE_LABELS, POSES, X, Z, fitToStage, laneLabelAt, laneZ, repZ, type Pose } from './layout';
+import { atlas } from '../../state/atlasStore';
+import { workspaceLayers } from '../../data/method';
 import { CONDITION_COLOR, INTERFACE, OUTCOME, SPECTRAL } from '../palette';
 
 /**
@@ -37,8 +39,12 @@ const C = {
 type Zone = 'agent' | 'eval' | 'neutral';
 interface Mats { [k: string]: MeshStandardMaterial }
 
+/** The four planes through the camera and the stage's edges: a zoomed model never draws outside its stage. */
+const CLIP = [new Plane(), new Plane(), new Plane(), new Plane()];
+const MAX_LAYERS = 8;
+
 function makeMats(): Record<Zone, Mats> {
-  const mk = (hex: string, o = 1) => new MeshStandardMaterial({ color: hex, roughness: 0.62, metalness: 0.06, transparent: true, opacity: o });
+  const mk = (hex: string, o = 1) => new MeshStandardMaterial({ color: hex, roughness: 0.62, metalness: 0.06, transparent: true, opacity: o, clippingPlanes: CLIP });
   const zone = (): Mats => ({
     plate: mk(C.plate), plate2: mk(C.plate2), rail: mk(C.rail), tips: mk(C.tips), generic: mk(C.generic), hook: mk(C.hook),
     glass: mk(C.glass, 0.16), board: mk(C.board), laneOn: mk(C.laneOn), snapshot: mk(C.snapshot), issue: mk(C.issue), patch: mk(C.patch), tests: mk(C.tests),
@@ -80,14 +86,14 @@ export function WorkbenchScene({ summary }: Props) {
   const G = { box: BOX, edges: EDGES, ring: RING };
   const M = useMemo(makeMats, []);
   const edgeMat = useMemo(() => ({
-    agent: new LineBasicMaterial({ color: C.glassEdge, transparent: true, opacity: 0.85 }),
-    pick: new LineBasicMaterial({ color: C.pick, transparent: true, opacity: 1 }),
-    wall: new LineBasicMaterial({ color: C.wall, transparent: true, opacity: 0.9 }),
+    agent: new LineBasicMaterial({ color: C.glassEdge, transparent: true, opacity: 0.85, clippingPlanes: CLIP }),
+    pick: new LineBasicMaterial({ color: C.pick, transparent: true, opacity: 1, clippingPlanes: CLIP }),
+    wall: new LineBasicMaterial({ color: C.wall, transparent: true, opacity: 0.9, clippingPlanes: CLIP }),
   }), []);
   const devLine = useMemo(() => {
     const g = new BufferGeometry();
     g.setAttribute('position', new Float32BufferAttribute([X.dev + 1.2, 0.06, Z.devTray, X.setup, 0.06, Z.devTray, X.setup, 0.06, laneZ(LANES - 1) + 0.45], 3));
-    const m = new LineDashedMaterial({ color: C.devLine, dashSize: 0.14, gapSize: 0.1, transparent: true, opacity: 0.9 });
+    const m = new LineDashedMaterial({ color: C.devLine, dashSize: 0.14, gapSize: 0.1, transparent: true, opacity: 0.9, clippingPlanes: CLIP });
     return { g, m };
   }, []);
   useEffect(() => {
@@ -102,8 +108,8 @@ export function WorkbenchScene({ summary }: Props) {
   // Task tiles: two instanced sets (main and dev), coloured by group, the selected bug in blue.
   const tiles = useRef<InstancedMesh>(null);
   const devTiles = useRef<InstancedMesh>(null);
-  const tileMat = useMemo(() => new MeshStandardMaterial({ roughness: 0.55, metalness: 0.05, transparent: true }), []);
-  const devMat = useMemo(() => new MeshStandardMaterial({ color: C.dev, roughness: 0.7, transparent: true, opacity: 0.9 }), []);
+  const tileMat = useMemo(() => new MeshStandardMaterial({ roughness: 0.55, metalness: 0.05, transparent: true, clippingPlanes: CLIP }), []);
+  const devMat = useMemo(() => new MeshStandardMaterial({ color: C.dev, roughness: 0.7, transparent: true, opacity: 0.9, clippingPlanes: CLIP }), []);
   useEffect(() => () => { tileMat.dispose(); devMat.dispose(); }, [tileMat, devMat]);
   const tilePos = (i: number): [number, number] => {
     const fresh = i >= nTest;
@@ -130,8 +136,8 @@ export function WorkbenchScene({ summary }: Props) {
   // Selection-driven state (read every frame from the store; React never re-renders the scene).
   const dim = useRef({ agent: 1, eval: 1 });
   const lastTask = useRef(-1);
-  const lampMats = useMemo(() => Array.from({ length: LANES * 2 }, () => new MeshStandardMaterial({ color: C.unknown, roughness: 0.4, transparent: true })), []);
-  const barMats = useMemo(() => Array.from({ length: LANES }, () => new MeshStandardMaterial({ color: C.unknown, roughness: 0.5, transparent: true })), []);
+  const lampMats = useMemo(() => Array.from({ length: LANES * 2 }, () => new MeshStandardMaterial({ color: C.unknown, roughness: 0.4, transparent: true, clippingPlanes: CLIP })), []);
+  const barMats = useMemo(() => Array.from({ length: LANES }, () => new MeshStandardMaterial({ color: C.unknown, roughness: 0.5, transparent: true, clippingPlanes: CLIP })), []);
   const bars = useRef<(Mesh | null)[]>([]);
   const baseline = useRef<Mesh>(null);
   const laneMeshes = useRef<(Mesh | null)[]>([]);
@@ -141,6 +147,14 @@ export function WorkbenchScene({ summary }: Props) {
   // Any selection or view change needs one frame; the labels may have re-mounted, so refit too.
   const fit = useRef({ dirty: true, stage: null as HTMLElement | null, l: 0, t: 0, w: 0, h: 0, aspect: 0 });
   useEffect(() => wb.subscribe(() => { fit.current.dirty = true; requestFrame('state'); }), []);
+  useEffect(() => atlas.subscribe(() => requestFrame('state')), []);
+  const gl = useThree((s) => s.gl);
+  useEffect(() => { gl.localClippingEnabled = true; }, [gl]);
+  const pose = useRef<Pose>({ ...POSES.full });
+  const explodeT = useRef(0);
+  const glassT = useRef(0.16);
+  const layerMeshes = useRef<(Mesh | null)[]>([]);
+  const scratchV = useMemo(() => ({ a: new Vector3(), b: new Vector3(), c: new Vector3(), d: new Vector3(), e: new Vector3() }), []);
   // Mounting can follow the visibility flip, so the first frame has to be asked for here.
   useEffect(() => {
     scenes.setMounted('workbench', true);
@@ -181,9 +195,17 @@ export function WorkbenchScene({ summary }: Props) {
     // Fit the board into the DOM stage: a fixed three-quarter view, scaled to the stage rect. Refit
     // only when the stage moved or resized (it moves with the page; the camera does not).
     const f0 = fit.current;
-    const refit = f0.dirty || f0.stage !== entry.stage || f0.l !== r.left || f0.t !== r.top || f0.w !== r.width || f0.h !== r.height || f0.aspect !== camera.aspect;
+    const want0 = POSES[s.preset], p0 = pose.current;
+    let posed = false;
+    for (const k of ['tilt', 'yaw', 'zoom', 'x', 'z'] as const) {
+      const d = want0[k] - p0[k];
+      if (Math.abs(d) < 1e-3) { if (d !== 0) { p0[k] = want0[k]; posed = true; } continue; }
+      p0[k] = reduced ? want0[k] : p0[k] + d * (1 - Math.exp(-dt * 6));
+      posed = true; busy = true;
+    }
+    const refit = posed || f0.dirty || f0.stage !== entry.stage || f0.l !== r.left || f0.t !== r.top || f0.w !== r.width || f0.h !== r.height || f0.aspect !== camera.aspect;
     if (refit) {
-      const tilt = 0.86, yaw = -0.26;
+      const { tilt, yaw } = p0;
       g.rotation.set(0, yaw, 0);
       o.rotation.set(tilt, 0, 0);
       rot.makeRotationX(tilt).multiply(rotY.makeRotationY(yaw));
@@ -193,8 +215,22 @@ export function WorkbenchScene({ summary }: Props) {
       const fitted = fitToStage(rotated,
         { tanHalfFov: Math.tan(MathUtils.degToRad(camera.fov / 2)), aspect: camera.aspect, z: camera.position.z },
         { left: r.left, top: r.top, width: r.width, height: r.height, vw: window.innerWidth, vh: window.innerHeight });
-      o.scale.setScalar(fitted.scale);
-      o.position.set(fitted.x, fitted.y, -BACK);
+      // Zoom about the pose's focus point; at the full view this is exactly the fit.
+      const sc = fitted.scale * p0.zoom, V = scratchV;
+      V.a.set(BOARD_CENTRE.x, 0, BOARD_CENTRE.z).applyMatrix4(rot);
+      V.b.set(p0.x, 0, p0.z).applyMatrix4(rot);
+      o.scale.setScalar(sc);
+      o.position.set(fitted.x + V.a.x * fitted.scale - V.b.x * sc, fitted.y + V.a.y * fitted.scale - V.b.y * sc, -BACK);
+      // Clip to the stage: planes through the camera and the stage's edges on the z = 0 plane.
+      const hh = Math.tan(MathUtils.degToRad(camera.fov / 2)) * camera.position.z, hw = hh * camera.aspect;
+      const ex = (px: number) => ((px / window.innerWidth) * 2 - 1) * hw, ey = (py: number) => (1 - (py / window.innerHeight) * 2) * hh;
+      const l = ex(r.left), rr = ex(r.right), t = ey(r.top), bt = ey(r.bottom);
+      V.c.copy(camera.position);
+      const setPlane = (i: number, ax: number, ay: number, bx: number, by: number) => {
+        CLIP[i].setFromCoplanarPoints(V.c, V.d.set(ax, ay, 0), V.e.set(bx, by, 0));
+        if (CLIP[i].distanceToPoint(V.d.set((l + rr) / 2, (t + bt) / 2, 0)) < 0) CLIP[i].negate();
+      };
+      setPlane(0, l, bt, l, t); setPlane(1, rr, bt, rr, t); setPlane(2, l, t, rr, t); setPlane(3, l, bt, rr, bt);
       workbenchBounds.left = fitted.left - r.left; workbenchBounds.right = fitted.right - r.left;
       workbenchBounds.top = fitted.top - r.top; workbenchBounds.bottom = fitted.bottom - r.top;
       workbenchBounds.stageWidth = r.width; workbenchBounds.stageHeight = r.height;
@@ -225,6 +261,25 @@ export function WorkbenchScene({ summary }: Props) {
       for (const m of lampMats) m.opacity = dim.current.eval;
       for (const m of barMats) m.opacity = dim.current.eval;
     }
+
+    // The barrier cutaway makes the wall solid enough to read as a physical boundary.
+    const glassWant = s.cutaway ? 0.55 : 0.16;
+    if (Math.abs(glassWant - glassT.current) > 1e-3) { glassT.current += (glassWant - glassT.current) * (reduced ? 1 : 1 - Math.exp(-dt * 8)); busy = true; } else glassT.current = glassWant;
+    M.neutral.glass.opacity = glassT.current;
+
+    // The exploded workspace: its layers separate along y, and reassemble.
+    const armSel: ArmId = atlas.get().condition ?? 'both';
+    const stack = workspaceLayers(armSel);
+    const exWant = s.explode ? 1 : 0;
+    if (Math.abs(exWant - explodeT.current) > 1e-3) { explodeT.current += (exWant - explodeT.current) * (reduced ? 1 : 1 - Math.exp(-dt * 7)); busy = true; } else explodeT.current = exWant;
+    layerMeshes.current.forEach((m, i) => {
+      if (!m) return;
+      m.visible = explodeT.current > 0.01 && i < stack.length && !s.hiddenLayers.includes(i);
+      if (!m.visible) return;
+      m.position.y = 0.7 + i * (0.09 + explodeT.current * 0.72);
+      const L = stack[i];
+      m.material = s.layer === i ? M.neutral.pick : L.kind === 'setup' ? M.neutral[`cond_${armSel}`] : L.kind === 'output' ? M.neutral.tips : M.neutral.plate2;
+    });
 
     // The selected bug: tile colour, lamps and analysis bars from its real outcomes.
     const t = tasks[s.task];
@@ -362,6 +417,14 @@ export function WorkbenchScene({ summary }: Props) {
             </group>
           );
         }))}
+
+        {/* Muse Code: one independent execution per workspace. */}
+        <Box p={[X.ws, 0.1, -3.62]} s={[3.2, 0.18, 0.34]} m={M.agent.plate2} {...hit({ kind: 'agent' })} />
+
+        {/* The exploded workspace: one plate per real layer of a run's workspace, for the chosen condition. */}
+        {Array.from({ length: MAX_LAYERS }, (_, i) => (
+          <mesh key={i} ref={(m) => { layerMeshes.current[i] = m; }} geometry={G.box} material={M.neutral.plate2} position={[X.ws, 0.7, 0]} scale={[3.3, 0.06, 2.6]} visible={false} />
+        ))}
 
         {/* D: the information barrier. Only patches pass (one slot per run); nothing comes back. */}
         <mesh geometry={G.box} position={[X.wall, 0.65, 0]} scale={[0.05, 1.3, LANES + 0.3]} material={M.neutral.glass} {...hit({ kind: 'agent' })} />

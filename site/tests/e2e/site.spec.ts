@@ -398,9 +398,10 @@ test.describe('WebGL', () => {
     await page.locator('.wb__toolbar').scrollIntoViewIfNeeded();
     await expect(page.locator('.experience canvas')).toHaveCount(1, { timeout: 15_000 });
     await expect(page.locator('.wb__stage')).toBeVisible();
-    await expect(page.locator('.wb-label')).toHaveCount(16);
+    await expect(page.locator('.wb-label')).toHaveCount(17);
     await page.locator('.wb-label button', { hasText: 'F · Paired analysis' }).click();
     await expect(page.locator('.wb-inspector__title')).toHaveText('Each condition against No setup, on the same bug');
+    await page.getByRole('group', { name: 'Camera preset' }).getByRole('button', { name: 'Full apparatus' }).click();
     await page.locator('.wb-label button', { hasText: '5 Generic tips file' }).click();
     await expect(page.locator('.wb-inspector__title')).toHaveText('Generic tips file');
     await expect(page.locator('.wb-inspector')).toContainText('A generic best-practice file, written by us in the style commonly shared online.');
@@ -487,6 +488,61 @@ test.describe('WebGL', () => {
     await expect(page.locator('.neb-guide')).toContainText('One node, one bug');
     await page.getByRole('button', { name: 'Exit guide' }).click();
     await expect(page.locator('.neb-guide')).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
+
+  test('lattice: isolate a condition, a repeat and a bug, without any instance upload', async ({ page }) => {
+    await page.addInitScript(() => {
+      const w = window as unknown as { __up: number };
+      w.__up = 0;
+      const P = WebGL2RenderingContext.prototype, o = P.bufferSubData;
+      P.bufferSubData = function (this: WebGL2RenderingContext, ...a: unknown[]) { w.__up++; return (o as (...x: unknown[]) => void).apply(this, a); } as typeof o;
+    });
+    await page.goto('./?diag&hero=runs', { waitUntil: 'networkidle' });
+    await expect(page.locator('.seg-dark button', { hasText: 'Outcomes' })).toHaveAttribute('aria-pressed', 'true', { timeout: 12_000 });
+    await settled(page);
+    const before = await page.evaluate(() => (window as unknown as { __up: number }).__up);
+    const iso = page.getByRole('group', { name: 'Isolate a condition' });
+    await iso.getByRole('button', { name: 'Tips + hooks' }).click();
+    await expect(page).toHaveURL(/cond=both/);
+    await page.getByRole('group', { name: 'Isolate a repeat' }).getByRole('button', { name: 'R2' }).click();
+    await expect(page).toHaveURL(/rep=2/);
+    await page.getByRole('button', { name: 'Isolate this bug' }).click();
+    await settled(page);
+    expect(await page.evaluate(() => (window as unknown as { __up: number }).__up)).toBe(before);
+    await iso.getByRole('button', { name: 'All' }).click();
+    await expect(page).not.toHaveURL(/cond=/);
+  });
+
+  test('apparatus: presets, top-down, exploded workspace by condition, barrier cross-section', async ({ page }) => {
+    const errors = collectErrors(page);
+    await page.goto('./?diag', { waitUntil: 'networkidle' });
+    await page.locator('#method .wb__stage').scrollIntoViewIfNeeded();
+    await expect.poll(async () => (await diag<{ stageWidth: number }>(page, 'workbenchBounds')).stageWidth, { timeout: 15_000 }).toBeGreaterThan(0);
+    const presets = page.getByRole('group', { name: 'Camera preset' });
+    await expect(presets.getByRole('button')).toHaveCount(8);
+    await presets.getByRole('button', { name: 'Top-down' }).click();
+    await settled(page);
+    await presets.getByRole('button', { name: 'Grading' }).click();
+    await settled(page);
+    await page.getByRole('button', { name: 'Explode workspace' }).click();
+    const layers = page.locator('.wslayers__list li');
+    await page.getByRole('group', { name: 'Condition of this workspace' }).getByRole('button', { name: 'No setup' }).click();
+    await expect(layers).toHaveCount(6);     // no AGENTS.md, no hooks
+    await page.getByRole('group', { name: 'Condition of this workspace' }).getByRole('button', { name: 'Tips + hooks' }).click();
+    await expect(layers).toHaveCount(8);
+    await layers.nth(5).locator('.wslayers__pick').click();
+    await expect(page.locator('.wslayers__detail')).toContainText('Hooks that run');
+    await page.getByRole('button', { name: 'Reassemble' }).click();
+    await page.getByRole('button', { name: 'Barrier cross-section' }).click();
+    await expect(page.locator('.barrier')).toContainText('Only the patch crosses');
+    await expect(page.locator('.barrier__hidden')).toContainText('Never shown to the agent');
+    await settled(page);
+    await page.getByRole('button', { name: 'Reset to overview' }).click();
+    await settled(page);
+    const b = await diag<{ left: number; right: number; stageWidth: number }>(page, 'workbenchBounds');
+    expect(b.left).toBeGreaterThanOrEqual(0);
+    expect(b.right).toBeLessThanOrEqual(b.stageWidth);
     expect(errors).toEqual([]);
   });
 

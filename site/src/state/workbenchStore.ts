@@ -3,6 +3,7 @@
 
 import { useSyncExternalStore } from 'react';
 import type { ArmId } from '../data/types';
+import type { PresetId } from '../scenes/Workbench/layout';
 
 export type Focus =
   | { kind: 'overview' }
@@ -21,9 +22,18 @@ export interface WorkbenchState {
   view: '3d' | '2d';
   /** Per-run outcomes of the selected task, arm order then repeat order, once its file has loaded. */
   runs: boolean[][] | null;
+  /** The camera preset the model eases to. */
+  preset: PresetId;
+  labels: boolean;
+  /** Exploded workspace: which layer is selected and which are hidden. */
+  explode: boolean;
+  layer: number | null;
+  hiddenLayers: number[];
+  /** The information-barrier cutaway. */
+  cutaway: boolean;
 }
 
-let state: WorkbenchState = { task: 0, focus: { kind: 'overview' }, view: '3d', runs: null };
+let state: WorkbenchState = { task: 0, focus: { kind: 'overview' }, view: '3d', runs: null, preset: 'full', labels: true, explode: false, layer: null, hiddenLayers: [], cutaway: false };
 const listeners = new Set<() => void>();
 
 export const wb = {
