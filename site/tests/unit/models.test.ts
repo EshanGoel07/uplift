@@ -1,7 +1,8 @@
 // The story models must say what the code says. They are data, so the claims can be checked directly.
 import { describe, expect, it } from 'vitest';
 import { cutawayModel, workspaceModel } from '../../src/data/models';
-import { CONDITIONS, workspaceLayers } from '../../src/data/method';
+import { gradingModel } from '../../src/data/gradingModel';
+import { CONDITIONS, GRADING_STEPS, workspaceLayers } from '../../src/data/method';
 import type { ArmId } from '../../src/data/types';
 
 const ARMS: ArmId[] = ['none', 'prose', 'sensors', 'both', 'handwritten', 'tuned'];
@@ -40,5 +41,25 @@ describe('cutaway model', () => {
       expect(part(id).poses[last].on).toBe(1);
       expect(part(id).poses[last].p[0]).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('grading model', () => {
+  const m = gradingModel();
+  it('has one gate per real step, in order, each explained in the text', () => {
+    const gates = m.parts.filter((p) => p.id.startsWith('gate-'));
+    expect(gates.map((g) => g.title)).toEqual(GRADING_STEPS.map((s) => s.title));
+    expect(m.views).toHaveLength(GRADING_STEPS.length);
+  });
+  it('moves the run forward through the gates, and lights only the current one', () => {
+    const run = m.parts.find((p) => p.id === 'run')!;
+    const xs = run.poses.map((q) => q.p[0]);
+    expect([...xs].sort((a, b) => a - b)).toEqual(xs);
+    const gates = m.parts.filter((p) => p.id.startsWith('gate-'));
+    GRADING_STEPS.forEach((_, at) => expect(gates.filter((g) => g.poses[at].glow).map((g) => g.id)).toEqual([`gate-${at}`]));
+  });
+  it('reaches a verdict only at the last step', () => {
+    const v = m.parts.find((p) => p.id === 'verdict')!;
+    expect(v.poses.map((q) => q.on)).toEqual(GRADING_STEPS.map((_, i) => (i === GRADING_STEPS.length - 1 ? 1 : 0)));
   });
 });

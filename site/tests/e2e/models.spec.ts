@@ -6,6 +6,7 @@ interface Spec { section: string; id: string; states: string[] }
 const MODELS: Spec[] = [
   { section: 'workspace', id: 'workspace', states: ['snapshot', 'issue', 'setup', 'assembled', 'patch'] },
   { section: 'cutaway', id: 'cutaway', states: ['agent-input', 'hidden', 'patch', 'prepare', 'run', 'result'] },
+  { section: 'grading', id: 'grading', states: ['check-the-run-finished', 'reset-the-test-files', 'apply-the-hidden-tests', 'clear-stale-bytecode', 'run-pytest', 'parse-each-test', 'cross-check-the-counts', 'check-both-test-lists', 'record-the-verdict'] },
 ];
 
 const go = (page: Page, section: string, i: number) => page.locator(`#${section} .story__step[data-step="${i}"]`).evaluate((el) => el.scrollIntoView({ behavior: 'instant', block: 'center' }));
@@ -46,7 +47,7 @@ for (const [width, height] of [[1440, 900], [1920, 1080]]) {
       test.use({ viewport: { width, height } });
 
       test('draws every state forward and back, and after a refresh', async ({ page }) => {
-        test.setTimeout(120_000);
+        test.setTimeout(200_000);
         await page.goto('./?diag', { waitUntil: 'networkidle' });
         for (let i = 0; i < m.states.length; i++) { await go(page, m.section, i); await expectState(page, m, i); }
         for (let i = m.states.length - 2; i >= 0; i--) { await go(page, m.section, i); await expectState(page, m, i); }
@@ -109,6 +110,18 @@ test('cutaway: the hidden tests stay on the evaluator side, and the agent is gon
   await go(page, 'cutaway', 3);
   await expect(parts.filter({ hasText: 'Muse Code' })).toHaveCount(0);
   await expect(page.locator('#cutaway .story__step.is-active')).toContainText('exited');
+});
+
+test('grading: the verdict appears only at the last step, and any gate can be inspected', async ({ page }) => {
+  await page.goto('./?diag', { waitUntil: 'networkidle' });
+  const parts = page.locator('#grading .assembly__parts button');
+  await go(page, 'grading', 2);
+  await expect(parts.filter({ hasText: /^Verdict$/ })).toHaveCount(0);
+  await parts.filter({ hasText: 'Cross-check the counts' }).click();
+  await expect(page.locator('#grading .assembly__detail')).toContainText('every test counts as failed');
+  await expect(page.locator('#grading .assembly__source')).toContainText('src/uplift/grade.py');
+  await go(page, 'grading', 8);
+  await expect(parts.filter({ hasText: /^Verdict$/ })).toHaveCount(1);
 });
 
 test('models carry their full story with no WebGL, and on phones', async ({ page }) => {

@@ -132,6 +132,7 @@ export default function ExperienceCanvas({ summary }: { summary: Summary | null 
   const wantCohort = useScenes(() => scenes.get('cohort').requested);
   const wantWorkspace = useScenes(() => scenes.get('workspace').requested);
   const wantCutaway = useScenes(() => scenes.get('cutaway').requested);
+  const wantGrading = useScenes(() => scenes.get('grading').requested);
   const wantNebula = useScenes(() => scenes.get('nebula').requested);
   const wantWorkbench = useScenes(() => scenes.get('workbench').requested);
   const nearWorkbench = useNear('#method', '120% 0px');
@@ -178,6 +179,7 @@ export default function ExperienceCanvas({ summary }: { summary: Summary | null 
         {wantCohort && <CohortBoundary><Suspense fallback={null}><StageView id="cohort" camera={COHORT_CAMERA}><CohortScene /></StageView></Suspense></CohortBoundary>}
         {wantWorkspace && <AssemblyBoundary><Suspense fallback={null}><StageView id="workspace" camera={ASSEMBLY_CAMERA}><AssemblyScene id="workspace" /></StageView></Suspense></AssemblyBoundary>}
         {wantCutaway && <AssemblyBoundary><Suspense fallback={null}><StageView id="cutaway" camera={ASSEMBLY_CAMERA}><AssemblyScene id="cutaway" /></StageView></Suspense></AssemblyBoundary>}
+        {wantGrading && <AssemblyBoundary><Suspense fallback={null}><StageView id="grading" camera={ASSEMBLY_CAMERA}><AssemblyScene id="grading" /></StageView></Suspense></AssemblyBoundary>}
       </Canvas>
     </div>
   );
