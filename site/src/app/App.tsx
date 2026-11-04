@@ -12,6 +12,7 @@ import { scenes, ui, useScenes, useUi } from '../state/sceneStore';
 import { Hero } from '../sections/Hero/Hero';
 import { OneBugStory } from '../sections/Story/OneBugStory';
 import { WorkspaceStory } from '../sections/Story/WorkspaceStory';
+import { CutawayStory } from '../sections/Story/CutawayStory';
 import { Results } from '../sections/Results/Results';
 import { BugMatrix } from '../sections/BugMatrix/BugMatrix';
 import { BugExplorer } from '../sections/BugExplorer/BugExplorer';
@@ -83,6 +84,7 @@ export function App() {
           <OneBugStory summary={summary} />
           <Conditions summary={summary} />
           <WorkspaceStory summary={summary} />
+          <CutawayStory summary={summary} />
           <Methodology summary={summary} onOpenTask={openTask} />
         </Chapter>
         <Chapter id="findings" label="Findings">

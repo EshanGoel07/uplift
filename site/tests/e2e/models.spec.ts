@@ -5,6 +5,7 @@ import { expect, test, type Page } from '@playwright/test';
 interface Spec { section: string; id: string; states: string[] }
 const MODELS: Spec[] = [
   { section: 'workspace', id: 'workspace', states: ['snapshot', 'issue', 'setup', 'assembled', 'patch'] },
+  { section: 'cutaway', id: 'cutaway', states: ['agent-input', 'hidden', 'patch', 'prepare', 'run', 'result'] },
 ];
 
 const go = (page: Page, section: string, i: number) => page.locator(`#${section} .story__step[data-step="${i}"]`).evaluate((el) => el.scrollIntoView({ behavior: 'instant', block: 'center' }));
@@ -97,6 +98,17 @@ test('workspace: each condition shows only what it really installed', async ({ p
   await expect(parts).toHaveCount(7);
   await expect(parts.filter({ hasText: 'AGENTS.md' })).toHaveCount(0);
   await expect(parts.filter({ hasText: 'Hook configuration' })).toHaveCount(1);
+});
+
+test('cutaway: the hidden tests stay on the evaluator side, and the agent is gone before they are used', async ({ page }) => {
+  await page.goto('./?diag', { waitUntil: 'networkidle' });
+  const parts = page.locator('#cutaway .assembly__parts button');
+  await go(page, 'cutaway', 1);
+  await expect(parts.filter({ hasText: 'FAIL_TO_PASS' })).toHaveCount(1);
+  await expect(parts.filter({ hasText: 'Muse Code' })).toHaveCount(1);
+  await go(page, 'cutaway', 3);
+  await expect(parts.filter({ hasText: 'Muse Code' })).toHaveCount(0);
+  await expect(page.locator('#cutaway .story__step.is-active')).toContainText('exited');
 });
 
 test('models carry their full story with no WebGL, and on phones', async ({ page }) => {

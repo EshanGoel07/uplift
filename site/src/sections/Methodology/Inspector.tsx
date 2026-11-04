@@ -57,7 +57,7 @@ export function Inspector({ summary, tasks, onOpenTask }: Props) {
               ['A', 'Task source', `${tasks.length} main bugs; the 40 dev tasks are kept apart.`, { kind: 'source', group: 'main' }],
               ['B', 'Six conditions', 'The same bug goes down every lane, twice.', { kind: 'lane', arm: 'none' }],
               ['C', 'Isolated workspaces', 'A snapshot with no history and only the assigned setup.', { kind: 'workspace' }],
-              ['D', 'Information barrier', 'Only the patch crosses; the tests never do.', { kind: 'agent' }],
+              ['D', 'Information barrier', 'The hidden tests arrive only after the agent has exited.', { kind: 'agent' }],
               ['E', 'Evaluator', "The repo's real tests decide each run.", { kind: 'evaluator' }],
               ['F', 'Paired analysis', 'Each condition is compared with No setup on the same bug.', { kind: 'analysis' }],
             ] as [string, string, string, Focus][]).map(([k, n, d, f]) => (

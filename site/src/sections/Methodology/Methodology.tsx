@@ -204,7 +204,7 @@ export function Methodology({ summary, onOpenTask }: Props) {
                     <p className="kicker">Agent input</p>
                     <ul>{AGENT_SEES.map((x) => <li key={x.k}><strong>{x.k}</strong> {x.v}</li>)}</ul>
                   </div>
-                  <div className="barrier__wall" aria-hidden="true"><span>Only the patch crosses</span></div>
+                  <div className="barrier__wall" aria-hidden="true"><span>Hidden tests arrive only after the agent exits</span></div>
                   <div className="barrier__side">
                     <p className="kicker">Evaluator input</p>
                     <ul>{EVALUATOR_SEES.map((x) => <li key={x.k}><strong>{x.k}</strong> {x.v}</li>)}</ul>

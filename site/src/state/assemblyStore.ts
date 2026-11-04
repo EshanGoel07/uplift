@@ -24,6 +24,8 @@ export interface Part {
   /** Repository path this part comes from, where there is one. */
   source?: string;
   shape?: 'slab' | 'column' | 'wall';
+  /** Smoked glass: a boundary to see through, not a solid. */
+  glass?: boolean;
   /** Width, height, depth. */
   size: Vec3;
   accent: string;

@@ -26,17 +26,21 @@ export const WORKSPACE_STEPS: { title: string; detail: string }[] = [
   { title: 'Snapshot, no history', detail: 'git archive of the task\'s base commit into a fresh folder, then git init and one "start" commit. The agent cannot read the repo\'s past, so it cannot find the fix in later commits.' },
   { title: 'Own agent files removed', detail: `The repository's own ${STRIPPED_AGENT_FILES.slice(0, 2).join(' and ')} (and ${STRIPPED_AGENT_FILES.length - 2} other agent paths) are deleted, so "No setup" really has none.` },
   { title: 'Assigned setup installed', detail: 'Only this condition\'s files are copied in and committed: an AGENTS.md, the hook files, both, or nothing.' },
-  { title: 'Own environment', detail: 'A private .venv (uv, Python 3.12) with the package and pytest. The hook folder is read-only to the agent.' },
+  { title: 'Own environment', detail: 'A private .venv (uv, Python 3.12) with the package and pytest. The Muse sandbox keeps the hook folder read-only to the agent.' },
   { title: 'Agent run', detail: 'muse exec --trust-workspace --disable-approval, at most 40 model steps and 2,400 s, every call metered through the budget proxy.' },
 ];
 
 /** src/uplift/grade.py (grade, reset_test_files, check_output) and screen.py (resolved). */
 export const GRADING_STEPS: { title: string; detail: string }[] = [
-  { title: 'Take the agent\'s patch', detail: 'The diff of the agent\'s changes, excluding agent files.' },
-  { title: 'Reset the test files', detail: 'Any test file the agent touched goes back to the base commit.' },
-  { title: 'Apply the hidden tests', detail: 'The real fix\'s test patch, which the agent never saw, is applied now.' },
-  { title: 'Run pytest', detail: 'FAIL_TO_PASS (the bug\'s tests) and PASS_TO_PASS (existing tests), with bytecode cleared and an isolated pytest config.' },
-  { title: 'Fail closed', detail: 'Parsed results must match pytest\'s own summary line, or the run cannot pass.' },
+  { title: 'Check the run finished', detail: 'A run that hit an infrastructure failure is kept out of grading. It is not scored as a failed attempt.' },
+  { title: 'Reset the test files', detail: 'The files in the task\'s test patch go back to the base commit. Grading runs in the agent\'s own workspace, after it has exited.' },
+  { title: 'Apply the hidden tests', detail: 'The real fix\'s test patch, which the agent never saw, is applied now. If it cannot apply, the run is not resolved.' },
+  { title: 'Clear stale bytecode', detail: 'Every __pycache__ folder outside .venv is deleted, so old compiled code cannot answer for the new source.' },
+  { title: 'Run pytest', detail: 'The test files run with the workspace\'s own interpreter and an isolated pytest config, with a 900-second limit.' },
+  { title: 'Parse each test', detail: 'Per-test results are read from pytest\'s -rA output.' },
+  { title: 'Cross-check the counts', detail: 'Parsed passed, failed and error counts must match pytest\'s own summary line. On any mismatch every test counts as failed.' },
+  { title: 'Check both test lists', detail: 'Every FAIL_TO_PASS test must now pass, and every PASS_TO_PASS test must still pass.' },
+  { title: 'Record the verdict', detail: 'Resolved or not resolved, ignoring FAIL_TO_PASS tests that screening excluded before any result was seen.' },
 ];
 
 /** screen.resolved: the definition of a solved run. */
@@ -60,7 +64,7 @@ export function workspaceLayers(arm: ArmId): WorkspaceLayer[] {
   if (c.hasTips) out.push({ id: 'agents', title: arm === 'handwritten' ? 'AGENTS.md (handwritten)' : 'AGENTS.md (generated)', detail: c.receives[0], source: arm === 'handwritten' ? 'arms/handwritten/AGENTS.md' : 'src/uplift/generate.py', kind: 'setup' });
   if (c.hasHooks) out.push({ id: 'hooks', title: 'Hook configuration', detail: 'Hooks that run while the agent works, under .muse/, delivering messages back to it.', source: 'src/uplift/arm_hooks/uplift_hook.py', kind: 'setup' });
   out.push({ id: 'agent', title: 'Muse Code execution', detail: 'muse exec with at most 40 model steps and 2,400 seconds. Network access was not blocked in the 924 runs.', source: 'src/uplift/runner.py', kind: 'output' });
-  out.push({ id: 'patch', title: 'Produced patch', detail: 'The diff of the agent\'s changes, excluding agent files. This is the only thing that crosses to the evaluator.', source: 'src/uplift/workspace.py', kind: 'output' });
+  out.push({ id: 'patch', title: 'Produced patch', detail: 'The diff of the agent\'s changes, excluding agent files. It is recorded when the agent stops.', source: 'src/uplift/workspace.py', kind: 'output' });
   return out;
 }
 
@@ -73,7 +77,7 @@ export const AGENT_SEES = [
   { k: 'Runtime feedback', v: 'Hook messages while it works (hook conditions only).' },
 ];
 export const EVALUATOR_SEES = [
-  { k: 'Agent patch', v: 'What the agent changed, and nothing it said.' },
+  { k: 'The agent\'s workspace', v: 'Graded where the agent left it, after it has exited.' },
   { k: 'FAIL_TO_PASS tests', v: 'The bug\'s own tests from the real fix: fail before, must pass after.' },
   { k: 'PASS_TO_PASS tests', v: 'Existing tests that must still pass (regressions).' },
   { k: 'Pytest output', v: 'Checked against pytest\'s summary line.' },

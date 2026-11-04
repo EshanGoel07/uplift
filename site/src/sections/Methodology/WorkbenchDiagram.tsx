@@ -94,7 +94,7 @@ export function WorkbenchDiagram({ summary, tasks }: Props) {
           Each workspace: snapshot with no git history · repo's own agent files removed · only this condition's setup
         </button>
         <p className="wbd__veil wbd__veil--eval" aria-hidden="true">Hidden from the agent: the real fix's tests</p>
-        <p className="wbd__veil wbd__veil--agent" aria-hidden="true">Only the patch crosses to grading</p>
+        <p className="wbd__veil wbd__veil--agent" aria-hidden="true">Hidden tests arrive only after the agent exits to grading</p>
       </div>
     </div>
   );

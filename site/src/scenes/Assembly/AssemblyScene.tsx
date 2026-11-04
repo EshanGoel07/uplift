@@ -119,11 +119,12 @@ export default function AssemblyScene({ id }: { id: AssemblyId }) {
       if (e.group) { e.group.position.copy(l.pos); e.group.visible = l.on > 0.01; }
       // Unrelated parts recede while one is selected; nothing vanishes.
       const dim = a.selected && a.selected !== part.id ? 0.45 : 1;
-      e.mat.uniforms.uFade.value = l.on;
+      e.mat.uniforms.uFade.value = l.on * (part.glass ? 0.22 : 1);
       e.mat.uniforms.uGlow.value = l.glow;
       e.mat.uniforms.uSelect.value = l.pick;
       e.mat.uniforms.uDim.value = dim;
-      e.mat.transparent = l.on < 0.995;
+      e.mat.transparent = part.glass || l.on < 0.995;
+      e.mat.depthWrite = !part.glass;
       e.edge.uniforms.uFade.value = l.on * dim * (0.55 + 0.45 * l.glow);
       e.edge.uniforms.uSelect.value = l.pick;
     }

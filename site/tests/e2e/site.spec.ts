@@ -769,7 +769,7 @@ test.describe('WebGL', () => {
     await expect(page.locator('.wslayers__detail')).toContainText('Hooks that run');
     await page.getByRole('button', { name: 'Reassemble' }).click();
     await page.getByRole('button', { name: 'Barrier cross-section' }).click();
-    await expect(page.locator('.barrier')).toContainText('Only the patch crosses');
+    await expect(page.locator('.barrier')).toContainText('Hidden tests arrive only after the agent exits');
     await expect(page.locator('.barrier__hidden')).toContainText('Never shown to the agent');
     await settled(page);
     await page.getByRole('button', { name: 'Reset to overview' }).click();
