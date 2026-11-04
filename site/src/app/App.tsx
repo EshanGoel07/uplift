@@ -26,6 +26,9 @@ import { Footer } from '../sections/Footer/Footer';
 
 // three.js, R3F and the shaders load in their own chunk, once a section requests a 3D scene.
 const ExperienceCanvas = lazy(() => import('../scenes/ExperienceCanvas'));
+// Development only, on request; the production build compiles this out.
+const SceneDiagnostics = import.meta.env.DEV ? lazy(() => import('../components/atlas/SceneDiagnostics')) : null;
+const showDiagnostics = !!SceneDiagnostics && typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('overlay');
 const Architecture = lazy(() => import('../sections/Architecture/Architecture').then((m) => ({ default: m.Architecture })));
 
 /** If WebGL fails at runtime (no context, lost driver), every section falls back to its SVG/HTML version. */
@@ -102,6 +105,7 @@ export function App() {
       <ComparisonTray summary={summary} />
       <CommandPalette summary={summary} />
       <GuidedTour />
+      {showDiagnostics && SceneDiagnostics && <Suspense fallback={null}><SceneDiagnostics /></Suspense>}
       <svg className="thread" aria-hidden="true"><line ref={(el) => { nebulaDom.thread = el; }} visibility="hidden" /></svg>
     </>
   );

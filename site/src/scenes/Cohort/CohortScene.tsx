@@ -380,6 +380,8 @@ export default function CohortScene() {
       v.set(bodyAt[0], bodyAt[1] - 1.36, bodyAt[2]);
       label(cohort.labels[L.lanes]);
     }
+    cohort.view = st.view;
+    cohort.settledAt = busy ? -1 : stage;
     if (busy) scenes.animate('cohort'); else scenes.settle('cohort');
   });
 

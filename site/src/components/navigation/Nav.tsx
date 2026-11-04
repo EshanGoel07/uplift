@@ -55,10 +55,66 @@ export function jumpTo(id: string, { step = false, instant = false } = {}): void
   if (heading) { heading.setAttribute('tabindex', '-1'); heading.focus({ preventScroll: true }); }
 }
 
-/** Lands on the URL's hash after the page has data. Lazy sections may mount a moment later, so it waits for them. */
+const PLACE_KEY = 'uplift:place';
+interface Place { step?: number; section?: string; offset?: number }
+
+/** What the reader was on, not a pixel: the page's height changes as data and sections arrive. */
+function currentPlace(): Place {
+  const step = document.querySelector<HTMLElement>('.story--sticky .story__step.is-active');
+  const stage = document.querySelector('.story--sticky .story__stage')?.getBoundingClientRect();
+  if (step && stage && stage.top < window.innerHeight / 2 && stage.bottom > window.innerHeight / 2) return { step: +step.dataset.step! };
+  const sections = [...document.querySelectorAll<HTMLElement>('main section[id]')];
+  const at = sections.find((s) => s.getBoundingClientRect().bottom > 0);
+  return at ? { section: at.id, offset: Math.round(-at.getBoundingClientRect().top) } : {};
+}
+
+function placeTarget(p: Place): { el: Element; block: ScrollLogicalPosition; offset: number } | null {
+  const el = p.step !== undefined ? document.querySelector(`.story__step[data-step="${p.step}"]`) : p.section ? document.getElementById(p.section) : null;
+  return el ? { el, block: p.step !== undefined ? 'center' : 'start', offset: p.offset ?? 0 } : null;
+}
+
+/** Holds the reader on their place until the layout has stopped moving under it. */
+function restorePlace(p: Place): void {
+  history.scrollRestoration = 'manual';
+  let frames = 0, still = 0, last = Number.NaN;
+  const hold = () => {
+    const t = placeTarget(p);
+    if (t) {
+      const top = t.el.getBoundingClientRect().top;
+      t.el.scrollIntoView({ behavior: 'instant', block: t.block });
+      if (t.offset) window.scrollBy({ top: t.offset, behavior: 'instant' });
+      const now = Math.round(window.scrollY + top);
+      still = now === last ? still + 1 : 0;
+      last = now;
+    }
+    if (still < 5 && frames++ < 240) requestAnimationFrame(hold);
+    else history.scrollRestoration = 'auto';
+  };
+  const stop = () => { frames = 1e6; for (const e of ['wheel', 'touchstart', 'keydown']) window.removeEventListener(e, stop); };
+  for (const e of ['wheel', 'touchstart', 'keydown']) window.addEventListener(e, stop, { passive: true });
+  requestAnimationFrame(hold);
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('pagehide', () => {
+    try { sessionStorage.setItem(PLACE_KEY, JSON.stringify(currentPlace())); } catch { /* private mode: the browser's own restore applies */ }
+  });
+}
+
+/**
+ * Puts the reader in the right place once the page has data. A refresh returns them to what they were on.
+ * A first arrival lands on the URL's hash; lazy sections may mount a moment later, so it waits for them.
+ */
 export function jumpToHash(): void {
+  const nav = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
+  if (nav?.type === 'reload') {
+    let saved: Place | null = null;
+    try { saved = JSON.parse(sessionStorage.getItem(PLACE_KEY) ?? 'null') as Place | null; } catch { saved = null; }
+    if (saved && (saved.step !== undefined || saved.section)) restorePlace(saved);
+    return;
+  }
   const id = decodeURIComponent(location.hash.slice(1));
-  if (!id) return;
+  if (!id || nav?.type === 'back_forward') return;
   let frames = 0;
   const attempt = () => {
     if (document.getElementById(id)) jumpTo(id, { instant: true });

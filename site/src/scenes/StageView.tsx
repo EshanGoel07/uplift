@@ -17,7 +17,9 @@ interface CameraSpec { fov: number; near: number; far: number; position: [number
  * Nothing is drawn while the scene is off screen, and pointer events outside the stage hit nothing.
  *
  * Ownership: the scene and camera belong to this view. Geometries and materials belong to the scene
- * component that created them, and it disposes them; this view only empties its scene on unmount.
+ * component that created them, and it disposes them. The portal's reconciler adds and removes the scene's
+ * children. This view must never empty the scene itself: in React's StrictMode an effect cleanup also runs
+ * on a live mount, and clearing there left a mounted scene with nothing to draw.
  */
 export function StageView({ id, camera: spec, children }: { id: SceneId; camera: CameraSpec; children: ReactNode }) {
   const gl = useThree((s) => s.gl);
@@ -39,6 +41,8 @@ export function StageView({ id, camera: spec, children }: { id: SceneId; camera:
     const read = () => {
       const r = stage.getBoundingClientRect();
       setSize((s) => (s.width === r.width && s.height === r.height ? s : { width: r.width, height: r.height, top: 0, left: 0 }));
+      // The stage's layout can arrive with no scroll or resize at all: skipped content rendering in.
+      scenes.remeasure();
     };
     read();
     const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(read) : null;
@@ -59,7 +63,7 @@ export function StageView({ id, camera: spec, children }: { id: SceneId; camera:
     let on = true;
     const go = () => { if (on) requestFrame('mount'); };
     if (r.compileAsync) r.compileAsync(scene, camera).then(go, go); else go();
-    return () => { on = false; scenes.setMounted(id, false); scene.clear(); };
+    return () => { on = false; scenes.setMounted(id, false); };
   }, [id, gl, scene, camera]);
 
   useFrame((state) => {
@@ -75,6 +79,7 @@ export function StageView({ id, camera: spec, children }: { id: SceneId; camera:
     g.setScissorTest(true);
     g.clearDepth();
     g.render(scene, camera);
+    scenes.drawn(id, scene.children.length);
     g.setScissorTest(false);
     g.setViewport(0, 0, state.size.width, H);
     g.autoClear = auto;

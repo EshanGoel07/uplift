@@ -127,3 +127,21 @@ Headed runs were taken on an interim Gate 1 build: 3 of 3 trials stalled at 0 ms
 **Still open.** The stall inside the first 500 ms remains, and a still pointer shows it too, so it is page startup. The worst frames here are higher than the 150 to 167 ms measured at Gate 2, on few trials. Deferring the renderer to idle was tried and rejected: it reached a 233 ms worst frame and stalled at 500 ms in 4 of 4 trials.
 
 The first probe of this correction caught a regression: the story's scene was loading during page startup, because `useInView` reports true when its element has not rendered. The story now uses its own observer on the stage, and the chunk no longer loads at start-up.
+
+## M15.10: narrative scene reliability
+**Root cause, proven.** `StageView`'s effect cleanup called `scene.clear()`. React Three Fiber forwards StrictMode into the Canvas, and StrictMode runs a new component's cleanup once while it is alive. That removed every object from a scene that then reported `mounted` and `active` and drew nothing. Removing the call fixes it.
+
+The owner's recording shows the failure: scenes blank after a scene switch, DOM and labels correct, three refreshes, the 2D figure replaced by a blank stage once `mounted` turned true. Its unstyled flash on reload points to the dev server, where StrictMode is on. Production builds do not double effects, so the checks there always passed.
+
+**Not established:** why the first scene after a load survives the cleanup while later ones do not.
+
+| Replay of the recording, headed Chrome | Before (3 of 3 trials) | After |
+|---|---:|---:|
+| Lattice lit share | 28.8% | 29% |
+| Nebula after the switch | 0% | 43.4% |
+| Story | 0.6% | 7.2% |
+| Story after refresh | 0.8% | 7.3% |
+
+**A second defect, found by the new tests.** A refresh lost the reader's step: the hash jump ran again, and the browser's restored pixel position was wrong because the page was still short. The page now saves the reader's step or section on `pagehide` and restores it once the layout stops moving.
+
+**Hardening, not proven causal:** re-measuring when a stage's size changes, redrawing on tab return and on a restored WebGL context, a canonical story state, a record of each scene's real draws, and a development-only overlay (`?overlay`) that production compiles out.

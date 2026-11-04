@@ -4,6 +4,7 @@ import type { Summary } from '../data/types';
 import { invalidations, requestFrame, scenes, setInvalidator, ui, useScenes, useUi } from '../state/sceneStore';
 import { lattice, latticeProbe } from '../state/latticeStore';
 import { workbenchBounds } from '../state/workbenchStore';
+import { STORY_STATES, cohort } from '../state/cohortStore';
 import { useNear } from '../hooks/useNear';
 import { OFF } from './layout';
 import { NebulaScene } from './Nebula/NebulaScene';
@@ -98,6 +99,8 @@ function Diagnostics() {
       workbenchBounds: () => ({ ...workbenchBounds }),
       latticeHovered: () => lattice.get().hovered,
       latticeColumn: (bug: number) => latticeProbe.column?.(bug) ?? null,
+      story: () => ({ state: STORY_STATES[cohort.stage], stage: cohort.stage, settledAt: cohort.settledAt, view: cohort.view }),
+      draws: () => scenes.list().map((e) => ({ id: e.id, draws: e.draws, lastDraw: Math.round(e.lastDraw), objects: e.lastObjects })),
       renderer: () => ({ calls: gl.info.render.calls, triangles: gl.info.render.triangles, geometries: gl.info.memory.geometries, textures: gl.info.memory.textures, programs: gl.info.programs?.length ?? 0 }),
     };
     return () => { delete w.__upliftDiag; };
@@ -136,7 +139,11 @@ export default function ExperienceCanvas({ summary }: { summary: Summary | null 
         dpr={lowTier ? [1, 1.5] : [1, 2]}
         camera={{ fov: 35, position: [0, 0, 10], near: 0.1, far: 60 }}
         gl={{ antialias: true, alpha: true, powerPreference: 'high-performance', stencil: false }}
-        onCreated={({ gl }) => { contexts++; gl.setClearColor(0x000000, 0); setReady(true); }}
+        onCreated={({ gl }) => {
+          contexts++; gl.setClearColor(0x000000, 0); setReady(true);
+          // A restored context has an empty buffer, and on-demand rendering would leave it that way.
+          gl.domElement.addEventListener('webglcontextrestored', () => requestFrame('visibility'));
+        }}
       >
         <FrameDriver />
         {DIAG && <Diagnostics />}

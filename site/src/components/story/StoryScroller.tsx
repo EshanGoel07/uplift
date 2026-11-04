@@ -13,6 +13,8 @@ interface Props {
   figure?: (step: number) => ReactNode;
   /** True when the persistent stage is in use. */
   sticky: boolean;
+  /** A name for each step, exposed on the stage for the story's state. */
+  states?: readonly string[];
   onStep?: (active: number) => void;
 }
 
@@ -21,12 +23,12 @@ interface Props {
  * `position: sticky`. Only the stage holds still, and the page scrolls as usual. The step text carries the
  * whole meaning, so the story reads the same with no stage at all.
  */
-export function StoryScroller({ steps, label, stage, figure, sticky, onStep }: Props) {
+export function StoryScroller({ steps, label, stage, figure, sticky, states, onStep }: Props) {
   const { active, bind, select } = useStorySteps(steps.length);
   useEffect(() => { onStep?.(active); }, [active, onStep]);
 
   return (
-    <div className={`story${sticky ? ' story--sticky' : ''}`}>
+    <div className={`story${sticky ? ' story--sticky' : ''}`} data-state={states?.[active]}>
       {sticky && (
         <div className="story__stage">
           {stage(active)}

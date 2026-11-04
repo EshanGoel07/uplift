@@ -5,7 +5,7 @@ import { FEATURED_TASK } from '../../data/reportFigures';
 import { useMedia, WIDE } from '../../hooks/useMedia';
 import { jumpTo } from '../../components/navigation/Nav';
 import { StoryScroller, type StoryStep } from '../../components/story/StoryScroller';
-import { cohort, setCohortStage } from '../../state/cohortStore';
+import { STORY_STATES, cohort, setCohortStage } from '../../state/cohortStore';
 import { scenes, useScenes, useUi } from '../../state/sceneStore';
 import { condStyle } from '../../utils/condition';
 import { StoryFigure } from './StoryFigure';
@@ -95,6 +95,7 @@ export function OneBugStory({ summary }: Props) {
         label="From one bug to 924 attempts"
         steps={steps}
         sticky={wide}
+        states={STORY_STATES}
         onStep={setCohortStage}
         stage={(active) => (
           <>

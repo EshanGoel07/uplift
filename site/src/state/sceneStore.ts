@@ -126,6 +126,10 @@ export interface SceneEntry {
   /** Lifecycle counters, for diagnostics and tests. */
   mounts: number;
   disposals: number;
+  /** Frames this scene actually drew, the last one's time, and the objects in it then. */
+  draws: number;
+  lastDraw: number;
+  lastObjects: number;
 }
 
 export type ScenePhase = 'available' | 'requested' | 'mounted' | 'visible' | 'active' | 'animating' | 'paused' | 'disposed';
@@ -140,7 +144,7 @@ const emit = (): void => { version++; sceneListeners.forEach((l) => l()); };
 function entry(id: SceneId): SceneEntry {
   let e = entries.get(id);
   if (!e) {
-    e = { id, requested: false, mounted: false, visibility: 0, visible: false, animating: false, stage: null, caps: DEFAULT_CAPS, mounts: 0, disposals: 0 };
+    e = { id, requested: false, mounted: false, visibility: 0, visible: false, animating: false, stage: null, caps: DEFAULT_CAPS, mounts: 0, disposals: 0, draws: 0, lastDraw: 0, lastObjects: 0 };
     entries.set(id, e);
   }
   return e;
@@ -189,6 +193,8 @@ const onScroll = (): void => {
   schedule('scroll');
 };
 const onResize = (): void => schedule('resize');
+/** The browser may have dropped the canvas's buffer while the tab was hidden, and nothing else would redraw it. */
+const onTabReturn = (): void => { if (!document.hidden) schedule('resize'); };
 function schedule(reason: FrameReason): void {
   pendingReason = reason;
   if (pending) return;
@@ -200,12 +206,14 @@ function attach(): void {
   attached = true;
   window.addEventListener('scroll', onScroll, { passive: true });
   window.addEventListener('resize', onResize);
+  document.addEventListener('visibilitychange', onTabReturn);
 }
 function detach(): void {
   if (!attached) return;
   attached = false;
   window.removeEventListener('scroll', onScroll);
   window.removeEventListener('resize', onResize);
+  document.removeEventListener('visibilitychange', onTabReturn);
   if (pending) { window.cancelAnimationFrame(pending); pending = 0; }
 }
 
@@ -234,6 +242,11 @@ export const scenes = {
     e.mounted = mounted;
     if (mounted) e.mounts++; else { e.disposals++; e.animating = false; }
     emit();
+  },
+  /** Called by a view after it drew: the record of what really reached the screen. */
+  drawn(id: SceneId, objects: number): void {
+    const e = entry(id);
+    e.draws++; e.lastDraw = performance.now(); e.lastObjects = objects;
   },
   /** Called from a scene's frame callback: it changed something over time and needs another frame. */
   animate(id: SceneId): void {
