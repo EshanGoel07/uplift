@@ -25,14 +25,14 @@ import { CONDITION_COLOR, INTERFACE, OUTCOME, SPECTRAL } from '../palette';
  */
 
 // Every colour comes from the shared palette (scenes/palette.ts = styles/tokens.css).
-// Structure is warm graphite and ivory; ember marks the selection; the six conditions carry their
+// Structure is dark ceramic in the Nebula's language, with fine spectral edges; ember marks the selection; the six conditions carry their
 // spectral identity; outcomes use the semantic solved / failed / mixed colours.
 const C = {
-  board: INTERFACE.elevated, plate: INTERFACE.border, plate2: INTERFACE.text3, rail: INTERFACE.text3, edge: INTERFACE.text3,
+  board: INTERFACE.graphite, plate: INTERFACE.border, plate2: INTERFACE.border, rail: INTERFACE.text3, edge: INTERFACE.text3,
   test: INTERFACE.text, fresh: INTERFACE.text2, dev: INTERFACE.text3, pick: INTERFACE.ember, laneOn: INTERFACE.burnt,
-  tips: INTERFACE.text, generic: INTERFACE.text3, hook: INTERFACE.text2, devLine: SPECTRAL.amber,
-  glass: INTERFACE.text2, glassEdge: INTERFACE.text3, snapshot: INTERFACE.text3, issue: INTERFACE.text, patch: INTERFACE.text,
-  wall: INTERFACE.text2, tests: INTERFACE.text, solved: OUTCOME.solved, failed: OUTCOME.failed, unknown: INTERFACE.border,
+  tips: INTERFACE.text2, generic: INTERFACE.text3, hook: INTERFACE.text3, devLine: SPECTRAL.amber,
+  glass: SPECTRAL.violet, glassEdge: SPECTRAL.blue, snapshot: INTERFACE.text3, issue: SPECTRAL.amber, patch: INTERFACE.ember,
+  wall: SPECTRAL.violet, tests: INTERFACE.text, solved: OUTCOME.solved, failed: OUTCOME.failed, unknown: INTERFACE.border,
   half: OUTCOME.mixed,
 };
 
@@ -44,7 +44,7 @@ const CLIP = [new Plane(), new Plane(), new Plane(), new Plane()];
 const MAX_LAYERS = 8;
 
 function makeMats(): Record<Zone, Mats> {
-  const mk = (hex: string, o = 1) => new MeshStandardMaterial({ color: hex, roughness: 0.62, metalness: 0.06, transparent: true, opacity: o, clippingPlanes: CLIP });
+  const mk = (hex: string, o = 1) => new MeshStandardMaterial({ color: hex, roughness: 0.42, metalness: 0.28, transparent: true, opacity: o, clippingPlanes: CLIP });
   const zone = (): Mats => ({
     plate: mk(C.plate), plate2: mk(C.plate2), rail: mk(C.rail), tips: mk(C.tips), generic: mk(C.generic), hook: mk(C.hook),
     glass: mk(C.glass, 0.16), board: mk(C.board), laneOn: mk(C.laneOn), snapshot: mk(C.snapshot), issue: mk(C.issue), patch: mk(C.patch), tests: mk(C.tests),
@@ -383,8 +383,9 @@ export function WorkbenchScene({ summary }: Props) {
     <group ref={outer}>
       <group ref={inner}>
         <ambientLight intensity={0.85} />
-        <directionalLight position={[-4, 9, 6]} intensity={1.6} />
-        <directionalLight position={[6, 4, -6]} intensity={0.35} color={SPECTRAL.amber} />
+        <directionalLight position={[-4, 9, 6]} intensity={1.4} />
+        <directionalLight position={[6, 4, -6]} intensity={0.6} color={SPECTRAL.amber} />
+        <directionalLight position={[-8, 2, -4]} intensity={0.5} color={SPECTRAL.blue} />
 
         {/* Board, outlined */}
         <Box p={[-0.6, -0.06, 0.8]} s={[19.9, 0.06, 9.7]} m={M.neutral.board} />

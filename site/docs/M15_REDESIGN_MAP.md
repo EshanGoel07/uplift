@@ -145,3 +145,8 @@ The owner's recording shows the failure: scenes blank after a scene switch, DOM 
 **A second defect, found by the new tests.** A refresh lost the reader's step: the hash jump ran again, and the browser's restored pixel position was wrong because the page was still short. The page now saves the reader's step or section on `pagehide` and restores it once the layout stops moving.
 
 **Hardening, not proven causal:** re-measuring when a stage's size changes, redrawing on tab return and on a restored WebGL context, a canonical story state, a record of each scene's real draws, and a development-only overlay (`?overlay`) that production compiles out.
+
+## Gate 3
+Workspace, cutaway and grader share one data-driven scene (`src/scenes/Assembly/AssemblyScene.tsx`), with models in `src/data/models.ts` and `src/data/gradingModel.ts`. Each model is held to the code by `tests/unit/models.test.ts`, and each story is tested by `tests/e2e/models.spec.ts`.
+
+The apparatus reskin changes colours, one material recipe and lights only. Its geometry, presets and behaviour are unchanged.
