@@ -11,7 +11,7 @@
 import { useSyncExternalStore } from 'react';
 
 /** Stable scene identifiers. Future scenes (e.g. 'nebula') join this union. */
-export type SceneId = 'nebula' | 'lattice' | 'workbench' | 'cohort';
+export type SceneId = 'nebula' | 'lattice' | 'workbench' | 'cohort' | 'workspace' | 'cutaway' | 'grading';
 /** @deprecated alias kept for existing imports. */
 export type SceneName = SceneId;
 
@@ -34,6 +34,8 @@ export interface UiState {
   workbench3dFailed: boolean;
   /** The story's 3D scene could not load or run: it stays on its 2D figure. */
   cohort3dFailed: boolean;
+  /** The story models' scene could not load or run: they stay on their 2D figures. */
+  assembly3dFailed: boolean;
 }
 
 const prefersReduced = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
@@ -61,6 +63,7 @@ let state: UiState = {
   lowTier: detectLowTier(),
   workbench3dFailed: false,
   cohort3dFailed: false,
+  assembly3dFailed: false,
 };
 
 const listeners = new Set<() => void>();

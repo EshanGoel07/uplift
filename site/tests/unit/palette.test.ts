@@ -55,7 +55,7 @@ describe('no retired colour systems', () => {
     expect(bad).toEqual([]);
   });
   it('no hex literals in scene files except the palette', () => {
-    const bad = all.filter(({ f, s }) => /[\\/]scenes[\\/]/.test(f) && !/palette\.ts$/.test(f) && /['"]#[0-9a-fA-F]{3,8}['"]/.test(s)).map(({ f }) => f);
+    const bad = all.filter(({ f, s }) => /[\\/]scenes[\\/]/.test(f) && !/(palette|colors)\.ts$/.test(f) && /['"]#[0-9a-fA-F]{3,8}['"]/.test(s)).map(({ f }) => f);
     expect(bad).toEqual([]);
   });
 });

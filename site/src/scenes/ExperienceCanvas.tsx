@@ -5,6 +5,7 @@ import { invalidations, requestFrame, scenes, setInvalidator, ui, useScenes, use
 import { lattice, latticeProbe } from '../state/latticeStore';
 import { workbenchBounds } from '../state/workbenchStore';
 import { STORY_STATES, cohort } from '../state/cohortStore';
+import { assemblies, type AssemblyId } from '../state/assemblyStore';
 import { useNear } from '../hooks/useNear';
 import { OFF } from './layout';
 import { NebulaScene } from './Nebula/NebulaScene';
@@ -29,6 +30,19 @@ class WorkbenchBoundary extends Component<{ children: ReactNode }, { failed: boo
   state = { failed: false };
   static getDerivedStateFromError() { return { failed: true }; }
   componentDidCatch() { ui.set({ workbench3dFailed: true }); }
+  render() { return this.state.failed ? null : this.props.children; }
+}
+
+const AssemblyScene = lazy(() => import('./Assembly/AssemblyScene').catch(() => {
+  ui.set({ assembly3dFailed: true });
+  return { default: (() => null) as unknown as typeof import('./Assembly/AssemblyScene').default };
+}));
+
+/** If a story model fails, its section stays on the 2D figure; everything else carries on. */
+class AssemblyBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  componentDidCatch() { ui.set({ assembly3dFailed: true }); }
   render() { return this.state.failed ? null : this.props.children; }
 }
 
@@ -58,6 +72,7 @@ class CohortBoundary extends Component<{ children: ReactNode }, { failed: boolea
 export const frameCount = { n: 0 };
 if (typeof window !== 'undefined') (window as unknown as { __upliftFrames: typeof frameCount }).__upliftFrames = frameCount;
 
+const ASSEMBLY_CAMERA = { fov: 30, near: 0.1, far: 120, position: [0, 4, 14] as [number, number, number] };
 const COHORT_CAMERA = { fov: 34, near: 0.1, far: 200, position: [0, 0, 14] as [number, number, number] };
 const LATTICE_CAMERA = { fov: 34, near: 0.1, far: 120, position: [0, 4, 10] as [number, number, number] };
 const NEBULA_CAMERA = { fov: 34, near: 0.1, far: 60, position: [0, 0, 8.4] as [number, number, number] };
@@ -99,6 +114,7 @@ function Diagnostics() {
       workbenchBounds: () => ({ ...workbenchBounds }),
       latticeHovered: () => lattice.get().hovered,
       latticeColumn: (bug: number) => latticeProbe.column?.(bug) ?? null,
+      assembly: (id: AssemblyId) => ({ state: assemblies[id].state, settledAt: assemblies[id].settledAt, selected: assemblies[id].selected, parts: assemblies[id].model?.parts.length ?? 0 }),
       story: () => ({ state: STORY_STATES[cohort.stage], stage: cohort.stage, settledAt: cohort.settledAt, view: cohort.view }),
       draws: () => scenes.list().map((e) => ({ id: e.id, draws: e.draws, lastDraw: Math.round(e.lastDraw), objects: e.lastObjects })),
       renderer: () => ({ calls: gl.info.render.calls, triangles: gl.info.render.triangles, geometries: gl.info.memory.geometries, textures: gl.info.memory.textures, programs: gl.info.programs?.length ?? 0 }),
@@ -114,6 +130,7 @@ export default function ExperienceCanvas({ summary }: { summary: Summary | null 
   // no-WebGL browsers never request the workbench, so it never loads into the renderer there.
   const wantLattice = useScenes(() => scenes.get('lattice').requested);
   const wantCohort = useScenes(() => scenes.get('cohort').requested);
+  const wantWorkspace = useScenes(() => scenes.get('workspace').requested);
   const wantNebula = useScenes(() => scenes.get('nebula').requested);
   const wantWorkbench = useScenes(() => scenes.get('workbench').requested);
   const nearWorkbench = useNear('#method', '120% 0px');
@@ -158,6 +175,7 @@ export default function ExperienceCanvas({ summary }: { summary: Summary | null 
         {wantNebula && <StageView id="nebula" camera={NEBULA_CAMERA}><NebulaScene /></StageView>}
         {wantLattice && <StageView id="lattice" camera={LATTICE_CAMERA}><RunLatticeScene /></StageView>}
         {wantCohort && <CohortBoundary><Suspense fallback={null}><StageView id="cohort" camera={COHORT_CAMERA}><CohortScene /></StageView></Suspense></CohortBoundary>}
+        {wantWorkspace && <AssemblyBoundary><Suspense fallback={null}><StageView id="workspace" camera={ASSEMBLY_CAMERA}><AssemblyScene id="workspace" /></StageView></Suspense></AssemblyBoundary>}
       </Canvas>
     </div>
   );

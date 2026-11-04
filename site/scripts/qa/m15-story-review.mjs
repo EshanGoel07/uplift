@@ -32,8 +32,8 @@ try {
     await page.goto(`${base}?diag`, { waitUntil: 'networkidle' });
     await page.waitForTimeout(1200);
     await page.mouse.move(width / 3, height / 2);
-    const active = () => page.evaluate(() => +(document.querySelector('.story__step.is-active')?.dataset.step ?? -1));
-    const top = () => page.evaluate(() => document.querySelector('.story__stage')?.getBoundingClientRect().top ?? 1e6);
+    const active = () => page.evaluate(() => +(document.querySelector('#story .story__step.is-active')?.dataset.step ?? -1));
+    const top = () => page.evaluate(() => document.querySelector('#story .story__stage')?.getBoundingClientRect().top ?? 1e6);
     // The story has started once its stage has reached its sticky position.
     for (let i = 0; i < 80 && (await top()) > 120; i++) { await page.mouse.wheel(0, 200); await page.waitForTimeout(140); }
     let n = 0;
@@ -42,7 +42,7 @@ try {
       await page.waitForTimeout(3000);
       const shot = `${dir}/${width}-${++n}-step${step}.png`;
       await page.screenshot({ path: shot });
-      const box = await page.locator('.story__stage').boundingBox();
+      const box = await page.locator('#story .story__stage').boundingBox();
       const clip = { x: Math.max(0, box.x), y: Math.max(0, box.y), width: Math.min(box.width, width), height: Math.max(4, Math.min(box.y + box.height, height) - Math.max(0, box.y)) };
       const lit = await litShare(await page.screenshot({ clip }));
       const row = { width, step, active: await active(), lit, stageOfViewport: +((100 * clip.width * clip.height) / (width * height)).toFixed(1) };

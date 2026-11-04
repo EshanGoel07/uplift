@@ -1,6 +1,6 @@
 import { AdditiveBlending, Color, ShaderMaterial } from 'three';
 import { SPECTRAL_RAMP } from '../shaders/noise';
-import { SPECTRAL } from '../palette';
+import { INTERFACE, SPECTRAL } from '../palette';
 
 // The shared Nebula material language: every luminous scene takes its light from here, so the Lattice,
 // the story scenes and the Nebula read as one environment. StageViews sit outside the Workbench's bloom
@@ -18,6 +18,73 @@ export const ADDITIVE = { transparent: true, depthWrite: false, blending: Additi
 
 /** A soft bloom-like falloff across a quad; `d` is 0 at the centre and 1 at the edge. */
 export const HALO_FALLOFF = /* glsl */ `float haloFalloff(float d) { return exp(-d * d * 4.0) * smoothstep(1.0, 0.72, d); }`;
+
+/** Dark ceramic for solid parts: near-black, lit only at its rim and by what it represents. */
+export function ceramicMaterial(accent: string): ShaderMaterial {
+  return new ShaderMaterial({
+    depthWrite: true,
+    uniforms: {
+      uBase: { value: new Color(INTERFACE.carbon) }, uTop: { value: new Color(INTERFACE.elevated) },
+      uAccent: { value: new Color(accent) }, uSelectColor: { value: new Color(INTERFACE.ember) },
+      uFade: { value: 1 }, uGlow: { value: 0 }, uSelect: { value: 0 }, uDim: { value: 1 },
+    },
+    vertexShader: /* glsl */ `
+      varying vec3 vN; varying vec3 vV; varying vec3 vWorldN;
+      void main() {
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        vN = normalize(normalMatrix * normal);
+        vV = normalize(-mv.xyz);
+        vWorldN = normalize(mat3(modelMatrix) * normal);
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform vec3 uBase; uniform vec3 uTop; uniform vec3 uAccent; uniform vec3 uSelectColor;
+      uniform float uFade; uniform float uGlow; uniform float uSelect; uniform float uDim;
+      varying vec3 vN; varying vec3 vV; varying vec3 vWorldN;
+      void main() {
+        float rim = pow(1.0 - clamp(dot(normalize(vN), normalize(vV)), 0.0, 1.0), 2.4);
+        float up = smoothstep(-0.2, 1.0, vWorldN.y);
+        vec3 c = mix(uBase, uTop, up * 0.75);
+        c += uAccent * (rim * (1.0 - up) * 0.3 + uGlow * (0.008 + up * 0.016));
+        c = mix(c, c + uSelectColor * (0.03 + rim * 0.3), uSelect);
+        gl_FragColor = vec4(c * uDim, uFade);
+        #include <colorspace_fragment>
+      }`,
+  });
+}
+
+/** A fine lit edge along a solid part. */
+export function edgeMaterial(accent: string): ShaderMaterial {
+  return new ShaderMaterial({
+    ...ADDITIVE,
+    uniforms: { uColor: { value: new Color(accent) }, uSelectColor: { value: new Color(INTERFACE.ember) }, uFade: { value: 1 }, uSelect: { value: 0 } },
+    vertexShader: /* glsl */ `void main() { gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: /* glsl */ `
+      uniform vec3 uColor; uniform vec3 uSelectColor; uniform float uFade; uniform float uSelect;
+      void main() {
+        gl_FragColor = vec4(mix(uColor, uSelectColor, uSelect), 1.0);
+        #include <colorspace_fragment>
+        float a = uFade * (0.8 + 0.2 * uSelect);
+        gl_FragColor = vec4(gl_FragColor.rgb * a, a);
+      }`,
+  });
+}
+
+/** A lit connection between two parts. */
+export function filamentLineMaterial(accent: string): ShaderMaterial {
+  return new ShaderMaterial({
+    ...ADDITIVE,
+    uniforms: { uColor: { value: new Color(accent) }, uFade: { value: 0 } },
+    vertexShader: /* glsl */ `void main() { gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: /* glsl */ `
+      uniform vec3 uColor; uniform float uFade;
+      void main() {
+        gl_FragColor = vec4(uColor, 1.0);
+        #include <colorspace_fragment>
+        gl_FragColor = vec4(gl_FragColor.rgb * uFade, uFade);
+      }`,
+  });
+}
 
 export interface HazeOpts { seed: number; intensity: number; warmth: number }
 

@@ -8,7 +8,7 @@ const LIT_MIN = [5, 4, 5, 8, 10];     // well under what each state shows, far o
 const q = (p: Page, key: string) => p.evaluate((k) => (window as any).__upliftDiag?.[k]?.(), key);
 
 async function lit(page: Page): Promise<number> {
-  const box = (await page.locator('.story__stage').boundingBox())!;
+  const box = (await page.locator('#story .story__stage').boundingBox())!;
   const vp = page.viewportSize()!;
   const y = Math.max(0, box.y), height = Math.min(box.y + box.height, vp.height) - y;
   const png = await page.screenshot({ clip: { x: 0, y, width: vp.width, height } });
@@ -30,21 +30,21 @@ async function lit(page: Page): Promise<number> {
   return share;
 }
 
-const go = (page: Page, i: number) => page.locator(`.story__step[data-step="${i}"]`).evaluate((el) => el.scrollIntoView({ behavior: 'instant', block: 'center' }));
+const go = (page: Page, i: number) => page.locator(`#story .story__step[data-step="${i}"]`).evaluate((el) => el.scrollIntoView({ behavior: 'instant', block: 'center' }));
 
 /** The state is active, the scene settled on it, the 3D drew it and no fallback stands in for it. */
 async function expectState(page: Page, i: number) {
-  await expect(page.locator('.story')).toHaveAttribute('data-state', STATES[i]);
-  await expect(page.locator('.story__step.is-active')).toHaveAttribute('data-step', String(i));
+  await expect(page.locator('#story .story')).toHaveAttribute('data-state', STATES[i]);
+  await expect(page.locator('#story .story__step.is-active')).toHaveAttribute('data-step', String(i));
   await expect.poll(async () => (await q(page, 'story'))?.settledAt, { timeout: 15_000 }).toBe(i);
-  await expect(page.locator('.story__canvas .story__figure')).toHaveCount(0);
+  await expect(page.locator('#story .story__canvas .story__figure')).toHaveCount(0);
   const draw = (await q(page, 'draws')).find((d: { id: string }) => d.id === 'cohort');
   expect(draw.objects).toBeGreaterThan(0);
   await expect.poll(() => lit(page), { timeout: 6000, message: `${STATES[i]} is lit` }).toBeGreaterThan(LIT_MIN[i]);
   const view = (await q(page, 'story')).view;
   expect(view).toBe([0, 1, 1, 2, 2][i]);
-  await expect(page.locator('.story__formula')).toHaveCount(i === 2 || i === 4 ? 1 : 0);
-  const labels = await page.locator('.story__label.is-on').evaluateAll((els) => els.map((e) => { const r = e.getBoundingClientRect(); return [r.top, r.bottom]; }));
+  await expect(page.locator('#story .story__formula')).toHaveCount(i === 2 || i === 4 ? 1 : 0);
+  const labels = await page.locator('#story .story__label.is-on').evaluateAll((els) => els.map((e) => { const r = e.getBoundingClientRect(); return [r.top, r.bottom]; }));
   expect(labels.length).toBe(i === 1 || i === 2 ? 6 : i === 0 ? 1 : 0);
   labels.sort((a, b) => a[0] - b[0]);
   for (let n = 1; n < labels.length; n++) expect(labels[n][0]).toBeGreaterThanOrEqual(labels[n - 1][1]);
@@ -99,7 +99,7 @@ for (const [width, height] of [[1440, 900], [1920, 1080]]) {
       await page.goto('./?diag', { waitUntil: 'networkidle' });
       await go(page, 0);
       for (const i of [3, 1, 4, 0]) {
-        await page.getByRole('button', { name: new RegExp(`^Step ${i + 1}:`) }).click();
+        await page.locator('#story').getByRole('button', { name: new RegExp(`^Step ${i + 1}:`) }).click();
         await expectState(page, i);
       }
     });
@@ -157,16 +157,16 @@ test('L no WebGL: the 2D figure carries every state, with no canvas', async ({ p
   await expect(page.locator('canvas')).toHaveCount(0);
   for (let i = 0; i < 5; i++) {
     await go(page, i);
-    await expect(page.locator('.story')).toHaveAttribute('data-state', STATES[i]);
-    await expect(page.locator('.story__canvas .story__figure')).toHaveCount(1);
-    await expect(page.locator('.story__canvas .story__figure')).toHaveAttribute('aria-label', await page.locator('.story__step.is-active .story__title').textContent() as string);
+    await expect(page.locator('#story .story')).toHaveAttribute('data-state', STATES[i]);
+    await expect(page.locator('#story .story__canvas .story__figure')).toHaveCount(1);
+    await expect(page.locator('#story .story__canvas .story__figure')).toHaveAttribute('aria-label', await page.locator('#story .story__step.is-active .story__title').textContent() as string);
   }
 });
 
 test('phones: a 2D figure in every step, and no scene', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('./?diag', { waitUntil: 'networkidle' });
-  await expect(page.locator('.story__step .story__figure')).toHaveCount(5);
-  await expect(page.locator('.story__stage')).toHaveCount(0);
+  await expect(page.locator('#story .story__step .story__figure')).toHaveCount(5);
+  await expect(page.locator('#story .story__stage')).toHaveCount(0);
   await expect(page.locator('canvas')).toHaveCount(0);
 });

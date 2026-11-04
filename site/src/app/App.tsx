@@ -11,6 +11,7 @@ import { Chapter } from '../components/navigation/Chapter';
 import { scenes, ui, useScenes, useUi } from '../state/sceneStore';
 import { Hero } from '../sections/Hero/Hero';
 import { OneBugStory } from '../sections/Story/OneBugStory';
+import { WorkspaceStory } from '../sections/Story/WorkspaceStory';
 import { Results } from '../sections/Results/Results';
 import { BugMatrix } from '../sections/BugMatrix/BugMatrix';
 import { BugExplorer } from '../sections/BugExplorer/BugExplorer';
@@ -81,6 +82,7 @@ export function App() {
         <Chapter id="how" label="How it works">
           <OneBugStory summary={summary} />
           <Conditions summary={summary} />
+          <WorkspaceStory summary={summary} />
           <Methodology summary={summary} onOpenTask={openTask} />
         </Chapter>
         <Chapter id="findings" label="Findings">

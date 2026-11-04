@@ -494,17 +494,17 @@ test('moving between destinations is browser history, and old section links stil
   await expect.poll(() => page.locator('#trust').evaluate((el) => Math.abs(el.getBoundingClientRect().top)), { timeout: 6000 }).toBeLessThan(120);
 });
 
-const storyStep = (page: Page) => page.locator('.story__step.is-active').getAttribute('data-step');
-const toStep = (page: Page, i: number) => page.locator(`.story__step[data-step="${i}"]`).evaluate((el) => el.scrollIntoView({ behavior: 'instant', block: 'center' }));
+const storyStep = (page: Page) => page.locator('#story .story__step.is-active').getAttribute('data-step');
+const toStep = (page: Page, i: number) => page.locator(`#story .story__step[data-step="${i}"]`).evaluate((el) => el.scrollIntoView({ behavior: 'instant', block: 'center' }));
 
 test('the story reads in full without WebGL, as text and figures', async ({ page }) => {
   await page.goto(NOGL, { waitUntil: 'networkidle' });
-  await expect(page.locator('.story__step')).toHaveCount(5);
-  await expect(page.locator('.story__title')).toHaveText(['One real bug.', 'Six conditions.', 'Two repeats.', 'Now every bug.', '924 runs.']);
-  await expect(page.locator('.story__canvas .story__figure')).toHaveCount(1);
+  await expect(page.locator('#story .story__step')).toHaveCount(5);
+  await expect(page.locator('#story .story__title')).toHaveText(['One real bug.', 'Six conditions.', 'Two repeats.', 'Now every bug.', '924 runs.']);
+  await expect(page.locator('#story .story__canvas .story__figure')).toHaveCount(1);
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(page.locator('.story__stage')).toHaveCount(0);
-  await expect(page.locator('.story__step .story__figure')).toHaveCount(5);
+  await expect(page.locator('#story .story__stage')).toHaveCount(0);
+  await expect(page.locator('#story .story__step .story__figure')).toHaveCount(5);
 });
 
 test('the story follows native scrolling forward, backward and through skipped steps', async ({ page }) => {
@@ -513,13 +513,13 @@ test('the story follows native scrolling forward, backward and through skipped s
   await expect.poll(() => storyStep(page)).toBe('1');
   await toStep(page, 4);
   await expect.poll(() => storyStep(page)).toBe('4');
-  await expect(page.locator('.story__formula')).toContainText('77 bugs × 6 conditions × 2 repeats = 924 runs');
+  await expect(page.locator('#story .story__formula')).toContainText('77 bugs × 6 conditions × 2 repeats = 924 runs');
   await toStep(page, 0);
   await expect.poll(() => storyStep(page)).toBe('0');
-  await expect(page.locator('.story__formula')).toHaveCount(0);
-  await page.getByRole('button', { name: /^Step 3:/ }).click();
+  await expect(page.locator('#story .story__formula')).toHaveCount(0);
+  await page.locator('#story').getByRole('button', { name: /^Step 3:/ }).click();
   await expect.poll(() => storyStep(page)).toBe('2');
-  await expect(page.locator('.story__formula')).toContainText('= 12 attempts');
+  await expect(page.locator('#story .story__formula')).toContainText('= 12 attempts');
   const y = await page.evaluate(() => window.scrollY);
   await page.mouse.move(300, 400);
   await page.mouse.wheel(0, 300);
@@ -710,7 +710,7 @@ test.describe('WebGL', () => {
     await lens.getByRole('button', { name: 'Outcome' }).click();
     await expect(page.locator('.lattice__key')).toContainText('Always 43');
     await lens.getByRole('button', { name: 'Condition' }).click();
-    await expect(page.locator('.lens-cond')).toHaveCount(6);
+    await expect(page.locator('.hero__figure .lens-cond')).toHaveCount(6);
     await page.getByRole('button', { name: 'Focus the selected bug' }).click();
     await page.getByRole('button', { name: 'Zoom in' }).click();
     await page.getByRole('button', { name: 'Reset the view' }).click();
@@ -956,25 +956,25 @@ test.describe('WebGL', () => {
     await toStep(page, 0);
     await expect.poll(async () => (await diag<{ id: string; mounted: boolean }[]>(page, 'scenes')).find((s) => s.id === 'cohort')?.mounted, { timeout: 15_000 }).toBe(true);
     expect(await diag<number>(page, 'canvases')).toBe(1);
-    const box = (await page.locator('.story__stage').boundingBox())!;
+    const box = (await page.locator('#story .story__stage').boundingBox())!;
     expect((box.width * box.height) / (1440 * 900)).toBeGreaterThan(0.6);
-    await expect(page.locator('.story__canvas .story__figure')).toHaveCount(0);
+    await expect(page.locator('#story .story__canvas .story__figure')).toHaveCount(0);
     // Fast through every step, then straight back: the labels and state follow the last position only.
     for (const i of [1, 2, 3, 4, 2]) await toStep(page, i);
     await expect.poll(() => storyStep(page)).toBe('2');
-    await expect(page.locator('.story__label.is-on')).toHaveCount(6);
+    await expect(page.locator('#story .story__label.is-on')).toHaveCount(6);
     await toStep(page, 0);
     await expect.poll(() => storyStep(page)).toBe('0');
-    await expect(page.locator('.story__label--bug.is-on')).toHaveCount(1);
+    await expect(page.locator('#story .story__label--bug.is-on')).toHaveCount(1);
   });
 
   test('a failed story chunk leaves its 2D figure and the rest of the 3D running', async ({ page }) => {
     await page.route(/CohortScene/, (r) => r.abort());
     await page.goto('./?diag&hero=runs', { waitUntil: 'networkidle' });
     await toStep(page, 0);
-    await expect(page.locator('.story__canvas .story__figure')).toHaveCount(1);
+    await expect(page.locator('#story .story__canvas .story__figure')).toHaveCount(1);
     await page.waitForTimeout(600);
-    await expect(page.locator('.story__canvas .story__figure')).toHaveCount(1);
+    await expect(page.locator('#story .story__canvas .story__figure')).toHaveCount(1);
     expect(await diag<number>(page, 'contexts')).toBe(1);
   });
 
@@ -984,7 +984,7 @@ test.describe('WebGL', () => {
     await page.goto('./?diag', { waitUntil: 'networkidle' });
     await toStep(page, 4);
     await expect.poll(() => storyStep(page)).toBe('4');
-    await expect(page.locator('.story__formula')).toContainText('924 runs');
+    await expect(page.locator('#story .story__formula')).toContainText('924 runs');
     await settled(page);
     expect(await diag<boolean>(page, 'animating')).toBe(false);
     await ctx.close();

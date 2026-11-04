@@ -56,20 +56,23 @@ export function jumpTo(id: string, { step = false, instant = false } = {}): void
 }
 
 const PLACE_KEY = 'uplift:place';
-interface Place { step?: number; section?: string; offset?: number }
+interface Place { story?: string; step?: number; section?: string; offset?: number }
 
 /** What the reader was on, not a pixel: the page's height changes as data and sections arrive. */
 function currentPlace(): Place {
-  const step = document.querySelector<HTMLElement>('.story--sticky .story__step.is-active');
-  const stage = document.querySelector('.story--sticky .story__stage')?.getBoundingClientRect();
-  if (step && stage && stage.top < window.innerHeight / 2 && stage.bottom > window.innerHeight / 2) return { step: +step.dataset.step! };
+  for (const story of document.querySelectorAll<HTMLElement>('.story--sticky')) {
+    const stage = story.querySelector('.story__stage')?.getBoundingClientRect();
+    const step = story.querySelector<HTMLElement>('.story__step.is-active');
+    const owner = story.closest('section')?.id;
+    if (owner && step && stage && stage.top < window.innerHeight / 2 && stage.bottom > window.innerHeight / 2) return { story: owner, step: +step.dataset.step! };
+  }
   const sections = [...document.querySelectorAll<HTMLElement>('main section[id]')];
   const at = sections.find((s) => s.getBoundingClientRect().bottom > 0);
   return at ? { section: at.id, offset: Math.round(-at.getBoundingClientRect().top) } : {};
 }
 
 function placeTarget(p: Place): { el: Element; block: ScrollLogicalPosition; offset: number } | null {
-  const el = p.step !== undefined ? document.querySelector(`.story__step[data-step="${p.step}"]`) : p.section ? document.getElementById(p.section) : null;
+  const el = p.step !== undefined ? document.querySelector(`#${p.story} .story__step[data-step="${p.step}"]`) : p.section ? document.getElementById(p.section) : null;
   return el ? { el, block: p.step !== undefined ? 'center' : 'start', offset: p.offset ?? 0 } : null;
 }
 

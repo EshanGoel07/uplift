@@ -67,3 +67,19 @@
 /* While the study data loads, keep the story at about its real height, so the sections below do not look
    near the viewport and start fetching. */
 .onebug[aria-busy] { min-height: 300vh; }
+
+/* Story models: the parts, and what the selected one is. */
+.assembly__controls { margin-top: 24px; }
+.assembly__inspect { position: absolute; left: clamp(72px, 8vw, 128px); top: 16px; z-index: 2; display: grid; gap: 10px; justify-items: start; max-width: min(520px, 46vw); }
+.assembly__parts { display: flex; flex-wrap: wrap; gap: 4px 6px; list-style: none; margin: 0; padding: 0; }
+.assembly__parts button { min-height: 28px; padding: 0 10px; border: 1px solid var(--border-soft); border-radius: 999px; background: rgba(9, 10, 12, 0.72); color: var(--text-2); font-size: 0.78rem; cursor: pointer; }
+.assembly__parts button:hover { color: var(--text); }
+.assembly__parts button[aria-pressed='true'] { border-color: var(--ember); color: var(--text); }
+.assembly__parts button:focus-visible { outline: 2px solid var(--ember); outline-offset: 2px; }
+.assembly__detail { padding: 12px 14px; border-left: 2px solid var(--ember); background: rgba(9, 10, 12, 0.86); font-size: 0.86rem; line-height: 1.5; color: var(--text-2); }
+.assembly__detail p { margin: 0; }
+.assembly__detail-title { color: var(--text); font-weight: 600; margin-bottom: 4px !important; }
+.assembly__source { display: flex; align-items: center; gap: 6px; margin-top: 6px !important; font-size: 0.76rem; }
+.story--sticky .story__canvas[data-scene] { cursor: grab; }
+.story:not(.story--sticky) .assembly__inspect { position: static; max-width: none; margin-top: 16px; }
+@media (max-width: 900px) { .assembly__inspect { display: none; } }
