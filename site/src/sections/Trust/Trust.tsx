@@ -17,7 +17,7 @@ export function Trust({ summary }: { summary: Summary | null }) {
   const runs = summary?.summary.runs ?? 924;
 
   return (
-    <section id="trust" className="pub pub--dark integrity" aria-labelledby="trust-title">
+    <section id="trust" className="pub integrity" aria-labelledby="trust-title">
       <div className="pub-container">
         <header className="pub-head">
           <p className="pub-eyebrow">Integrity</p>

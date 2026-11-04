@@ -2,6 +2,7 @@ import type { Summary, TaskMeta } from '../../data/types';
 import { shortId } from '../../data/classify';
 import { CONDITIONS } from '../../data/method';
 import { sideOf, wb, useWb, type Focus } from '../../state/workbenchStore';
+import { condStyle } from '../../utils/condition';
 
 interface Props { summary: Summary; tasks: TaskMeta[] }
 
@@ -51,7 +52,7 @@ export function WorkbenchDiagram({ summary, tasks }: Props) {
           return (
             <div key={a.id} className={`wbd__row${laneOn(i) ? ' is-on' : ''}`}>
               <button type="button" className="wbd__lane" aria-pressed={focus.kind === 'lane' && focus.arm === a.id} onClick={() => go({ kind: 'lane', arm: a.id })}>
-                <b>{i + 1}</b>
+                <b style={condStyle(a.id)}>{i + 1}</b>
                 <span className="wbd__lane-name">{a.label}</span>
                 <span className="wbd__chips">
                   {c.hasTips && <i className={a.id === 'handwritten' ? 'c-generic' : 'c-tips'}>AGENTS.md</i>}

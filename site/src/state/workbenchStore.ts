@@ -42,6 +42,9 @@ export function useWb<T>(select: (s: WorkbenchState) => T): T {
   return useSyncExternalStore(wb.subscribe, () => select(wb.get()), () => select(wb.get()));
 }
 
+/** The model's projected box relative to its stage, in CSS pixels; written on each refit, read by diagnostics. */
+export const workbenchBounds = { left: 0, right: 0, top: 0, bottom: 0, stageWidth: 0, stageHeight: 0 };
+
 /** DOM label elements, keyed as in scenes/Workbench/layout.ts; the 3D scene positions them each frame. */
 export const wbLabels: Record<string, HTMLElement | null> = {};
 

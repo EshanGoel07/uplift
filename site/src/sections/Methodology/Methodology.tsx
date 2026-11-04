@@ -3,7 +3,7 @@ import type { Summary } from '../../data/types';
 import { loadTask } from '../../data/load';
 import { shortId } from '../../data/classify';
 import { FEATURED_TASK } from '../../data/reportFigures';
-import { live, requestFrame, useUi } from '../../state/sceneStore';
+import { scenes, useUi } from '../../state/sceneStore';
 import { sideOf, wb, wbLabels, useWb } from '../../state/workbenchStore';
 import { useMedia, WIDE } from '../../hooks/useMedia';
 import { useInView } from '../../hooks/useInView';
@@ -12,6 +12,7 @@ import { Inspector } from './Inspector';
 import { Bridge } from '../../components/navigation/Bridge';
 import { DOC_LINKS, SOURCE_LINKS } from '../../data/links';
 import { WorkbenchDiagram } from './WorkbenchDiagram';
+import { condStyle } from '../../utils/condition';
 
 interface Props { summary: Summary | null; onOpenTask: (id: string) => void }
 
@@ -26,7 +27,9 @@ const MODULE_TEXT: Record<string, string> = {
  * inspector. Normal scrolling; no pins.
  */
 export function Methodology({ summary, onOpenTask }: Props) {
-  const webgl = useUi((s) => s.webgl);
+  const webglOk = useUi((s) => s.webgl);
+  const failed3d = useUi((s) => s.workbench3dFailed);
+  const webgl = webglOk && !failed3d;   // a failed 3D layer behaves like no WebGL here: the 2D diagram, no toggle
   const wide = useMedia(WIDE);
   const view = useWb((s) => s.view);
   const idx = useWb((s) => s.task);
@@ -61,21 +64,12 @@ export function Methodology({ summary, onOpenTask }: Props) {
     return () => { on = false; };
   }, [idx, tasks, summary, near]);
 
-  // How much of the 3D stage is on screen: this alone wakes the shared canvas (no pinning).
+  // Request the 3D scene for this stage while the 3D view is shown; the registry measures visibility
+  // and wakes the shared canvas. The 2D diagram and phones never request it.
   useEffect(() => {
-    const update = () => {
-      const el = stage.current;
-      if (!el || !use3d) { live.workbenchVis = 0; return; }
-      const r = el.getBoundingClientRect();
-      const visible = Math.max(0, Math.min(r.bottom, window.innerHeight) - Math.max(r.top, 0));
-      live.workbenchVis = Math.min(1, visible / Math.max(1, Math.min(r.height, window.innerHeight)));
-      requestFrame();
-    };
-    update();
-    window.addEventListener('scroll', update, { passive: true });
-    window.addEventListener('resize', update);
-    return () => { window.removeEventListener('scroll', update); window.removeEventListener('resize', update); live.workbenchVis = 0; };
-  }, [use3d]);
+    if (!use3d || !stage.current) return;
+    return scenes.request('workbench', stage.current, { reducedMotion: 'full', lowTier: false });
+  }, [use3d, summary]);
 
   const step = (d: number) => wb.set({ task: (idx + d + tasks.length) % tasks.length });
   const label = (k: string, i?: number) => (i !== undefined ? `${i + 1} ${summary?.arms[i].label ?? ''}` : MODULE_TEXT[k]);
@@ -85,7 +79,7 @@ export function Methodology({ summary, onOpenTask }: Props) {
   };
 
   return (
-    <section id="method" ref={root} className="pub pub--dark wb-section" aria-labelledby="method-title">
+    <section id="method" ref={root} className="pub wb-section" aria-labelledby="method-title">
       <div className="pub-container">
         <header className="pub-head">
           <p className="pub-eyebrow">Experiment</p>
@@ -141,7 +135,7 @@ export function Methodology({ summary, onOpenTask }: Props) {
                       </span>
                     ))}
                     {Array.from({ length: LANES }, (_, i) => (
-                      <span key={i} className="wb-label wb-label--lane a-left" ref={(el) => { wbLabels[`lane${i}`] = el; }}>
+                      <span key={i} className="wb-label wb-label--lane a-left" style={condStyle(summary.arms[i].id)} ref={(el) => { wbLabels[`lane${i}`] = el; }}>
                         <button type="button" aria-pressed={(focus.kind === 'lane' || focus.kind === 'run') && focus.arm === summary.arms[i].id}
                           onClick={() => wb.set({ focus: { kind: 'lane', arm: summary.arms[i].id } })}>
                           {label('', i)}

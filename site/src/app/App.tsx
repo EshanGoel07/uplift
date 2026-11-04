@@ -3,8 +3,7 @@ import type { Summary } from '../data/types';
 import { loadSummary } from '../data/load';
 import { FEATURED_TASK } from '../data/reportFigures';
 import { BackToTop, Nav, jumpTo } from '../components/navigation/Nav';
-import { ui, useUi } from '../state/sceneStore';
-import { scheduleRefresh } from '../hooks/useGsap';
+import { scenes, ui, useScenes, useUi } from '../state/sceneStore';
 import { Hero } from '../sections/Hero/Hero';
 import { Results } from '../sections/Results/Results';
 import { BugMatrix } from '../sections/BugMatrix/BugMatrix';
@@ -17,10 +16,10 @@ import { Limitations } from '../sections/Limitations/Limitations';
 import { FutureWork } from '../sections/FutureWork/FutureWork';
 import { Footer } from '../sections/Footer/Footer';
 
-// three.js, R3F and the shaders load in their own chunk, only when a section with a 3D scene approaches.
+// three.js, R3F and the shaders load in their own chunk, once a section requests a 3D scene.
 const ExperienceCanvas = lazy(() => import('../scenes/ExperienceCanvas'));
 
-/** If WebGL fails at runtime (no context, lost driver), fall back to the static poster. */
+/** If WebGL fails at runtime (no context, lost driver), every section falls back to its SVG/HTML version. */
 class WebGLBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
   state = { failed: false };
   static getDerivedStateFromError() { return { failed: true }; }
@@ -33,27 +32,15 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [taskId, setTaskId] = useState<string>(FEATURED_TASK);
   const webgl = useUi((s) => s.webgl);
-  // The hero and findings carry no WebGL. The 3D layer (method and matrix scenes) mounts only when
-  // one of those sections comes within about a screen of the viewport.
+  // The one canvas mounts when a section first requests a scene, and stays: it is a single persistent
+  // renderer, and scenes come and go inside it.
+  const wanted = useScenes(() => scenes.list().some((e) => e.requested));
   const [mount3d, setMount3d] = useState(false);
-  useEffect(() => {
-    if (!webgl || mount3d) return;
-    const targets = ['method'].map((id) => document.getElementById(id)).filter((el): el is HTMLElement => !!el);
-    if (!targets.length) return;
-    const io = new IntersectionObserver((entries) => {
-      if (entries.some((e) => e.isIntersecting)) { setMount3d(true); io.disconnect(); }
-    }, { rootMargin: '100% 0px' });
-    targets.forEach((el) => io.observe(el));
-    return () => io.disconnect();
-  }, [webgl, mount3d]);
+  useEffect(() => { if (wanted) setMount3d(true); }, [wanted]);
 
   useEffect(() => {
     loadSummary().then(setSummary).catch((e: Error) => setError(e.message));
   }, []);
-
-  // Trigger positions depend on layout: refresh once data and fonts are in.
-  useEffect(() => { if (summary) scheduleRefresh(60); }, [summary]);
-  useEffect(() => { document.fonts?.ready.then(() => scheduleRefresh(60)); }, []);
 
   const openTask = useCallback((id: string) => {
     setTaskId(id);

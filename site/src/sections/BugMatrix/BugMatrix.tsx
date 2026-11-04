@@ -3,6 +3,7 @@ import type { ArmId, Group, Summary, TaskMeta, TaskSet } from '../../data/types'
 import { GROUP_LABEL, GROUP_ORDER, groupCounts, groupOf, shortId, sortForMatrix } from '../../data/classify';
 import { useInView } from '../../hooks/useInView';
 import { Bridge } from '../../components/navigation/Bridge';
+import { condStyle } from '../../utils/condition';
 
 interface Props {
   summary: Summary | null;
@@ -156,7 +157,7 @@ function Matrix({ summary, onOpenTask, selectedTask }: { summary: Summary } & Om
              style={{ ['--cols' as string]: cols }} onMouseLeave={() => setTip(null)}>
           <div className="mx-row mx-row--head" role="row">
             <div className="mx-th mx-th--task" role="columnheader">Bug</div>
-            {arms.map((a, i) => <div key={a.id} className="mx-th" role="columnheader"><span className="mx-th__n">{i + 1}</span>{a.label}</div>)}
+            {arms.map((a, i) => <div key={a.id} className="mx-th" role="columnheader"><span className="mx-th__n" style={condStyle(a.id)}>{i + 1}</span>{a.label}</div>)}
           </div>
 
           {bands.map((b) => (

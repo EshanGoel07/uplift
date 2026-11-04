@@ -53,7 +53,6 @@ function ExternalLinks({ onNavigate }: { onNavigate?: () => void }) {
 export function Nav() {
   const [active, setActive] = useState<string>('overview');
   const [open, setOpen] = useState(false);
-  const [dark, setDark] = useState(true);
   const menuBtn = useRef<HTMLButtonElement>(null);
 
   // Scroll-spy: the last section (in page order) whose top has passed the upper third is current.
@@ -66,10 +65,6 @@ export function Nav() {
         if (el && el.getBoundingClientRect().top <= line) current = id;
       }
       setActive((a) => (a === current ? a : current));
-      // Dark while the dark hero is under the header.
-      const hero = document.getElementById('overview');
-      const under = !!hero && hero.getBoundingClientRect().bottom > headerHeight();
-      setDark((d) => (d === under ? d : under));
     };
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
@@ -101,7 +96,7 @@ export function Nav() {
   );
 
   return (
-    <header className={`nav${open ? ' is-open' : ''}${dark ? ' is-dark' : ''}`}>
+    <header className={`nav${open ? ' is-open' : ''}`}>
       <div className="nav__inner">
         <a className="nav__brand" href="#overview" onClick={(e) => { e.preventDefault(); go('overview'); }} aria-label="Uplift, back to the top">
           Uplift

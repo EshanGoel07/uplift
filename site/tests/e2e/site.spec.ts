@@ -12,6 +12,18 @@ const collectErrors = (page: Page) => {
   return errors;
 };
 
+// Engine diagnostics (available with ?diag). Each key is a getter on window.__upliftDiag.
+const diag = <T = unknown>(page: Page, key: string): Promise<T> =>
+  page.evaluate((k) => (window as unknown as { __upliftDiag: Record<string, () => T> }).__upliftDiag[k](), key);
+/** Frames rendered during `ms` with no input. */
+const framesDuring = async (page: Page, ms: number): Promise<number> => {
+  const a = await diag<number>(page, 'frames');
+  await page.waitForTimeout(ms);
+  return (await diag<number>(page, 'frames')) - a;
+};
+/** Waits until rendering has stopped. */
+const settled = (page: Page) => expect.poll(() => framesDuring(page, 300), { timeout: 15_000 }).toBe(0);
+
 test('loads from a sub-path with no errors and no task files on first paint', async ({ page }) => {
   const errors = collectErrors(page);
   const taskRequests: string[] = [];
@@ -403,9 +415,10 @@ test.describe('WebGL', () => {
   test('hero run lattice: builds, reveals outcomes, and its readout follows the stepper', async ({ page }) => {
     const errors = collectErrors(page);
     await page.goto('./', { waitUntil: 'networkidle' });
-    await expect(page.locator('.lattice__canvas canvas')).toHaveCount(1, { timeout: 15_000 });
-    // The later 3D layer is not loaded at the top of the page.
-    await expect(page.locator('.experience canvas')).toHaveCount(0);
+    // The lattice draws in the one shared canvas: no canvas of its own, and exactly one on the page.
+    await expect(page.locator('.experience canvas')).toHaveCount(1, { timeout: 15_000 });
+    await expect(page.locator('canvas')).toHaveCount(1);
+    await expect(page.locator('.lattice__canvas-wrap canvas')).toHaveCount(0);
     await expect(page.locator('.scene-controls')).toHaveCount(0);
     // After the build-in, the results arrive on their own once.
     const outcomes = page.locator('.seg-dark button', { hasText: 'Outcomes' });
@@ -423,7 +436,262 @@ test.describe('WebGL', () => {
     await expect(page.locator('.lattice__caption')).toContainText('Six lanes, one per condition');
     await page.locator('#method').scrollIntoViewIfNeeded();
     await expect(page.locator('.experience canvas')).toHaveCount(1, { timeout: 15_000 });
+    await expect(page.locator('canvas')).toHaveCount(1);
     expect(errors).toEqual([]);
+  });
+
+  test('one canvas: the lattice and the workbench share one renderer, across scene switches', async ({ page }) => {
+    const errors = collectErrors(page);
+    await page.goto('./?diag', { waitUntil: 'networkidle' });
+    await expect(page.locator('canvas')).toHaveCount(1, { timeout: 15_000 });
+    await page.evaluate(() => { document.querySelector('canvas')!.dataset.first = 'yes'; });
+    for (let i = 0; i < 3; i++) {
+      await page.locator('#method .wb__stage').scrollIntoViewIfNeeded();
+      await expect.poll(() => diag(page, 'activeScenes')).toBe(1);
+      await page.waitForTimeout(250);
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.waitForTimeout(250);
+    }
+    // Still the same element and context; both scenes mounted once and never rebuilt.
+    await expect(page.locator('canvas[data-first="yes"]')).toHaveCount(1);
+    expect(await page.locator('canvas').count()).toBe(1);
+    expect(await diag(page, 'contexts')).toBe(1);
+    const list = await diag<{ id: string; mounts: number; disposals: number }[]>(page, 'scenes');
+    expect(list.map((s) => [s.id, s.mounts, s.disposals]).sort()).toEqual([['lattice', 1, 0], ['workbench', 1, 0]]);
+    expect(errors).toEqual([]);
+  });
+
+  test('rendering stops at rest: hero and workbench draw nothing while nothing changes', async ({ page }) => {
+    await page.goto('./?diag', { waitUntil: 'networkidle' });
+    await expect(page.locator('.seg-dark button', { hasText: 'Outcomes' })).toHaveAttribute('aria-pressed', 'true', { timeout: 12_000 });
+    await settled(page);
+    expect(await framesDuring(page, 1500)).toBe(0);
+    await page.locator('#method .wb__stage').scrollIntoViewIfNeeded();
+    await settled(page);
+    expect(await framesDuring(page, 1500)).toBe(0);
+    expect(await diag(page, 'frameloop')).toBe('demand');
+  });
+
+  test('an animation requests frames only while it runs, then rendering settles', async ({ page }) => {
+    await page.goto('./?diag', { waitUntil: 'networkidle' });
+    const outcomes = page.locator('.seg-dark button', { hasText: 'Outcomes' });
+    await expect(outcomes).toHaveAttribute('aria-pressed', 'true', { timeout: 12_000 });
+    await settled(page);
+    const before = await diag<number>(page, 'frames');
+    await page.locator('.seg-dark button', { hasText: 'Design' }).click();
+    await expect.poll(() => diag(page, 'frames')).toBeGreaterThan(before + 5);
+    await settled(page);
+    expect(await framesDuring(page, 1000)).toBe(0);
+    expect(await diag(page, 'animating')).toBe(false);
+  });
+
+  test('off-screen scenes do not react to the pointer or to scrolling elsewhere', async ({ page }) => {
+    await page.goto('./?diag', { waitUntil: 'networkidle' });
+    await expect(page.locator('.seg-dark button', { hasText: 'Outcomes' })).toHaveAttribute('aria-pressed', 'true', { timeout: 12_000 });
+    await page.evaluate(() => document.getElementById('results')!.scrollIntoView());
+    await settled(page);
+    const before = await diag<number>(page, 'frames');
+    for (let i = 0; i < 40; i++) await page.mouse.move(200 + i * 20, 300 + (i % 7) * 30);
+    await page.evaluate(() => window.scrollBy(0, 120));
+    await page.waitForTimeout(400);
+    expect(await diag<number>(page, 'frames')).toBe(before);
+  });
+
+  test('hovering a cube reads out its bug, and clicking opens it in the explorer', async ({ page }) => {
+    const errors = collectErrors(page);
+    await page.goto('./', { waitUntil: 'networkidle' });
+    await expect(page.locator('.seg-dark button', { hasText: 'Outcomes' })).toHaveAttribute('aria-pressed', 'true', { timeout: 12_000 });
+    const wrap = page.locator('.lattice__canvas-wrap');
+    const box = (await wrap.boundingBox())!;
+    const start = await page.locator('.lattice__pos').textContent();
+    // The front block of cubes sits in the lower right of the stage.
+    await page.mouse.move(box.x + box.width * 0.62, box.y + box.height * 0.68);
+    await page.mouse.move(box.x + box.width * 0.64, box.y + box.height * 0.68);
+    await expect(page.locator('.lattice__pos')).not.toHaveText(start!);
+    const id = await page.locator('.lattice__bug-id').textContent();
+    await page.mouse.click(box.x + box.width * 0.64, box.y + box.height * 0.68);
+    await expect(page.locator('#explorer-all .ex-head__id')).toContainText(id!);
+    expect(errors).toEqual([]);
+  });
+
+  test('phones: the lattice draws in the one canvas, and the workbench never loads into it', async ({ browser }) => {
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const page = await ctx.newPage();
+    const errors = collectErrors(page);
+    await page.goto('./?diag', { waitUntil: 'networkidle' });
+    await expect(page.locator('canvas')).toHaveCount(1, { timeout: 15_000 });
+    await page.locator('#method').scrollIntoViewIfNeeded();
+    await expect(page.locator('.wbd')).toBeVisible();
+    await page.waitForTimeout(500);
+    const list = await diag<{ id: string; mounted: boolean }[]>(page, 'scenes');
+    expect(list.find((s) => s.id === 'workbench')?.mounted ?? false).toBe(false);
+    expect(await page.locator('canvas').count()).toBe(1);
+    expect(errors).toEqual([]);
+    await ctx.close();
+  });
+
+  test('a WebGL failure leaves no blank stage: the SVG figure and the 2D diagram take over', async ({ page }) => {
+    await page.addInitScript(() => {
+      const real = HTMLCanvasElement.prototype.getContext;
+      HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement, type: string, ...a: unknown[]) {
+        return /webgl/.test(type) ? null : (real as (...x: unknown[]) => unknown).call(this, type, ...a);
+      } as typeof real;
+    });
+    await page.goto('./', { waitUntil: 'networkidle' });
+    await expect(page.locator('.overview__svg')).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator('.lattice__canvas-wrap')).toHaveCount(0);
+    await page.locator('#method').scrollIntoViewIfNeeded();
+    await expect(page.locator('.wbd')).toBeVisible();
+    await expect(page.locator('#results .ic-svg')).toBeVisible();
+  });
+
+  test('dynamic chunks: phones and tablets never download the Workbench layer', async ({ browser }) => {
+    for (const width of [390, 768]) {
+      const ctx = await browser.newContext({ viewport: { width, height: 900 } });
+      const page = await ctx.newPage();
+      const js: string[] = [];
+      page.on('request', (r) => { if (r.url().endsWith('.js')) js.push(r.url()); });
+      await page.goto('./', { waitUntil: 'networkidle' });
+      await expect(page.locator('canvas')).toHaveCount(1, { timeout: 15_000 });
+      // The whole page, top to bottom.
+      const height = await page.evaluate(() => document.body.scrollHeight);
+      for (let y = 0; y < height; y += 700) { await page.evaluate((v) => window.scrollTo(0, v), y); await page.waitForTimeout(60); }
+      await expect(page.locator('.wbd')).toBeVisible();
+      expect(js.filter((u) => /WorkbenchLayer/.test(u)), `width ${width}`).toEqual([]);
+      await ctx.close();
+    }
+  });
+
+  test('dynamic chunks: desktop loads the Workbench layer only as it approaches', async ({ page }) => {
+    const js: string[] = [];
+    page.on('request', (r) => { if (r.url().endsWith('.js')) js.push(r.url()); });
+    await page.goto('./?diag', { waitUntil: 'networkidle' });
+    await expect(page.locator('canvas')).toHaveCount(1, { timeout: 15_000 });
+    await page.waitForTimeout(800);
+    expect(js.filter((u) => /WorkbenchLayer/.test(u))).toEqual([]);
+    // The hero's canvas chunk carries no postprocessing or Workbench code.
+    const canvasChunk = js.find((u) => /ExperienceCanvas/.test(u))!;
+    const text = await (await page.request.get(canvasChunk)).text();
+    expect(text).not.toMatch(/luminanceThreshold|mipmapBlur|Hidden tests/);
+    await page.locator('#method .wb__stage').scrollIntoViewIfNeeded();
+    await expect.poll(() => js.filter((u) => /WorkbenchLayer/.test(u)).length).toBe(1);
+    await expect.poll(async () => (await diag<{ id: string; mounted: boolean }[]>(page, 'scenes')).find((s) => s.id === 'workbench')?.mounted).toBe(true);
+    expect(await page.locator('canvas').count()).toBe(1);
+    expect(await diag(page, 'contexts')).toBe(1);
+  });
+
+  test('a failed Workbench chunk falls back to the 2D diagram and leaves the lattice running', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.route(/WorkbenchLayer/, (r) => r.abort());
+    await page.goto('./?diag', { waitUntil: 'networkidle' });
+    await expect(page.locator('canvas')).toHaveCount(1, { timeout: 15_000 });
+    await page.locator('#method').scrollIntoViewIfNeeded();
+    await expect(page.locator('.wbd')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('.wb__stage')).toHaveCount(0);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await expect(page.locator('.lattice__canvas-wrap')).toBeVisible();
+    await expect(page.locator('.overview__svg')).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
+
+  test('hover still lifts a bug: the picture changes under reduced motion, where nothing else moves', async ({ browser }) => {
+    const ctx = await browser.newContext({ reducedMotion: 'reduce', viewport: { width: 1440, height: 900 } });
+    const page = await ctx.newPage();
+    await page.goto('./?diag', { waitUntil: 'networkidle' });
+    await expect(page.locator('.lattice__loading')).toHaveCount(0, { timeout: 10_000 });
+    await settled(page);
+    const wrap = page.locator('.lattice__canvas-wrap');
+    const box = (await wrap.boundingBox())!;
+    const clip = { x: box.x, y: box.y, width: box.width, height: box.height };
+    const before = await page.screenshot({ clip });
+    await page.mouse.move(box.x + box.width * 0.64, box.y + box.height * 0.68);
+    await expect(page.locator('.lattice__pos')).not.toHaveText('Bug 51 of 77');
+    await settled(page);
+    expect((await page.screenshot({ clip })).equals(before)).toBe(false);
+    await ctx.close();
+  });
+
+  test('the stepper changes the lattice without any instance upload', async ({ page }) => {
+    await page.addInitScript(() => {
+      const w = window as unknown as { __up: number };
+      w.__up = 0;
+      const P = WebGL2RenderingContext.prototype, o = P.bufferSubData;
+      P.bufferSubData = function (this: WebGL2RenderingContext, ...a: unknown[]) { w.__up++; return (o as (...x: unknown[]) => void).apply(this, a); } as typeof o;
+    });
+    await page.goto('./?diag', { waitUntil: 'networkidle' });
+    await page.locator('.seg-dark button', { hasText: 'Design' }).first().click();
+    await settled(page);
+    const before = await page.evaluate(() => (window as unknown as { __up: number }).__up);
+    const framesBefore = await diag<number>(page, 'frames');
+    for (let i = 0; i < 4; i++) await page.locator('.lattice').getByRole('button', { name: 'Next bug' }).click();
+    await settled(page);
+    expect(await diag<number>(page, 'frames')).toBeGreaterThan(framesBefore);
+    expect(await page.evaluate(() => (window as unknown as { __up: number }).__up)).toBe(before);
+  });
+
+  for (const width of [600, 700, 768, 1024, 1440]) {
+    test(`lane labels stay inside the stage at ${width}px`, async ({ browser }) => {
+      const ctx = await browser.newContext({ viewport: { width, height: 900 } });
+      const page = await ctx.newPage();
+      await page.goto('./?diag', { waitUntil: 'networkidle' });
+      await page.locator('.lattice__canvas-wrap').scrollIntoViewIfNeeded();
+      await expect(page.locator('.lattice__loading')).toHaveCount(0, { timeout: 15_000 });
+      await page.waitForTimeout(600);
+      const out = await page.evaluate(() => {
+        const s = document.querySelector('.lattice__canvas-wrap')!.getBoundingClientRect();
+        return [...document.querySelectorAll('.lattice__lane b, .lattice__lane-name, .lattice__group')]
+          .filter((e) => getComputedStyle(e).display !== 'none' && getComputedStyle(e.parentElement!).opacity !== '0' && e.getBoundingClientRect().width > 0)
+          .map((e) => { const r = e.getBoundingClientRect(); return { t: e.textContent, over: Math.max(s.left - r.left, r.right - s.right) }; })
+          .filter((x) => x.over > 1);
+      });
+      expect(out).toEqual([]);
+      await ctx.close();
+    });
+  }
+
+  for (const width of [1024, 1440, 1920]) {
+    test(`the Workbench model stays inside its stage at ${width}px`, async ({ browser }) => {
+      const ctx = await browser.newContext({ viewport: { width, height: width === 1920 ? 1080 : 900 } });
+      const page = await ctx.newPage();
+      await page.goto('./?diag', { waitUntil: 'networkidle' });
+      await page.locator('#method .wb__stage').scrollIntoViewIfNeeded();
+      await expect.poll(async () => (await diag<{ stageWidth: number }>(page, 'workbenchBounds')).stageWidth, { timeout: 15_000 }).toBeGreaterThan(0);
+      await settled(page);
+      const b = await diag<{ left: number; right: number; top: number; bottom: number; stageWidth: number; stageHeight: number }>(page, 'workbenchBounds');
+      expect(b.left).toBeGreaterThanOrEqual(0);
+      expect(b.top).toBeGreaterThanOrEqual(0);
+      expect(b.right).toBeLessThanOrEqual(b.stageWidth);
+      expect(b.bottom).toBeLessThanOrEqual(b.stageHeight);
+      await ctx.close();
+    });
+  }
+
+  test('no horizontal overflow from the shared canvas at any review width', async ({ browser }) => {
+    for (const width of [375, 390, 600, 768, 1024, 1440, 1920]) {
+      const ctx = await browser.newContext({ viewport: { width, height: 900 } });
+      const page = await ctx.newPage();
+      await page.goto('./', { waitUntil: 'networkidle' });
+      await expect(page.locator('canvas')).toHaveCount(1, { timeout: 15_000 });
+      const { sw, w } = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, w: document.documentElement.clientWidth }));
+      expect(sw, `width ${width}`).toBeLessThanOrEqual(w);
+      await ctx.close();
+    }
+  });
+
+  test('reduced motion: the lattice draws a still frame and rendering stops at once', async ({ browser }) => {
+    const ctx = await browser.newContext({ reducedMotion: 'reduce', viewport: { width: 1440, height: 900 } });
+    const page = await ctx.newPage();
+    await page.goto('./?diag', { waitUntil: 'networkidle' });
+    await expect(page.locator('canvas')).toHaveCount(1, { timeout: 15_000 });
+    await expect(page.locator('.lattice__loading')).toHaveCount(0, { timeout: 10_000 });
+    await settled(page);
+    expect(await framesDuring(page, 1000)).toBe(0);
+    await page.mouse.move(600, 500);
+    await page.mouse.move(800, 600);
+    await page.waitForTimeout(300);
+    expect(await framesDuring(page, 500)).toBe(0);
+    await ctx.close();
   });
 
   test('reduced motion: no pinned sequences, still frame', async ({ browser }) => {

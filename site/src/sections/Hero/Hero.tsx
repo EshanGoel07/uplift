@@ -19,7 +19,7 @@ export function Hero({ summary, onOpenTask }: Props) {
   ];
 
   return (
-    <section id="overview" className="pub pub--dark hero" aria-labelledby="hero-title">
+    <section id="overview" className="pub hero" aria-labelledby="hero-title">
       <div className="pub-container">
         <p className="hero__kicker">A measured study of coding-agent setups on <span className="hero__repo">{s?.repo ?? 'tobymao/sqlglot'}</span></p>
         <h1 id="hero-title" className="hero__title">Do coding‑agent setups actually help?</h1>

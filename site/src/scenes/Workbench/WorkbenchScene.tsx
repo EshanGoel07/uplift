@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import {
-  BoxGeometry, Color, EdgesGeometry, Group, InstancedMesh, LineBasicMaterial, LineDashedMaterial, Matrix4, Mesh,
+  BoxGeometry, Color, EdgesGeometry, Group, InstancedMesh, LineBasicMaterial, LineDashedMaterial, MathUtils, Matrix4, Mesh,
   MeshStandardMaterial, Object3D, PerspectiveCamera, TorusGeometry, Vector3, BufferGeometry, Float32BufferAttribute,
 } from 'three';
 import type { ArmId, Summary } from '../../data/types';
 import { CONDITIONS } from '../../data/method';
-import { live, requestFrame, ui } from '../../state/sceneStore';
-import { sideOf, wb, wbLabels, type Focus } from '../../state/workbenchStore';
-import { rectToWorld } from '../layout';
-import { BOUNDS, LANES, MODULE_LABELS, X, Z, laneLabelAt, laneZ, repZ } from './layout';
+import { requestFrame, scenes, ui } from '../../state/sceneStore';
+import { sideOf, wb, wbLabels, workbenchBounds, type Focus } from '../../state/workbenchStore';
+import { BACK, BOUNDS, LANES, MODULE_LABELS, X, Z, fitToStage, laneLabelAt, laneZ, repZ } from './layout';
+import { CONDITION_COLOR, INTERFACE, OUTCOME, SPECTRAL } from '../palette';
 
 /**
  * The experimental workbench: the real architecture of the 924-run study as a model on a board.
@@ -22,13 +22,16 @@ import { BOUNDS, LANES, MODULE_LABELS, X, Z, laneLabelAt, laneZ, repZ } from './
  * Every count comes from summary.json; run outcomes come from the selected task's file.
  */
 
+// Every colour comes from the shared palette (scenes/palette.ts = styles/tokens.css).
+// Structure is warm graphite and ivory; ember marks the selection; the six conditions carry their
+// spectral identity; outcomes use the semantic solved / failed / mixed colours.
 const C = {
-  board: '#161e28', plate: '#2a3544', plate2: '#364457', rail: '#5d6e85', edge: '#56677e',
-  test: '#c9d0d9', fresh: '#7f8b9b', dev: '#5d6a7b', pick: '#8fabff',
-  tips: '#e9e2cf', generic: '#c9a970', hook: '#7d9cf2',
-  glass: '#9fb4d0', glassEdge: '#a3b8d8', snapshot: '#6a7d96', issue: '#eef1f5', patch: '#f0bf72',
-  wall: '#7d9cf2', tests: '#c7a6ff', solved: '#37b597', failed: '#d8665e', unknown: '#3f4a58',
-  half: '#d49a42',
+  board: INTERFACE.elevated, plate: INTERFACE.border, plate2: INTERFACE.text3, rail: INTERFACE.text3, edge: INTERFACE.text3,
+  test: INTERFACE.text, fresh: INTERFACE.text2, dev: INTERFACE.text3, pick: INTERFACE.ember, laneOn: INTERFACE.burnt,
+  tips: INTERFACE.text, generic: INTERFACE.text3, hook: INTERFACE.text2, devLine: SPECTRAL.amber,
+  glass: INTERFACE.text2, glassEdge: INTERFACE.text3, snapshot: INTERFACE.text3, issue: INTERFACE.text, patch: INTERFACE.text,
+  wall: INTERFACE.text2, tests: INTERFACE.text, solved: OUTCOME.solved, failed: OUTCOME.failed, unknown: INTERFACE.border,
+  half: OUTCOME.mixed,
 };
 
 type Zone = 'agent' | 'eval' | 'neutral';
@@ -38,8 +41,10 @@ function makeMats(): Record<Zone, Mats> {
   const mk = (hex: string, o = 1) => new MeshStandardMaterial({ color: hex, roughness: 0.62, metalness: 0.06, transparent: true, opacity: o });
   const zone = (): Mats => ({
     plate: mk(C.plate), plate2: mk(C.plate2), rail: mk(C.rail), tips: mk(C.tips), generic: mk(C.generic), hook: mk(C.hook),
-    glass: mk(C.glass, 0.16), board: mk(C.board), laneOn: mk('#3d5a8f'), snapshot: mk(C.snapshot), issue: mk(C.issue), patch: mk(C.patch), tests: mk(C.tests),
+    glass: mk(C.glass, 0.16), board: mk(C.board), laneOn: mk(C.laneOn), snapshot: mk(C.snapshot), issue: mk(C.issue), patch: mk(C.patch), tests: mk(C.tests),
     pick: mk(C.pick), lamp: mk(C.unknown),
+    // One identity material per condition, so the barrier switch dims them with their side.
+    ...Object.fromEntries(Object.entries(CONDITION_COLOR).map(([id, hex]) => [`cond_${id}`, mk(hex)])),
   });
   return { agent: zone(), eval: zone(), neutral: zone() };
 }
@@ -62,7 +67,6 @@ export function WorkbenchScene({ summary }: Props) {
   const camera = useThree((s) => s.camera) as PerspectiveCamera;
   const outer = useRef<Group>(null);
   const inner = useRef<Group>(null);
-  const stageRect = useRef<DOMRect | null>(null);
 
   const tasks = useMemo(
     () => [...summary.tasks.filter((t) => t.set === 'test'), ...summary.tasks.filter((t) => t.set === 'fresh')],
@@ -83,7 +87,7 @@ export function WorkbenchScene({ summary }: Props) {
   const devLine = useMemo(() => {
     const g = new BufferGeometry();
     g.setAttribute('position', new Float32BufferAttribute([X.dev + 1.2, 0.06, Z.devTray, X.setup, 0.06, Z.devTray, X.setup, 0.06, laneZ(LANES - 1) + 0.45], 3));
-    const m = new LineDashedMaterial({ color: C.hook, dashSize: 0.14, gapSize: 0.1, transparent: true, opacity: 0.9 });
+    const m = new LineDashedMaterial({ color: C.devLine, dashSize: 0.14, gapSize: 0.1, transparent: true, opacity: 0.9 });
     return { g, m };
   }, []);
   useEffect(() => {
@@ -134,13 +138,14 @@ export function WorkbenchScene({ summary }: Props) {
   const wsEdges = useRef<(Object3D | null)[]>([]);
   useEffect(() => () => { lampMats.forEach((m) => m.dispose()); barMats.forEach((m) => m.dispose()); }, [lampMats, barMats]);
 
+  // Any selection or view change needs one frame; the labels may have re-mounted, so refit too.
+  const fit = useRef({ dirty: true, stage: null as HTMLElement | null, l: 0, t: 0, w: 0, h: 0, aspect: 0 });
+  useEffect(() => wb.subscribe(() => { fit.current.dirty = true; requestFrame('state'); }), []);
+  // Mounting can follow the visibility flip, so the first frame has to be asked for here.
   useEffect(() => {
-    const read = () => { stageRect.current = document.querySelector('.wb__stage')?.getBoundingClientRect() ?? null; };
-    read();
-    window.addEventListener('resize', read);
-    window.addEventListener('scroll', read, { passive: true });
-    const unsub = wb.subscribe(() => { read(); requestFrame(); });
-    return () => { window.removeEventListener('resize', read); window.removeEventListener('scroll', read); unsub(); };
+    scenes.setMounted('workbench', true);
+    requestFrame('mount');
+    return () => { scenes.settle('workbench'); scenes.setMounted('workbench', false); };
   }, []);
 
   const corners = useMemo(() => {
@@ -148,50 +153,78 @@ export function WorkbenchScene({ summary }: Props) {
     for (const x of [BOUNDS.x0, BOUNDS.x1]) for (const y of [BOUNDS.y0, BOUNDS.y1]) for (const z of [BOUNDS.z0, BOUNDS.z1]) out.push(new Vector3(x, y, z));
     return out;
   }, []);
+  // Scratch objects, so the frame callback allocates nothing.
   const rot = useMemo(() => new Matrix4(), []);
+  const rotY = useMemo(() => new Matrix4(), []);
+  const rotated = useMemo(() => new Float64Array(corners.length * 3), [corners]);
   const color = useMemo(() => new Color(), []);
+  const lastFocus = useRef<Focus | null>(null);
+  // Materials per barrier side as flat lists, with the opacity each one rests at.
+  const zoneMats = useMemo(() => ({
+    agent: Object.entries(M.agent).map(([name, m]) => ({ m, base: name === 'glass' ? 0.16 : 1 })),
+    eval: Object.entries(M.eval).map(([name, m]) => ({ m, base: name === 'glass' ? 0.16 : 1 })),
+  }), [M]);
+  const appliedDim = useRef({ agent: -1, eval: -1 });
 
   useFrame((_, rawDt) => {
-    const o = outer.current, g = inner.current, r = stageRect.current;
+    const o = outer.current, g = inner.current;
     if (!o || !g) return;
     const s = wb.get();
-    const vis = live.workbenchVis;
-    o.visible = vis > 0.01 && s.view === '3d' && !!r;
-    if (!o.visible || !r) return;
+    const entry = scenes.get('workbench');
+    o.visible = entry.visible && s.view === '3d' && !!entry.stage;
+    if (!o.visible || !entry.stage) { scenes.settle('workbench'); return; }
+    const r = entry.stage.getBoundingClientRect();
     const dt = Math.min(rawDt, 0.05);
     const reduced = ui.get().reducedMotion;
     let busy = false;
 
-    // Fit the board into the DOM stage: a fixed three-quarter view, scaled to the stage rect.
-    const tilt = 0.86, yaw = -0.26;
-    g.rotation.set(0, yaw, 0);
-    o.rotation.set(tilt, 0, 0);
-    rot.makeRotationX(tilt).multiply(new Matrix4().makeRotationY(yaw));
-    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
-    for (const c of corners) { tmpV.copy(c).applyMatrix4(rot); x0 = Math.min(x0, tmpV.x); x1 = Math.max(x1, tmpV.x); y0 = Math.min(y0, tmpV.y); y1 = Math.max(y1, tmpV.y); }
-    const w = rectToWorld(r, camera);
-    const k = Math.min((w.w * 0.9) / (x1 - x0), (w.h * 0.88) / (y1 - y0));
-    // Drawn BACK units behind the z = 0 plane and scaled up to match, so perspective stays gentle
-    // (a measured three-quarter view rather than a wide-angle one).
-    const BACK = 30, m = (camera.position.z + BACK) / camera.position.z;
-    o.scale.setScalar(k * m);
-    o.position.set((w.x - ((x0 + x1) / 2) * k) * m, (w.y - ((y0 + y1) / 2) * k) * m, -BACK);
+    // Fit the board into the DOM stage: a fixed three-quarter view, scaled to the stage rect. Refit
+    // only when the stage moved or resized (it moves with the page; the camera does not).
+    const f0 = fit.current;
+    const refit = f0.dirty || f0.stage !== entry.stage || f0.l !== r.left || f0.t !== r.top || f0.w !== r.width || f0.h !== r.height || f0.aspect !== camera.aspect;
+    if (refit) {
+      const tilt = 0.86, yaw = -0.26;
+      g.rotation.set(0, yaw, 0);
+      o.rotation.set(tilt, 0, 0);
+      rot.makeRotationX(tilt).multiply(rotY.makeRotationY(yaw));
+      corners.forEach((c, i) => { tmpV.copy(c).applyMatrix4(rot); rotated[i * 3] = tmpV.x; rotated[i * 3 + 1] = tmpV.y; rotated[i * 3 + 2] = tmpV.z; });
+      // Drawn BACK units behind the z = 0 plane and scaled up to match, so perspective stays gentle
+      // (a measured three-quarter view rather than a wide-angle one).
+      const fitted = fitToStage(rotated,
+        { tanHalfFov: Math.tan(MathUtils.degToRad(camera.fov / 2)), aspect: camera.aspect, z: camera.position.z },
+        { left: r.left, top: r.top, width: r.width, height: r.height, vw: window.innerWidth, vh: window.innerHeight });
+      o.scale.setScalar(fitted.scale);
+      o.position.set(fitted.x, fitted.y, -BACK);
+      workbenchBounds.left = fitted.left - r.left; workbenchBounds.right = fitted.right - r.left;
+      workbenchBounds.top = fitted.top - r.top; workbenchBounds.bottom = fitted.bottom - r.top;
+      workbenchBounds.stageWidth = r.width; workbenchBounds.stageHeight = r.height;
+      f0.dirty = false; f0.stage = entry.stage; f0.l = r.left; f0.t = r.top; f0.w = r.width; f0.h = r.height; f0.aspect = camera.aspect;
+    }
 
     // Barrier switch: the side that is not being looked at fades back.
     const side = sideOf(s.focus);
-    const want = side === 'agent' ? { agent: 1, eval: 0.3 } : side === 'evaluator' ? { agent: 0.3, eval: 1 } : { agent: 1, eval: 1 };
-    for (const z of ['agent', 'eval'] as const) {
-      const d = want[z] - dim.current[z];
-      if (Math.abs(d) > 0.004) { dim.current[z] += reduced ? d : d * (1 - Math.exp(-dt * 8)); busy = true; } else dim.current[z] = want[z];
-      for (const [name, m] of Object.entries(M[z])) {
-        const base = name === 'glass' ? 0.16 : 1;
-        m.opacity = base * dim.current[z];
-      }
+    const wantAgent = side === 'evaluator' ? 0.3 : 1, wantEval = side === 'agent' ? 0.3 : 1;
+    const easeDim = (cur: number, want: number) => {
+      const d = want - cur;
+      if (Math.abs(d) <= 0.004) return want;
+      busy = true;
+      return reduced ? want : cur + d * (1 - Math.exp(-dt * 8));
+    };
+    dim.current.agent = easeDim(dim.current.agent, wantAgent);
+    dim.current.eval = easeDim(dim.current.eval, wantEval);
+    // Opacities are written only while a side's dim value changes.
+    if (appliedDim.current.agent !== dim.current.agent) {
+      appliedDim.current.agent = dim.current.agent;
+      for (const z of zoneMats.agent) z.m.opacity = z.base * dim.current.agent;
+      tileMat.opacity = dim.current.agent; devMat.opacity = 0.9 * dim.current.agent;
+      edgeMat.agent.opacity = 0.85 * dim.current.agent;
     }
-    lampMats.forEach((m) => { m.opacity = dim.current.eval; });
-    barMats.forEach((m) => { m.opacity = dim.current.eval; });
-    tileMat.opacity = dim.current.agent; devMat.opacity = 0.9 * dim.current.agent;
-    edgeMat.agent.opacity = 0.85 * dim.current.agent;
+    if (appliedDim.current.eval !== dim.current.eval) {
+      appliedDim.current.eval = dim.current.eval;
+      for (const z of zoneMats.eval) z.m.opacity = z.base * dim.current.eval;
+      for (const m of lampMats) m.opacity = dim.current.eval;
+      for (const m of barMats) m.opacity = dim.current.eval;
+    }
 
     // The selected bug: tile colour, lamps and analysis bars from its real outcomes.
     const t = tasks[s.task];
@@ -219,28 +252,34 @@ export function WorkbenchScene({ summary }: Props) {
 
     // Focus highlight: the selected lane or run is outlined in blue.
     const f: Focus = s.focus;
-    const laneSel = f.kind === 'lane' || f.kind === 'run' ? arms.findIndex((a) => a.id === f.arm) : -1;
-    laneMeshes.current.forEach((m, i) => { if (m) (m.material as MeshStandardMaterial) = i === laneSel ? M.agent.laneOn : M.agent.plate; });
-    wsEdges.current.forEach((e, i) => {
-      if (!e) return;
-      const on = f.kind === 'run' ? i === laneSel * 2 + f.rep : f.kind === 'workspace' || f.kind === 'agent' || i === laneSel * 2 || i === laneSel * 2 + 1;
-      (e as unknown as { material: LineBasicMaterial }).material = on ? edgeMat.pick : edgeMat.agent;
-    });
+    if (lastFocus.current !== f) {
+      lastFocus.current = f;
+      const laneSel = f.kind === 'lane' || f.kind === 'run' ? arms.findIndex((a) => a.id === f.arm) : -1;
+      laneMeshes.current.forEach((m, i) => { if (m) (m.material as MeshStandardMaterial) = i === laneSel ? M.agent.laneOn : M.agent.plate; });
+      wsEdges.current.forEach((e, i) => {
+        if (!e) return;
+        const on = f.kind === 'run' ? i === laneSel * 2 + f.rep : f.kind === 'workspace' || f.kind === 'agent' || i === laneSel * 2 || i === laneSel * 2 + 1;
+        (e as unknown as { material: LineBasicMaterial }).material = on ? edgeMat.pick : edgeMat.agent;
+      });
+    }
 
-    // DOM labels follow their anchors (positions relative to the stage element).
-    o.updateMatrixWorld();
-    const place = (key: string, at: [number, number, number]) => {
-      const el = wbLabels[key];
-      if (!el) return;
-      tmpV.set(at[0], at[1], at[2]).applyMatrix4(g.matrixWorld).project(camera);
-      const cx = (tmpV.x * 0.5 + 0.5) * window.innerWidth - r.left;
-      const cy = (-tmpV.y * 0.5 + 0.5) * window.innerHeight - r.top;
-      el.style.transform = `translate(${cx.toFixed(1)}px, ${cy.toFixed(1)}px)`;
-    };
-    MODULE_LABELS.forEach((l) => place(l.key, l.at));
-    for (let i = 0; i < LANES; i++) place(`lane${i}`, laneLabelAt(i));
+    // DOM labels follow their anchors (positions relative to the stage element). They only move when
+    // the model does.
+    if (refit) {
+      o.updateMatrixWorld();
+      const place = (key: string, at: [number, number, number]) => {
+        const el = wbLabels[key];
+        if (!el) return;
+        tmpV.set(at[0], at[1], at[2]).applyMatrix4(g.matrixWorld).project(camera);
+        const cx = (tmpV.x * 0.5 + 0.5) * window.innerWidth - r.left;
+        const cy = (-tmpV.y * 0.5 + 0.5) * window.innerHeight - r.top;
+        el.style.transform = `translate(${cx.toFixed(1)}px, ${cy.toFixed(1)}px)`;
+      };
+      MODULE_LABELS.forEach((l) => place(l.key, l.at));
+      for (let i = 0; i < LANES; i++) place(`lane${i}`, laneLabelAt(i));
+    }
 
-    if (busy) requestFrame();
+    if (busy) scenes.animate('workbench'); else scenes.settle('workbench');
   });
 
   // The shared canvas listens on the whole page, and three.js raycasts hidden objects too. So a
@@ -255,7 +294,7 @@ export function WorkbenchScene({ summary }: Props) {
     if (e.delta > 6 || !onStage(e)) return;
     e.stopPropagation();
     wb.set({ focus });
-    requestFrame();
+    requestFrame('state');
   };
   const hover = (on: boolean) => (e: ThreeEvent<PointerEvent>) => {
     document.body.style.cursor = on && onStage(e) ? 'pointer' : '';
@@ -278,7 +317,7 @@ export function WorkbenchScene({ summary }: Props) {
       <group ref={inner}>
         <ambientLight intensity={0.85} />
         <directionalLight position={[-4, 9, 6]} intensity={1.6} />
-        <directionalLight position={[6, 4, -6]} intensity={0.35} color="#7d9cf2" />
+        <directionalLight position={[6, 4, -6]} intensity={0.35} color={SPECTRAL.amber} />
 
         {/* Board, outlined */}
         <Box p={[-0.6, -0.06, 0.8]} s={[19.9, 0.06, 9.7]} m={M.neutral.board} />
@@ -300,7 +339,7 @@ export function WorkbenchScene({ summary }: Props) {
           <group key={a.id}>
             <mesh ref={(m) => { laneMeshes.current[r] = m; }} geometry={G.box} material={M.agent.plate}
               position={[(X.laneStart + X.laneEnd) / 2, 0.02, laneZ(r)]} scale={[X.laneEnd - X.laneStart, 0.05, 0.84]} {...hit({ kind: 'lane', arm: a.id })} />
-            <Box p={[X.laneStart + 0.16, 0.13, laneZ(r)]} s={[0.2, 0.06, 0.2]} m={M.agent.pick} />
+            <Box p={[X.laneStart + 0.16, 0.13, laneZ(r)]} s={[0.2, 0.06, 0.2]} m={M.agent[`cond_${a.id}`]} />
             <Box p={[X.setup, 0.07, laneZ(r)]} s={[0.78, 0.06, 0.7]} m={M.agent.plate2} />
             {tokens(a.id, X.setup, laneZ(r), 1, M.agent)}
             {Array.from({ length: repeats }, (_, q) => (

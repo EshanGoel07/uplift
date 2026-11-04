@@ -6,7 +6,7 @@
 html { -webkit-text-size-adjust: 100%; scroll-padding-top: calc(var(--nav-h) + 8px); }
 body {
   margin: 0;
-  background: #0c1117; /* the dark stage; light sections paint their own background */
+  background: var(--obsidian);
   color: var(--text);
   font-family: var(--font-sans);
   font-size: var(--fs-body);
@@ -70,10 +70,10 @@ body::before {
   font-size: 0.95rem; font-weight: 500; text-decoration: none; cursor: pointer;
   transition: background .2s, border-color .2s, color .2s, transform .2s var(--ease-out);
 }
-.btn:hover { border-color: #4a4e53; background: var(--elevated); color: var(--text); }
+.btn:hover { border-color: var(--border-strong); background: var(--elevated); color: var(--text); }
 .btn:active { transform: translateY(1px); }
-.btn--ember { background: var(--ember); border-color: var(--ember); color: #170a04; font-weight: 600; }
-.btn--ember:hover { background: var(--apricot); border-color: var(--apricot); color: #170a04; }
+.btn--ember { background: var(--ember); border-color: var(--ember); color: var(--on-ember); font-weight: 600; }
+.btn--ember:hover { background: var(--apricot); border-color: var(--apricot); color: var(--on-ember); }
 .btn--ghost { background: transparent; }
 .btn--ember-ghost { background: transparent; border-color: rgba(255,113,56,.45); color: var(--apricot); }
 .btn--ember-ghost:hover { background: var(--ember-12); color: var(--apricot); border-color: var(--ember); }
@@ -83,7 +83,7 @@ body::before {
   width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border); background: transparent;
   color: var(--text-2); cursor: pointer; font-size: 18px; line-height: 1;
 }
-.icon-btn:hover { color: var(--text); border-color: #4a4e53; }
+.icon-btn:hover { color: var(--text); border-color: var(--border-strong); }
 
 .chip {
   display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 999px;

@@ -1,27 +1,22 @@
-import { Component, lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Summary } from '../../data/types';
 import { GROUP_LABEL, groupCounts, groupOf, shortId } from '../../data/classify';
 import { FEATURED_TASK } from '../../data/reportFigures';
-import { useUi } from '../../state/sceneStore';
+import { scenes, useScenes, useUi } from '../../state/sceneStore';
+import { lattice, latticeHandlers, latticeLabels, latticeScroll, type LatticeMode } from '../../state/latticeStore';
 import { useInView } from '../../hooks/useInView';
 import { ExperimentOverview } from './ExperimentOverview';
-import type { LatticeMode } from '../../scenes/RunLattice/RunLattice';
-
-const RunLattice = lazy(() => import('../../scenes/RunLattice/RunLattice'));
-
-/** If WebGL fails at runtime, show the SVG version of the same figure. */
-class Fallback extends Component<{ fallback: ReactNode; children: ReactNode }, { failed: boolean }> {
-  state = { failed: false };
-  static getDerivedStateFromError() { return { failed: true }; }
-  render() { return this.state.failed ? this.props.fallback : this.props.children; }
-}
+import { condStyle } from '../../utils/condition';
 
 interface Props { summary: Summary; onOpenTask: (id: string) => void }
 
 /**
  * Figure 1 in the hero: all 924 runs as a 3D lattice (six condition lanes through 77 bugs), first as
  * the paired design, then coloured by each run's real result. The readout and the stepper give the
- * same information without a pointer; the SVG figure replaces it when WebGL is unavailable.
+ * same information without a pointer; the SVG figure replaces it when WebGL is unavailable or fails.
+ *
+ * The lattice itself is drawn by the one shared canvas (scenes/ExperienceCanvas.tsx) into the
+ * `.lattice__canvas-wrap` stage: this component requests the scene and owns every DOM control.
  */
 export function HeroStage({ summary, onOpenTask }: Props) {
   const webgl = useUi((s) => s.webgl);
@@ -44,8 +39,22 @@ export function HeroStage({ summary, onOpenTask }: Props) {
   const [ready, setReady] = useState(false);
   const [focus, setFocus] = useState(() => Math.max(0, tasks.findIndex((t) => t.id === FEATURED_TASK)));
   const [hovered, setHovered] = useState<number | null>(null);
-  const labels = useRef<(HTMLElement | null)[]>([]);
-  const scroll = useRef(0);
+  const stage = useRef<HTMLDivElement>(null);
+  const sceneMounted = useScenes(() => scenes.get('lattice').mounted);
+
+  // Hand the current selection to the scene inside the shared canvas.
+  useEffect(() => { lattice.set({ tasks, arms, mode, focus, hovered, reduced }); }, [tasks, arms, mode, focus, hovered, reduced]);
+  useEffect(() => {
+    latticeHandlers.onHover = setHovered;
+    latticeHandlers.onPick = (i) => onOpenTask(tasks[i].id);
+    latticeHandlers.onReady = () => setReady(true);
+  }, [tasks, onOpenTask]);
+
+  // Request the scene for this stage while it exists (the SVG path has no stage).
+  useEffect(() => {
+    if (!webgl || !stage.current) return;
+    return scenes.request('lattice', stage.current, { reducedMotion: 'static', lowTier: true });
+  }, [webgl]);
 
   // Once the lattice has built, the results arrive on their own (once), unless the reader has
   // already chosen a view. Both views stay one click away.
@@ -60,7 +69,7 @@ export function HeroStage({ summary, onOpenTask }: Props) {
     const onScroll = () => {
       const hero = document.getElementById('overview');
       if (!hero) return;
-      scroll.current = Math.min(1, Math.max(0, window.scrollY / Math.max(1, hero.offsetHeight)));
+      latticeScroll.value = Math.min(1, Math.max(0, window.scrollY / Math.max(1, hero.offsetHeight)));
     };
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
@@ -90,24 +99,18 @@ export function HeroStage({ summary, onOpenTask }: Props) {
           </ul>
         </div>
 
-        <div className="lattice__canvas-wrap" aria-hidden="true">
-          <Fallback fallback={svg}>
-            <Suspense fallback={<p className="lattice__loading">Placing {summary.summary.runs} runs…</p>}>
-              <RunLattice tasks={tasks} arms={arms} mode={mode} focus={focus} hovered={hovered}
-                onHover={setHovered} onPick={(i) => onOpenTask(tasks[i].id)} reduced={reduced}
-                labels={labels} scroll={scroll} onReady={() => setReady(true)} />
-            </Suspense>
-          </Fallback>
+        <div className="lattice__canvas-wrap" aria-hidden="true" ref={stage}>
+          {!sceneMounted && <p className="lattice__loading">Placing {summary.summary.runs} runs…</p>}
           <div className="lattice__labels">
             {arms.map((a, r) => (
-              <span key={a.id} className="lattice__lane" ref={(el) => { labels.current[r] = el; }}>
+              <span key={a.id} className="lattice__lane" style={condStyle(a.id)} ref={(el) => { latticeLabels[r] = el; }}>
                 <b>{r + 1}</b><span className="lattice__lane-name">{a.label}</span>
               </span>
             ))}
-            <span className="lattice__group" ref={(el) => { labels.current[arms.length] = el; }}>{nTest} test bugs</span>
-            <span className="lattice__group" ref={(el) => { labels.current[arms.length + 1] = el; }}>{tasks.length - nTest} fresh bugs</span>
+            <span className="lattice__group" ref={(el) => { latticeLabels[arms.length] = el; }}>{nTest} test bugs</span>
+            <span className="lattice__group" ref={(el) => { latticeLabels[arms.length + 1] = el; }}>{tasks.length - nTest} fresh bugs</span>
             {arms.map((a, r) => (
-              <span key={'back-' + a.id} className="lattice__lane lattice__lane--num" ref={(el) => { labels.current[arms.length + 2 + r] = el; }}>
+              <span key={'back-' + a.id} className="lattice__lane lattice__lane--num" style={condStyle(a.id)} ref={(el) => { latticeLabels[arms.length + 2 + r] = el; }}>
                 <b>{r + 1}</b>
               </span>
             ))}

@@ -102,22 +102,24 @@ build without Python.
 
 ```
 src/
-  app/App.tsx              page shell; loads the 3D chunk only near the method/matrix sections; WebGL error boundary
-  state/sceneStore.ts      shared state: scroll progress in mutable refs (read in useFrame),
-                           UI state (paused, interact, stage) via useSyncExternalStore
+  app/App.tsx              page shell; mounts the one canvas when a section requests a scene; WebGL error boundary
+  state/sceneStore.ts      UI state and the scene registry: lifecycle, stage measurement, render wake-ups
+  state/latticeStore.ts    selection shared by the hero's DOM controls and the lattice scene
   data/                    types, loader (+ per-task cache), formatters, classification, report figures
   sections/                Hero, Results, BugMatrix, BugExplorer, Trust, Methodology, BuiltVsUsed,
                            Limitations, FutureWork, Footer
   components/              nav, experiment overview (hero figure), interval chart, diff viewer, run panel
-  scenes/                  RunLattice (hero: all 924 runs, own canvas, loaded after first paint);
-                           ONE shared fixed <Canvas>: Workbench (the experiment, #method) and MatrixSurface,
-                           PipelineEngine, custom GLSL (simplex noise, spectral ramp)
+  scenes/                  ExperienceCanvas: the ONE fixed <Canvas>. WorkbenchScene (#method) draws in its default
+                           scene; RunLattice (hero, all 924 runs) draws through a StageView, a scissored pass with
+                           its own camera. palette.ts holds the 3D colours; shaders/ the GLSL noise and spectral ramp
   utils/                   unified-diff parser, sanitised markdown, linear scale
 ```
 
-- **One WebGL context.** A fixed canvas sits behind the page. Each scene reads its visibility from
-  scroll progress and lays itself out over a DOM "stage" rectangle, so 3D and HTML stay aligned.
-  When no scene is on screen the canvas renders nothing.
+- **One WebGL context.** A fixed canvas sits behind the page. A section requests a scene for a DOM
+  "stage" element; the registry measures how much of it is on screen, and the scene draws into that
+  rectangle, so 3D and HTML stay aligned. Rendering is on demand: a frame happens only because something
+  changed, a scene that animates asks for frames while it animates, and at rest the canvas renders
+  nothing. `?diag` adds read-only engine state on `window.__upliftDiag`.
 - **Scroll storytelling** uses GSAP ScrollTrigger inside `gsap.context` (reverted on unmount):
   - Pinned sequence B: the 3D matrix sheet unfolds into the grid.
   - Pinned sequence C: the pipeline builds stage by stage, desktop only.

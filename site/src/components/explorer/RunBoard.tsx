@@ -1,6 +1,7 @@
 import type { Arm, ArmId, Task } from '../../data/types';
 import { APPROACH_INFO, type Approach } from '../../data/reportFigures';
 import { CONDITIONS } from '../../data/method';
+import { condStyle } from '../../utils/condition';
 
 export interface RunPick { arm: ArmId; run: number }
 
@@ -53,12 +54,12 @@ export function RunBoard({ task, arms, a, b, onSelect, approaches, accordion }: 
           </div>
         );
         return accordion ? (
-          <details key={arm.id} className="rboard__group ex-arm">
+          <details key={arm.id} className="rboard__group ex-arm" style={condStyle(arm.id)}>
             <summary className="rboard__head">{head}</summary>
             {body}
           </details>
         ) : (
-          <div key={arm.id} className="rboard__group ex-arm">
+          <div key={arm.id} className="rboard__group ex-arm" style={condStyle(arm.id)}>
             <p className="rboard__head">{head}</p>
             {body}
           </div>
