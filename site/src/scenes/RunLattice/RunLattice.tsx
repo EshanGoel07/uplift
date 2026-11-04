@@ -24,7 +24,7 @@ import { CUBE, LANE, instanceIndex, latticeLayout, outcomeAt } from './layout';
  * After the build-in no instance data is uploaded at all. Instance colours hold each run's real
  * outcome and never change. Hover, focus and the design/outcomes view are per-bug uniform arrays read
  * by the vertex shader. Writing the instance buffers after they had been drawn from stalled the GPU
- * process for 100-750 ms (see docs/PHASE_02_1_REMEDIATION_REPORT.md). Picking uses the resting matrices.
+ * process for 100-750 ms. Picking uses the resting matrices.
  */
 const COLORS = {
   design: new Color(INTERFACE.text2),   // neutral warm grey: the design view, before outcomes

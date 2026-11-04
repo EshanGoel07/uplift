@@ -55,7 +55,7 @@ export function githubUrl(task: Pick<TaskMeta, 'id' | 'set'>): string | null {
 
 export const shortId = (id: string): string => id.replace(/^tobymao__sqlglot-/, '');
 
-/** The trust card the team retitled (see BRIEF.md §2.1). */
+/** The web-leak trust card's title on this site, and its title in results.json. */
 export const WEB_LEAK_TITLE = 'We caught and measured web leaks';
 export const WEB_LEAK_SOURCE_TITLE = 'Clean workspaces, one gap found and measured';
 export function trustTitle(title: string): string {

@@ -114,7 +114,7 @@ export const NETWORK_BLOCK = {
   probe: 'curl: (6) Could not resolve host: github.com',
 };
 
-/** The featured explorer task (BRIEF.md §5, Section 4). */
+/** The bug the worked example follows. */
 export const FEATURED_TASK = 'tobymao__sqlglot-fresh-63296846';
 
 /**

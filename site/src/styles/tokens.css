@@ -1,7 +1,6 @@
 /* Uplift design tokens: OBSIDIAN x NEBULA x EMBER.
-   One permanent dark theme. See docs/UPLIFT_DESIGN_BIBLE.md and docs/UPLIFT_ORIGINAL_IDENTITY_AUDIT.md.
-   Colour values are the original ones (commit 09549a9). src/scenes/palette.ts is the 3D source of the
-   same values; tests/unit/palette.test.ts keeps the two in step. */
+   One permanent dark theme. src/scenes/palette.ts is the 3D source of the same values;
+   tests/unit/palette.test.ts keeps the two in step. */
 :root {
   color-scheme: dark;
 

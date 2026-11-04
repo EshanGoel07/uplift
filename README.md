@@ -177,7 +177,6 @@ only study material from before the exam was written.
 | [sqlglot](https://github.com/tobymao/sqlglot) | The repository whose bugs we replay | MIT |
 | [SWE-rebench](https://huggingface.co/datasets/nebius/SWE-rebench) | Pre-validated sqlglot tasks | CC-BY-4.0 |
 | pyarrow, matplotlib, pytest | Data loading, charts, tests | Apache-2.0, PSF-based, MIT |
-| Claude Code | Coding assistant while building Uplift (never called at runtime) | — |
 
 Details and citations: [NOTICE.md](NOTICE.md).
 

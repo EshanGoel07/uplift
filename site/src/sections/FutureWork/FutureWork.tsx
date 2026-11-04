@@ -3,7 +3,7 @@ const FUTURE: [string, string][] = [
   ['Repos with little history: borrow tasks', 'Most repositories lack hundreds of past fixes. Borrow tasks from similar projects on the same stack.'],
   ['Repos with little history: synthetic bugs', 'Generate synthetic bugs where history is thin, and grade them with the same fail-closed tests.'],
   ['Live measurement', "Measure setups on the agent's real pull requests as they happen, not only on replayed bugs."],
-  ['Other agents', 'Adapters for Claude Code, Codex and others, so the same exam compares agents as well as setups.'],
+  ['Other agents', 'Adapters for other coding agents, so the same exam compares agents as well as setups.'],
   ['Muse Spark Open', 'Run the same study with Muse Spark Open, to test whether setups help a smaller or self-hosted model more than a strong one.'],
 ];
 

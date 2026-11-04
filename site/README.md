@@ -2,9 +2,6 @@
 
 A static, interactive presentation of the finished Uplift study: 924 Muse Code runs on 77 real
 sqlglot bugs, six agent setups, and the finding that **no setup was shown to differ from no setup**.
-The content rules are in [`BRIEF.md`](BRIEF.md); build history is in [`BUILD_LOG.md`](BUILD_LOG.md);
-measured quality is in [`QUALITY_REPORT.md`](QUALITY_REPORT.md).
-
 The site calls no models and no APIs. It fetches only its own static JSON.
 
 ## Quick start
@@ -47,26 +44,16 @@ live in `src/data/links.ts`.
 
 ```bash
 npm run typecheck   # tsc --noEmit
-npm test            # Vitest: data integrity, formatting, diff parser, markdown sanitiser (28 tests)
+npm test            # Vitest unit tests
 npm run build       # typecheck + vite build -> dist/
 npm run preview     # serves dist/ under /uplift/ on http://localhost:4173/uplift/
-npm run e2e         # Playwright against the preview server (15 tests)
+npm run e2e         # Playwright against the preview server
 ```
 
 Before the first e2e run: `npx playwright install chromium`. On Windows the tests use hardware GL
 (ANGLE/D3D11); elsewhere they use SwiftShader.
 
-QA helpers (not part of the build):
-
-```bash
-node scripts/qa/shot.mjs http://localhost:4173/uplift/ out.png 1440 900 "pin:.hero__pin:0.9" 2000
-node scripts/qa/fps.mjs           # steady-state fps per section
-node scripts/qa/review-shots.mjs http://localhost:5173/ qa-screenshots/review   # hero + findings at 1440/768/390/375
-node scripts/qa/workbench-shots.mjs http://localhost:5173/ qa-screenshots/workbench --video   # workbench states + video
-```
-
-Debug switches: `?nowebgl` turns the 3D layer off, and `?off=bloom,fill,lines,dust,strands,core`
-turns off individual 3D parts for profiling.
+Add `?nowebgl` to a URL to see the site with its 3D layer off.
 
 ## Deploy (Vercel)
 
@@ -75,8 +62,7 @@ from this folder; `.vercel/` is git-ignored).
 
 `vercel.json` sets the Vite preset, `npm ci`, `npm run build` and `dist/`, plus long-lived caching
 for the hashed JS, CSS and fonts. Vercel doesn't run `npm run data` (that needs Python), so regenerate
-`public/data/` locally before deploying. `.vercelignore` keeps `node_modules`, `dist` and QA output
-out of the upload.
+`public/data/` locally before deploying. `.vercelignore` keeps build and test output out of the upload.
 
 ```bash
 npm run data
@@ -120,20 +106,18 @@ src/
   rectangle, so 3D and HTML stay aligned. Rendering is on demand: a frame happens only because something
   changed, a scene that animates asks for frames while it animates, and at rest the canvas renders
   nothing. `?diag` adds read-only engine state on `window.__upliftDiag`.
-- **Scroll storytelling** uses GSAP ScrollTrigger inside `gsap.context` (reverted on unmount):
-  - Pinned sequence B: the 3D matrix sheet unfolds into the grid.
-  - Pinned sequence C: the pipeline builds stage by stage, desktop only.
+- **Scrolling is native.** No section pins the page or takes over the wheel.
 - **Start-up.** Shaders are compiled with `compileAsync` (KHR_parallel_shader_compile) before the
-  first frame. The matrix and pipeline scenes mount only as their sections approach.
+  first frame. three.js loads only once a section requests a scene, and the Workbench loads as its
+  section approaches.
 - **Untrusted content.** Diffs render as React text nodes. Issue markdown goes through marked and
   then DOMPurify: no images, scripts, iframes or inline handlers, and links are http(s) only with
   `rel="noopener noreferrer"`. The build adds a strict Content-Security-Policy.
 - **Accessibility.** The 3D layer is decorative (`aria-hidden`), and every fact it shows also exists
   in the DOM:
   - The matrix is a real ARIA grid with arrow-key navigation.
-  - Reduced motion: no pins, and the scene starts paused (Resume is a real opt-in).
-  - Without WebGL: the hero and findings are SVG and HTML, so nothing is lost; only the two
-    remaining 3D scenes are skipped.
+  - Reduced motion: the scenes draw a still frame.
+  - Without WebGL, and on phones: the hero and the method use SVG and HTML, so nothing is lost.
 
 ## Credits
 

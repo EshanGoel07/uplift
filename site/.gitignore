@@ -6,3 +6,4 @@ qa-screenshots/
 *.tsbuildinfo
 
 .vercel
+*.mp4
