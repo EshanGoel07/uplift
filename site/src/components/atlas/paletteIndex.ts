@@ -17,8 +17,9 @@ export interface PaletteItem { key: string; type: string; label: string; sub?: s
 
 /** The sections and actions that exist on the page. Everything else comes from the study's records. */
 const SECTIONS: [string, string][] = [
-  ['overview', 'Overview'], ['results', 'Findings'], ['conditions', 'Conditions'], ['method', 'Experiment Bench'],
-  ['explorer', 'WINDOW Investigation'], ['matrix', 'Bug Atlas'], ['architecture', 'Architecture'], ['trust', 'Research Integrity'], ['limitations', 'Limitations'],
+  ['overview', 'Overview'], ['how', 'How it works'], ['story', 'From one bug to 924'], ['conditions', 'Conditions'], ['method', 'Experiment Bench'], ['findings', 'Findings'],
+  ['explore', 'Explore bugs'], ['explorer', 'WINDOW Investigation'], ['matrix', 'Bug Atlas'],
+  ['details', 'Research details'], ['architecture', 'Architecture'], ['trust', 'Research Integrity'], ['limitations', 'Limitations'],
 ];
 
 export function buildIndex(s: Summary, modules: string[] = []): PaletteItem[] {

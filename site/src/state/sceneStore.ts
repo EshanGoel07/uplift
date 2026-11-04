@@ -11,7 +11,7 @@
 import { useSyncExternalStore } from 'react';
 
 /** Stable scene identifiers. Future scenes (e.g. 'nebula') join this union. */
-export type SceneId = 'nebula' | 'lattice' | 'workbench';
+export type SceneId = 'nebula' | 'lattice' | 'workbench' | 'cohort';
 /** @deprecated alias kept for existing imports. */
 export type SceneName = SceneId;
 

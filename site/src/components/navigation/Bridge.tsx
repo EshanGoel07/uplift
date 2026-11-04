@@ -4,7 +4,7 @@ import { jumpTo } from './Nav';
 export function Bridge({ to, children }: { to: string; children: string }) {
   return (
     <p className="bridge">
-      <a href={`#${to}`} onClick={(e) => { e.preventDefault(); jumpTo(to); }}>{children}</a>
+      <a href={`#${to}`} onClick={(e) => { e.preventDefault(); jumpTo(to, { step: true }); }}>{children}</a>
     </p>
   );
 }

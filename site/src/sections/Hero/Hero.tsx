@@ -1,5 +1,4 @@
 import type { Summary } from '../../data/types';
-import { int, usd } from '../../data/format';
 import { DETECTABLE_MAX, DETECTABLE_MIN } from '../../data/reportFigures';
 import { jumpTo } from '../../components/navigation/Nav';
 import { atlas } from '../../state/atlasStore';
@@ -9,16 +8,7 @@ interface Props { summary: Summary | null }
 
 /** Opening of the publication: the question, the answer, and all 924 runs as a 3D lattice. */
 export function Hero({ summary }: Props) {
-  const s = summary?.summary;
-  const runs = s ? int(s.runs) : '924';
-  const tasks = s ? String(s.tasks) : '77';
-  const stats = [
-    { value: tasks, label: 'real sqlglot bugs' },
-    { value: summary ? String(summary.arms.length) : '6', label: 'conditions' },
-    { value: '2', label: 'repeats' },
-    { value: runs, label: 'runs' },
-    { value: s ? usd(s.total_cost_usd, 2) : '$21.31', label: 'main experiment cost' },
-  ];
+  const tasks = summary ? String(summary.summary.tasks) : '77';
 
   return (
     <section id="overview" className="pub hero" aria-labelledby="hero-title">
@@ -39,18 +29,9 @@ export function Hero({ summary }: Props) {
               </p>
             </div>
             <div className="hero__actions">
-              <a className="pbtn pbtn--primary" href="#method" onClick={(e) => { e.preventDefault(); jumpTo('method'); }}>Explore the experiment</a>
-              <a className="pbtn" href="#explorer" onClick={(e) => { e.preventDefault(); jumpTo('explorer'); }}>Investigate the WINDOW bug</a>
+              <a className="pbtn pbtn--primary" href="#how" onClick={(e) => { e.preventDefault(); jumpTo('how', { step: true }); }}>See how the experiment worked</a>
               <button type="button" className="pbtn hero__tour" onClick={() => atlas.set({ tour: 0 }, 'none')}>Guided tour</button>
             </div>
-            <dl className="hero__stats" aria-label="The study at a glance">
-              {stats.map((x) => (
-                <div className="stat" key={x.label}>
-                  <dt className="stat__label">{x.label}</dt>
-                  <dd className="stat__num">{x.value}</dd>
-                </div>
-              ))}
-            </dl>
           </div>
 
           <div className="hero__figure">

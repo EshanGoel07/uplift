@@ -23,11 +23,10 @@ export function Results({ summary }: { summary: Summary | null }) {
       <div className="pub-container">
         <header className="pub-head">
           <p className="pub-eyebrow">Findings</p>
-          <h2 id="results-title" className="pub-title">The setups did not produce a detectable improvement.</h2>
+          <h2 id="results-title" className="pub-title">The setups did not produce a detectable difference.</h2>
           <p className="pub-lead">
-            Each setup is compared with No setup on the same bugs. In the chart below, the dot is the difference in solve
-            rate and the line is its 95% paired interval. An interval that crosses zero means the study can't tell that
-            setup apart from having none, and every interval does.
+            Across the experimental conditions, no setup was shown to differ from the no-setup baseline. This does not
+            establish that the effects are zero.
           </p>
         </header>
 
@@ -159,7 +158,7 @@ export function Results({ summary }: { summary: Summary | null }) {
             </dl>
           </>
         )}
-        <Bridge to="method">How was this measured? See the experiment →</Bridge>
+        <Bridge to="explorer">See it on one real bug, run by run →</Bridge>
       </div>
     </section>
   );

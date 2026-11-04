@@ -115,7 +115,7 @@ void main() {
 }`;
 
 /** One fine ribbon per condition along its row, in one geometry and one draw call. */
-function filamentGeometry(L: LatticeLayout, colors: Color[]): BufferGeometry {
+export function filamentGeometry(L: LatticeLayout, colors: Color[]): BufferGeometry {
   const SEGMENTS = 96, THICK = 0.016, LEAD = 2;
   const n = (SEGMENTS + 1) * 2 * L.lanes;
   const position = new Float32Array(n * 3), color = new Float32Array(n * 3), along = new Float32Array(n), lane = new Float32Array(n);

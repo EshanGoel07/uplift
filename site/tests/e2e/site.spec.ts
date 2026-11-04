@@ -46,16 +46,14 @@ test('hero states the null result and the four study numbers from the data', asy
   await expect(page.locator('.overview__svg .ov-runs')).toHaveCount(6);
   await expect(page.locator('.overview__svg .ov-task')).toHaveCount(77);
   await expect(page.locator('.overview__svg')).toContainText('924 runs');
-  const stats = page.locator('.hero__stats .stat__num');
-  await expect(stats).toHaveText(['77', '6', '2', '924', '$21.31']);
   await expect(page.locator('.hero__models')).toContainText('Muse Code');
   await expect(page.locator('.hero__models')).toContainText('Muse Spark');
 });
 
 test('navigation jumps to sections and marks the current one', async ({ page }) => {
   await page.goto(NOGL, { waitUntil: 'networkidle' });
-  await expect(page.locator('.nav__links a')).toHaveText(['Overview', 'Findings', 'Experiment', 'Investigation', 'Bug Atlas', 'Architecture', 'Integrity']);
-  for (const [label, id] of [['Integrity', 'trust'], ['Findings', 'results'], ['Experiment', 'method'], ['Investigation', 'explorer']] as const) {
+  await expect(page.locator('.nav__links a')).toHaveText(['Overview', 'How it works', 'Findings', 'Explore bugs', 'Research details']);
+  for (const [label, id] of [['Research details', 'details'], ['Findings', 'findings'], ['How it works', 'how'], ['Explore bugs', 'explore']] as const) {
     await page.locator('.nav__links a', { hasText: label }).click();
     await expect.poll(() => page.locator(`#${id}`).evaluate((el) => Math.abs(el.getBoundingClientRect().top)), { timeout: 6000 }).toBeLessThan(120);
     await expect(page.locator('.nav__links a[aria-current]')).toHaveText(label);
@@ -471,6 +469,62 @@ test('without WebGL the hero and findings are complete', async ({ page }) => {
   await page.locator('#results').scrollIntoViewIfNeeded();
   await expect(page.locator('.ic-svg')).toBeVisible();
   await expect(page.locator('.arm-table')).toBeVisible();
+});
+
+test('moving between destinations is browser history, and old section links still land', async ({ page }) => {
+  await page.goto(NOGL, { waitUntil: 'networkidle' });
+  await page.locator('.nav__links a', { hasText: 'Findings' }).click();
+  await expect(page).toHaveURL(/#findings$/);
+  await expect.poll(() => page.locator('#findings').evaluate((el) => Math.abs(el.getBoundingClientRect().top)), { timeout: 6000 }).toBeLessThan(120);
+  await page.locator('.nav__links a', { hasText: 'Research details' }).click();
+  await expect(page).toHaveURL(/#details$/);
+  await page.goBack();
+  await expect(page).toHaveURL(/#findings$/);
+  await expect.poll(() => page.locator('#findings').evaluate((el) => Math.abs(el.getBoundingClientRect().top)), { timeout: 6000 }).toBeLessThan(160);
+  await page.goBack();
+  await expect(page).not.toHaveURL(/#/);
+
+  await page.goto(`${NOGL}#trust`, { waitUntil: 'networkidle' });
+  await expect.poll(() => page.locator('#trust').evaluate((el) => Math.abs(el.getBoundingClientRect().top)), { timeout: 6000 }).toBeLessThan(120);
+});
+
+test('the one-bug story reads in full without WebGL, as text and figures', async ({ page }) => {
+  await page.goto(NOGL, { waitUntil: 'networkidle' });
+  await expect(page.locator('.story__step')).toHaveCount(10);
+  await expect(page.locator('#story')).toContainText('Six arms, not six stages.');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.locator('.story__stage')).toHaveCount(0);
+  await expect(page.locator('.story__step .story__figure')).toHaveCount(10);
+});
+
+test('the story follows native scrolling forward, backward and through a skipped jump', async ({ page }) => {
+  await page.goto(NOGL, { waitUntil: 'networkidle' });
+  const active = () => page.locator('.story__step.is-active').getAttribute('data-step');
+  const before = await page.evaluate(() => { const c: string[] = []; for (const t of ['wheel']) window.addEventListener(t, (e) => c.push(String(e.defaultPrevented))); return c.length; });
+  const goTo = (i: number) => page.locator(`.story__step[data-step="${i}"]`).evaluate((el) => el.scrollIntoView({ behavior: 'instant', block: 'center' }));
+  await goTo(3);
+  await expect.poll(active).toBe('3');
+  await goTo(9);
+  await expect.poll(active).toBe('9');
+  await expect(page.locator('.story__formula')).toContainText('= 924 runs');
+  await goTo(1);
+  await expect.poll(active).toBe('1');
+  await expect(page.locator('.story__formula')).toHaveCount(0);
+  // A step can be chosen directly, and the page itself stays free to scroll.
+  await page.getByRole('button', { name: /^Step 9:/ }).click();
+  await expect.poll(active).toBe('8');
+  await expect(page.locator('.story__formula')).toContainText('= 12 attempts');
+  const y = await page.evaluate(() => window.scrollY);
+  await page.mouse.wheel(0, 300);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(y);
+  expect(before).toBe(0);
+});
+
+test('resizing inside the story keeps its place', async ({ page }) => {
+  await page.goto(NOGL, { waitUntil: 'networkidle' });
+  await page.locator('.story__step[data-step="4"]').evaluate((el) => el.scrollIntoView({ behavior: 'instant', block: 'center' }));
+  await page.setViewportSize({ width: 1100, height: 700 });
+  await expect.poll(() => page.locator('.story__step.is-active').getAttribute('data-step')).toBe('4');
 });
 
 test('small-screen menu works with pointer and keyboard', async ({ page }) => {
@@ -959,7 +1013,7 @@ test.describe('WebGL', () => {
       const ctx = await browser.newContext({ viewport: { width, height: 900 } });
       const page = await ctx.newPage();
       await page.goto('./', { waitUntil: 'networkidle' });
-      await expect(page.locator('.hero__stats')).toBeVisible();
+      await expect(page.locator('.hero__finding')).toBeVisible();
       const { sw, w } = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, w: document.documentElement.clientWidth }));
       expect(sw, `width ${width}`).toBeLessThanOrEqual(w);
       await ctx.close();

@@ -70,7 +70,7 @@ export function BugExplorer({ summary, taskId, onSelectTask }: Props) {
               : <TaskView key={task.id} task={task} summary={summary} groupLabel={meta ? GROUP_LABEL[groupOf(meta.solved)] : ''} accordion={!wide} />}
           </div>
         </div>
-        <Bridge to="trust">Could any of this be an artifact? See the integrity checks →</Bridge>
+        <Bridge to="details">How was this built, and how reliable is it? →</Bridge>
       </div>
     </section>
   );

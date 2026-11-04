@@ -157,7 +157,7 @@ export function WorkedExample({ summary }: { summary: Summary | null }) {
             <p className="worked__card-k">Featured task</p>
             <p className="worked__id">{FEATURED_TASK}</p>
             <p className="worked__title">{task?.title ?? 'Sqlite ParseError: Invalid expression / Unexpected token. for WINDOW'}</p>
-            <p className="worked__meta">Fresh bug, fixed upstream in 2026 · 6 conditions × 2 repeats = 12 runs</p>
+            <p className="worked__meta">Fresh bug, fixed upstream in 2026 · twelve runs</p>
             {task && <Issue text={task.issue} />}
           </aside>
         </div>
@@ -260,7 +260,7 @@ export function WorkedExample({ summary }: { summary: Summary | null }) {
             </div>
 
             <p className="worked__point" role="note">Different approaches produced different outcomes. This one task cannot establish a causal benefit of any setup.</p>
-            <Bridge to="matrix">Now explore all 77 bugs and their 924 runs →</Bridge>
+            <Bridge to="matrix">Now inspect every other bug →</Bridge>
           </>
         )}
       </div>

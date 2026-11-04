@@ -6,9 +6,11 @@ import { CommandPalette } from '../components/atlas/CommandPalette';
 import { ComparisonTray, InspectorPanel } from '../components/atlas/Inspector';
 import { SectionProgress } from '../components/atlas/SectionProgress';
 import { nebulaDom } from '../state/nebulaStore';
-import { BackToTop, Nav, jumpTo } from '../components/navigation/Nav';
+import { BackToTop, Nav, jumpTo, jumpToHash } from '../components/navigation/Nav';
+import { Chapter } from '../components/navigation/Chapter';
 import { scenes, ui, useScenes, useUi } from '../state/sceneStore';
 import { Hero } from '../sections/Hero/Hero';
+import { OneBugStory } from '../sections/Story/OneBugStory';
 import { Results } from '../sections/Results/Results';
 import { BugMatrix } from '../sections/BugMatrix/BugMatrix';
 import { BugExplorer } from '../sections/BugExplorer/BugExplorer';
@@ -51,6 +53,9 @@ export function App() {
     loadSummary().then(setSummary).catch((e: Error) => setError(e.message));
   }, []);
 
+  // A link to a section can only land once the sections above it have their real height.
+  useEffect(() => { if (summary) jumpToHash(); }, [summary]);
+
   const openTask = useCallback((id: string) => {
     atlas.set({ task: id }, 'push');
     requestAnimationFrame(() => jumpTo('explorer-all'));
@@ -70,17 +75,26 @@ export function App() {
       <main id="main">
         <Hero summary={summary} />
         {error && <p className="pub-container load-error" role="alert">Could not load the study data ({error}). The raw file is at <a href="./data/results.json">data/results.json</a>.</p>}
-        <Results summary={summary} />
-        <Conditions summary={summary} />
-        <Methodology summary={summary} onOpenTask={openTask} />
-        <WorkedExample summary={summary} />
-        <BugMatrix summary={summary} onOpenTask={openTask} selectedTask={taskId} />
-        <BugExplorer summary={summary} taskId={taskId} onSelectTask={selectTask} />
-        <Suspense fallback={<div className="pub-skeleton pub-skeleton--matrix" />}><Architecture summary={summary} /></Suspense>
-        <Trust summary={summary} />
-        <BuiltVsUsed />
-        <Limitations />
-        <FutureWork />
+        <Chapter id="how" label="How it works">
+          <OneBugStory summary={summary} />
+          <Conditions summary={summary} />
+          <Methodology summary={summary} onOpenTask={openTask} />
+        </Chapter>
+        <Chapter id="findings" label="Findings">
+          <Results summary={summary} />
+        </Chapter>
+        <Chapter id="explore" label="Explore bugs">
+          <WorkedExample summary={summary} />
+          <BugMatrix summary={summary} onOpenTask={openTask} selectedTask={taskId} />
+          <BugExplorer summary={summary} taskId={taskId} onSelectTask={selectTask} />
+        </Chapter>
+        <Chapter id="details" label="Research details">
+          <Suspense fallback={<div className="pub-skeleton pub-skeleton--matrix" />}><Architecture summary={summary} /></Suspense>
+          <Trust summary={summary} />
+          <BuiltVsUsed />
+          <Limitations />
+          <FutureWork />
+        </Chapter>
       </main>
       <Footer />
       <BackToTop />

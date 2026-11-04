@@ -98,10 +98,10 @@ export function Methodology({ summary, onOpenTask }: Props) {
       <div className="pub-container">
         <header className="pub-head">
           <p className="pub-eyebrow">Experiment</p>
-          <h2 id="method-title" className="pub-title">How the 924 runs were built, run and graded.</h2>
+          <h2 id="method-title" className="pub-title">How each run was built, run and graded.</h2>
           <p className="pub-lead">
-            Every bug went through six conditions, twice each, in isolated workspaces. The agent saw the issue and its
-            setup; only its patch crossed to the evaluator, where the repository's real tests decided the result.
+            Every run started in an isolated workspace. The agent saw the issue and its setup. The hidden tests arrived only
+            after it had finished, and the repository's real tests decided the result.
           </p>
         </header>
 
@@ -241,7 +241,7 @@ export function Methodology({ summary, onOpenTask }: Props) {
             ))}
           </ol>
         </div>
-        <Bridge to="explorer">See it on one real bug, run by run →</Bridge>
+        <Bridge to="findings">See what the experiment found →</Bridge>
       </div>
     </section>
   );

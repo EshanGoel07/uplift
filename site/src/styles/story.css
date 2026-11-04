@@ -1,0 +1,58 @@
+/* ==========================================================================
+   Vertical stories: a stage held by CSS sticky beside steps in normal flow.
+   Nothing here pins the page or changes how it scrolls.
+   ========================================================================== */
+
+.onebug { padding: 96px 0 64px; border-top: 1px solid var(--border-soft); }
+.onebug__skip { margin: 16px 0 0; font-size: 0.95rem; }
+.onebug__skip a { color: var(--text-2); }
+.onebug__skip a:hover { color: var(--text); }
+
+.story { margin-top: 48px; }
+.story--sticky { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 64px; align-items: start; }
+
+.story__stage {
+  position: sticky; top: calc(var(--nav-h) + 24px); display: grid; align-content: start; gap: 12px;
+  height: calc(100vh - var(--nav-h) - 48px); min-height: 420px; max-height: 760px;
+}
+.story__canvas { position: relative; min-height: 0; flex: 1; height: 100%; grid-row: 1; }
+.story__stage { grid-template-rows: minmax(0, 1fr) auto auto; }
+.story__canvas .story__figure { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+.story__rail {
+  position: absolute; top: 0; right: 0; display: grid; gap: 2px; list-style: none; margin: 0; padding: 0; z-index: 1;
+}
+.story__rail button {
+  display: block; width: 24px; height: 18px; padding: 0; border: 0; background: none; cursor: pointer; position: relative;
+}
+.story__rail button::after {
+  content: ''; position: absolute; top: 8px; right: 0; width: 12px; height: 2px; border-radius: 1px; background: var(--border-strong);
+  transition: width .2s, background .2s;
+}
+.story__rail button:hover::after { background: var(--text-2); }
+.story__rail button[aria-current]::after { width: 20px; background: var(--ember); }
+.story__rail button:focus-visible { outline: 2px solid var(--ember); outline-offset: 1px; border-radius: 2px; }
+
+.story__legend { display: flex; flex-wrap: wrap; gap: 4px 16px; min-height: 22px; list-style: none; margin: 0; padding: 0; font-size: 0.8rem; color: var(--text-2); }
+.story__legend li { display: inline-flex; align-items: center; gap: 6px; }
+.story__legend i { width: 12px; height: 2px; border-radius: 1px; background: var(--cond); }
+.story__formula { margin: 0; font-family: var(--font-mono, monospace); font-size: 0.9rem; font-variant-numeric: tabular-nums; color: var(--text); }
+
+.story__steps { list-style: none; margin: 0; padding: 0; }
+.story__step { padding: 24px 0; }
+.story--sticky .story__step { min-height: 62vh; display: flex; flex-direction: column; justify-content: center; opacity: 0.38; transition: opacity .3s; }
+.story--sticky .story__step.is-active { opacity: 1; }
+.story--sticky .story__step:first-child { min-height: 40vh; justify-content: flex-start; }
+.story__title { margin: 0; font-size: var(--fs-h3, 1.4rem); font-weight: 600; letter-spacing: -0.02em; line-height: 1.2; color: var(--text); }
+.story__body { margin-top: 12px; max-width: 46ch; color: var(--text-2); line-height: 1.6; }
+.story__body p { margin: 0; }
+.story__body code { color: var(--text); }
+.story__cond { display: inline-block; width: 14px; height: 2px; margin: 0 8px 4px 0; border-radius: 1px; background: var(--cond); }
+.story__end { padding: 24px 0 64px; }
+
+.story__figure { display: block; width: 100%; height: auto; margin-bottom: 16px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .story--sticky .story__step { transition: none; }
+  .story__rail button::after { transition: none; }
+}

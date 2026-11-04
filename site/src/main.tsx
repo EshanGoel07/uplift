@@ -9,6 +9,7 @@ import './styles/workbench.css';
 import './styles/explorer.css';
 import './styles/sections.css';
 import './styles/atlas.css';
+import './styles/story.css';
 import { App } from './app/App';
 
 createRoot(document.getElementById('root')!).render(

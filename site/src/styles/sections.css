@@ -3,6 +3,10 @@
    Same tokens, outcome colours, type scale and captions as the rest of the page.
    ========================================================================== */
 
+/* The five destinations. Sections off screen skip layout until they come near: the page's first layout
+   otherwise costs about 600 ms on the main thread. */
+.chapter > .pub { content-visibility: auto; contain-intrinsic-size: auto 1400px; }
+
 /* Explore runs: the matrix ---------------------------------------------- */
 .runs { padding: 104px 0 64px; border-top: 1px solid var(--border-soft); }
 .runs + .explorer { padding-top: 24px; border-top: 0; }

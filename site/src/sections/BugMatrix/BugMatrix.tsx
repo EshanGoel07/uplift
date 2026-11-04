@@ -35,8 +35,7 @@ export function BugMatrix({ summary, onOpenTask, selectedTask }: Props) {
           <p className="pub-eyebrow">Bug Atlas</p>
           <h2 id="matrix-title" className="pub-title">All 77 bugs under all six conditions.</h2>
           <p className="pub-lead">
-            Each cell is one bug under one condition: how many of its two runs the repository's real tests resolved. That is
-            {' '}{summary ? summary.tasks.length * summary.arms.length : 462} cells and {summary?.summary.runs ?? 924} runs. Most bugs
+            Each cell is one bug under one condition: how many of its two runs the repository's real tests resolved. Most bugs
             behave the same under every condition, which is why the study could only detect large effects.
           </p>
         </header>

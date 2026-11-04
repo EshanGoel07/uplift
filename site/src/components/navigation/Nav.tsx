@@ -3,27 +3,33 @@ import { REPO_URL } from '../../data/links';
 import { atlas, useAtlas } from '../../state/atlasStore';
 import { Icon } from '../atlas/Icon';
 
-/** Section order on the page. Labels are the reader's words; ids stay stable for links and tests. */
+/**
+ * The five destinations, in page order. Each answers one question. Everything else on the page sits
+ * inside one of them and keeps its own id for deep links.
+ */
 export const NAV_ITEMS = [
   { id: 'overview', label: 'Overview' },
-  { id: 'results', label: 'Findings' },
-  { id: 'method', label: 'Experiment' },
-  { id: 'explorer', label: 'Investigation' },
-  { id: 'matrix', label: 'Bug Atlas' },
-  { id: 'architecture', label: 'Architecture' },
-  { id: 'trust', label: 'Integrity' },
+  { id: 'how', label: 'How it works' },
+  { id: 'findings', label: 'Findings' },
+  { id: 'explore', label: 'Explore bugs' },
+  { id: 'details', label: 'Research details' },
 ] as const;
 
 const headerHeight = (): number => (document.querySelector('.nav') as HTMLElement | null)?.offsetHeight ?? 64;
 
 let jumpSeq = 0;
 
-export function jumpTo(id: string): void {
+/**
+ * Scrolls to a section. `step` makes the move a Back step, so moving between destinations is browser
+ * history; the entry is written first, so Back returns to where the reader was.
+ */
+export function jumpTo(id: string, { step = false, instant = false } = {}): void {
   const el = document.getElementById(id);
   if (!el) return;
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
-  history.replaceState(null, '', `${location.pathname}${location.search}#${id}`);
+  if (step) history.pushState(null, '', `${location.pathname}${location.search}#${id}`);
+  else history.replaceState(null, '', `${location.pathname}${location.search}#${id}`);
+  el.scrollIntoView({ behavior: reduce || instant ? 'auto' : 'smooth', block: 'start' });
   // Content above can grow while we scroll (a bug loading in the explorer): once the scroll has stopped,
   // re-aim so the heading lands just below the sticky header. A newer jump or the reader's own input wins.
   const mine = ++jumpSeq;
@@ -47,6 +53,18 @@ export function jumpTo(id: string): void {
   // Move focus for keyboard and screen-reader users without scrolling again.
   const heading = el.querySelector<HTMLElement>('h1, h2');
   if (heading) { heading.setAttribute('tabindex', '-1'); heading.focus({ preventScroll: true }); }
+}
+
+/** Lands on the URL's hash after the page has data. Lazy sections may mount a moment later, so it waits for them. */
+export function jumpToHash(): void {
+  const id = decodeURIComponent(location.hash.slice(1));
+  if (!id) return;
+  let frames = 0;
+  const attempt = () => {
+    if (document.getElementById(id)) jumpTo(id, { instant: true });
+    else if (frames++ < 120) requestAnimationFrame(attempt);
+  };
+  requestAnimationFrame(attempt);
 }
 
 /** Explore is spacious and visual; Investigate is dense, with source paths and full metadata. Same data, same dark theme. */
@@ -109,7 +127,7 @@ export function Nav() {
     return () => { document.removeEventListener('keydown', onKey); wide.removeEventListener('change', onWide); };
   }, [open]);
 
-  const go = (id: string) => { setOpen(false); jumpTo(id); };
+  const go = (id: string) => { setOpen(false); jumpTo(id, { step: true }); };
   const links = (cls: string) => (
     <ul className={cls}>
       {NAV_ITEMS.map((n) => (

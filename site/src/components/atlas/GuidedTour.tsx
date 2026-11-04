@@ -10,7 +10,7 @@ export const TOUR = [
   ['conditions', 'Six conditions', 'The same bug ran under six setups, from nothing at all to generated guidance and hooks.'],
   ['conditions', 'Two repeats', 'Every condition ran twice on every bug, so 77 × 6 × 2 = 924 runs.'],
   ['method', 'An isolated workspace', 'Each run started from a snapshot with no git history. A condition only changed what was installed around it.'],
-  ['method', 'The information barrier', 'The agent saw the issue and the code. Only its patch crossed to the evaluator.'],
+  ['method', 'The information barrier', 'The agent saw the issue and the code. The hidden tests arrived only after it had finished.'],
   ['method', 'Grading', 'Hidden tests from the real fix decided the result, and the grader fails closed.'],
   ['results', 'The result', 'All five intervals cross zero: none of the five setups was shown to differ from running with none.'],
   ['limitations', 'The limits', `Effects smaller than about ${DETECTABLE_MIN}–${DETECTABLE_MAX} points remain unresolved, and agents could reach the web in these runs.`],

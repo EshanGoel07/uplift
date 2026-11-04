@@ -92,7 +92,16 @@ Headed runs were taken on an interim Gate 1 build: 3 of 3 trials stalled at 0 ms
 
 **A regression, found and fixed:** the Lattice's noise-based haze raised shader linking from about 95 to 162 ms, with a final long task of up to 277 ms. Replacing the noise with layered sines removed it (final task about 129 ms, against about 150 ms before M15).
 
-**Next:** deal with the page's first layout in Gate 2, when the sections are restructured (`content-visibility` on off-screen chapters is the candidate), attribute the remaining tasks, and rerun the same probes.
+**Gate 2 result:** `content-visibility: auto` on off-screen sections cut the first-layout task from about 600 ms to about 180 ms, and startup long tasks now end near 1.2 s rather than 2 s.
+
+| Contact | Trials with a frame over 50 ms | Worst frame |
+|---:|---:|---:|
+| 0 ms | 4 of 4 | 166.7 ms |
+| 250 ms | 4 of 4 | 150.0 ms |
+| 500 ms | 0 of 4 | 16.8 ms |
+| 1000 ms | 0 of 4 | 16.8 ms |
+
+**Still open.** Frames over 50 ms remain inside the first 500 ms after the stage appears. The tasks of about 100 ms near 1.0 to 1.2 s after navigation are not attributed yet. Retest in M15.9.
 
 ## Lattice hover
 `tests/e2e/site.spec.ts` sweeps all 77 columns, 25 points each (1,925 points), and requires the exact bug at every point. It first found 715 misses. Causes fixed: `out` and `move` fire together when crossing tiles, and the old handler compared against a stale store value, clearing hover inside one bug (carried over from the old Lattice); a 0.022 gap between neighbouring rows' pointer targets; and tiles overlapping too much where the camera angle squeezed columns at the far right. Result: 0 misses.
