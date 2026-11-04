@@ -333,8 +333,9 @@ export function WorkbenchScene({ summary }: Props) {
         let cy = (-tmpV.y * 0.5 + 0.5) * window.innerHeight - r.top;
         const write = () => { el.style.transform = `translate(${cx.toFixed(1)}px, ${cy.toFixed(1)}px)`; };
         write();
+        const shown = el.firstElementChild ?? el;   // The anchor has no size; its button is what is seen.
         for (let k = 0; k < 6; k++) {
-          const b = el.getBoundingClientRect();
+          const b = shown.getBoundingClientRect();
           if (!b.width) return;
           const hit = placed.find((p) => b.left < p.right + 2 && b.right > p.left - 2 && b.top < p.bottom + 2 && b.bottom > p.top - 2);
           if (!hit) { placed.push(b); return; }

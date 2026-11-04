@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ArmId, Summary } from '../../data/types';
-import { LINEAGE, stageOf } from '../../data/lineage';
+import { FILE_COPIES, LINEAGE, stageOf } from '../../data/lineage';
 import { REPO_URL } from '../../data/links';
 import { useInView } from '../../hooks/useInView';
 import { highlightPython } from '../../utils/highlight';
@@ -10,6 +10,7 @@ import { EmptyState, Kicker, NOT_PUBLISHED, ToolButton, Unavailable } from '../.
 import { EvidenceBadge } from '../../components/atlas/Evidence';
 import { Icon } from '../../components/atlas/Icon';
 import { shortId } from '../../data/classify';
+import { PipelineStory } from './PipelineStory';
 import { sourcePath, type ModuleInfo } from './types';
 
 type Lens = 'imports' | 'flow' | 'external';
@@ -60,6 +61,44 @@ function ModuleMap({ modules, selected, lens, onPick }: { modules: ModuleInfo[];
           </g>
         );
       })}
+    </svg>
+  );
+}
+
+/** One module and its direct neighbours. Dependants are the modules whose real imports name it. */
+function Neighbourhood({ modules, selected, onPick }: { modules: ModuleInfo[]; selected: string; onPick: (m: string) => void }) {
+  const sel = modules.find((m) => m.name === selected);
+  if (!sel) return null;
+  const W = 760, rowH = 30, X = { left: 130, mid: 380, right: 630 };
+  const left = modules.filter((m) => m.imports.includes(selected)).map((m) => ({ name: m.name, copy: false }));
+  const right = sel.imports.map((name) => ({ name, copy: false }));
+  for (const [from, to] of FILE_COPIES) {
+    if (from === selected) right.push({ name: to, copy: true });
+    if (to === selected) left.push({ name: from, copy: true });
+  }
+  const rows = Math.max(left.length, right.length, 1);
+  const H = 56 + rows * rowH;
+  const yOf = (i: number, n: number) => 44 + (rows - n) * (rowH / 2) + i * rowH;
+  const midY = 44 + ((rows - 1) * rowH) / 2;
+  const Node = ({ name, x, y, on }: { name: string; x: number; y: number; on?: boolean }) => (
+    <g className={`modmap__node${on ? ' is-sel' : ' is-near'}`} role="button" tabIndex={on ? -1 : 0} aria-label={`Open ${name}.py`}
+       onClick={() => onPick(name)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPick(name); } }}>
+      <rect x={x - 52} y={y - 11} width={104} height={22} rx={4} />
+      <text x={x} y={y + 4} textAnchor="middle" className="modmap__label">{name}</text>
+    </g>
+  );
+  const edge = (x0: number, y0: number, x1: number, y1: number, copy: boolean, key: string) => (
+    <path key={key} d={`M${x0},${y0} C${(x0 + x1) / 2},${y0} ${(x0 + x1) / 2},${y1} ${x1},${y1}`} className={copy ? 'modmap__copy' : 'modmap__edge is-on'} />
+  );
+  return (
+    <svg className="modmap modmap--near" viewBox={`0 0 ${W} ${H}`} role="group" aria-label={`${selected}.py: imported by ${left.length} modules, imports ${right.length}.`}>
+      <text x={X.left} y={18} textAnchor="middle" className="modmap__head">Imported by</text>
+      <text x={X.right} y={18} textAnchor="middle" className="modmap__head">Imports</text>
+      {left.map((m, i) => edge(X.left + 52, yOf(i, left.length), X.mid - 52, midY, m.copy, `l${m.name}`))}
+      {right.map((m, i) => edge(X.mid + 52, midY, X.right - 52, yOf(i, right.length), m.copy, `r${m.name}`))}
+      {left.map((m, i) => <Node key={`l${m.name}`} name={m.name} x={X.left} y={yOf(i, left.length)} />)}
+      {right.map((m, i) => <Node key={`r${m.name}`} name={m.name} x={X.right} y={yOf(i, right.length)} />)}
+      <Node name={selected} x={X.mid} y={midY} on />
     </svg>
   );
 }
@@ -170,6 +209,7 @@ export function Architecture({ summary }: { summary: Summary | null }) {
   const [selected, setSelected] = useState('grade');
   const [stage, setStage] = useState(7);
   const [lens, setLens] = useState<Lens>('imports');
+  const [wholeMap, setWholeMap] = useState(false);
   const [line, setLine] = useState<number | null>(null);
   const [q, setQ] = useState('');
   const [failed, setFailed] = useState(false);
@@ -197,10 +237,13 @@ export function Architecture({ summary }: { summary: Summary | null }) {
         <header className="pub-head">
           <p className="pub-eyebrow">Architecture</p>
           <h2 id="arch-title" className="pub-title">How the study is built, from the source.</h2>
-          <p className="pub-lead">Follow the data through the pipeline, read the actual Python, and see how the research records relate. The imports below are parsed from the code, not drawn by hand.</p>
+          <p className="pub-lead">Follow the work through five stages, then read the actual Python. The imports below are parsed from the code, not drawn by hand.</p>
         </header>
-
-        <h3 className="pub-h3 arch__h">Data lineage</h3>
+      </div>
+      <PipelineStory />
+      <div className="pub-container">
+        <details className="arch__more">
+        <summary>All ten lineage stages</summary>
         <ol className="ribbon" style={{ ['--done' as string]: stage / (LINEAGE.length - 1) }}>
           {LINEAGE.map((x, i) => (
             <li key={x.id}><button type="button" aria-pressed={stage === i} className={i <= stage ? 'is-past' : undefined} onClick={() => { setStage(i); pick(x.modules[0]); }}><i aria-hidden="true" />{x.name}</button></li>
@@ -218,8 +261,9 @@ export function Architecture({ summary }: { summary: Summary | null }) {
           </dl>
           <p className="caption">The line through these stages shows conceptual data flow. It is not a live run, and the study is finished.</p>
         </div>
+        </details>
 
-        <h3 className="pub-h3 arch__h">Source explorer</h3>
+        <h3 id="source-explorer" className="pub-h3 arch__h">Source explorer</h3>
         {failed && <EmptyState title="The source index could not load">The same files are on GitHub.</EmptyState>}
         <div className="srcx">
           <nav className="srcx__tree" aria-label="Source files">
@@ -236,7 +280,10 @@ export function Architecture({ summary }: { summary: Summary | null }) {
               <ToolButton pressed={lens === 'flow'} onClick={() => setLens('flow')}>Documented data flow</ToolButton>
               <ToolButton pressed={lens === 'external'} onClick={() => setLens('external')}>External packages</ToolButton>
             </div>
-            {modules.length > 0 && <ModuleMap modules={modules} selected={selected} lens={lens} onPick={pick} />}
+            {lens === 'imports' && <ToolButton pressed={wholeMap} onClick={() => setWholeMap(!wholeMap)}>{wholeMap ? 'Show one module' : 'Show every module'}</ToolButton>}
+            {modules.length > 0 && (lens === 'imports' && !wholeMap
+              ? <><Neighbourhood modules={modules} selected={selected} onPick={pick} /><p className="caption">Solid lines are verified Python imports. A dashed line is a file copy, not an import: generate.py installs uplift_hook.py into a workspace.</p></>
+              : <ModuleMap modules={modules} selected={selected} lens={lens} onPick={pick} />)}
             {mod && (
               <div className="srcx__source">
                 <div className="srcx__head">

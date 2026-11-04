@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useStorySteps } from '../../components/story/useStorySteps';
 import { EvidenceBadge } from '../../components/atlas/Evidence';
 import type { ArmId, Summary } from '../../data/types';
 import { ci, int, pct, pts, usd } from '../../data/format';
@@ -15,6 +16,7 @@ const VIEW_LABEL = ['Full cohort', 'Exposed tasks excluded', 'Own-PR pages exclu
 
 export function Results({ summary }: { summary: Summary | null }) {
   const [view, setView] = useState(0);
+  const { active, bind } = useStorySteps(4);
   const baseline = summary?.arms.find((a) => a.id === 'none');
   const nTasks = summary?.tasks.length ?? 77;
 
@@ -30,32 +32,10 @@ export function Results({ summary }: { summary: Summary | null }) {
           </p>
         </header>
 
-        <div className="results__intro">
-          <div className="results__paired">
-            <h3 className="pub-h3">Why the comparison is paired</h3>
-            <p>
-              Every condition was tested on the same {nTasks} bugs. This lets us compare the effect of changing the setup
-              rather than comparing unrelated collections of tasks.
-            </p>
-            <p>
-              A hard bug is hard under every condition, so bug difficulty cancels out of each difference. The interval is
-              computed by resampling bugs, not runs, because the bug is the unit that was shared.
-            </p>
-          </div>
-          <aside className="sde" aria-labelledby="sde-title">
-            <p id="sde-title" className="sde__k">Smallest detectable effect</p>
-            <p className="sde__big"><span className="sde__num">{DETECTABLE_MIN}–{DETECTABLE_MAX}</span> percentage points</p>
-            <p>
-              A real effect had to be about this large to be detected 80% of the time. Smaller real effects could exist
-              and go undetected here. A null result means <strong>not shown</strong>, not <strong>shown to be zero</strong>.
-            </p>
-            <p className="sde__fine">The intervals' half-widths are ±{HALF_WIDTH_MIN} to ±{HALF_WIDTH_MAX} points.</p>
-          </aside>
-        </div>
-
         {!summary || !baseline ? <div className="pub-skeleton pub-skeleton--chart" role="status" aria-busy="true" aria-label="Loading results" /> : (
           <>
             <p className="findstrip" aria-label="Findings summary"><span><b>5</b> comparisons</span><span><b>5</b> intervals cross zero</span><span>No detectable difference</span><EvidenceBadge id="E04" /><EvidenceBadge id="E05" /></p>
+            <div className="results__read" data-read={active}>
             <figure className="pub-figure results__figure">
               <p className="pub-figure__title">Difference in solve rate versus No setup, by setup</p>
               <ul className="ic-legend" aria-label="Chart legend">
@@ -80,6 +60,26 @@ export function Results({ summary }: { summary: Summary | null }) {
                 test of two setups against each other, and the study did not run that test.
               </figcaption>
             </figure>
+            <ol className="results__steps" aria-label="How to read this chart">
+              <li ref={bind(0)} className={active === 0 ? 'is-active' : undefined}>
+                <h3 className="pub-h3">What the zero line means</h3>
+                <p>Zero is No setup. A dot to the right solved more than No setup, a dot to the left solved fewer. Every condition was tested on the same {nTasks} bugs, so bug difficulty cancels out of each difference.</p>
+              </li>
+              <li ref={bind(1)} className={active === 1 ? 'is-active' : undefined}>
+                <h3 className="pub-h3">What crossing zero means</h3>
+                <p>Each line is a 95% paired interval, from resampling bugs rather than runs. All five cross zero, so none of them shows a difference from No setup. That is different from showing no difference.</p>
+              </li>
+              <li ref={bind(2)} className={active === 2 ? 'is-active' : undefined}>
+                <h3 className="pub-h3">What the detectable range means</h3>
+                <p className="sde__big"><span className="sde__num">{DETECTABLE_MIN}–{DETECTABLE_MAX}</span> percentage points</p>
+                <p>A real effect had to be about this large to be detected 80% of the time. Smaller real effects could exist and go undetected here. The intervals' half-widths are ±{HALF_WIDTH_MIN} to ±{HALF_WIDTH_MAX} points.</p>
+              </li>
+              <li ref={bind(3)} className={active === 3 ? 'is-active' : undefined}>
+                <h3 className="pub-h3">What the sensitivity views change</h3>
+                <p>The View control swaps in the report's figures with exposed tasks or runs handled differently. The estimates move a little, and every interval still crosses zero in all four views.</p>
+              </li>
+            </ol>
+            </div>
 
             <div className="results__notes">
               <div className="results__takeaway">

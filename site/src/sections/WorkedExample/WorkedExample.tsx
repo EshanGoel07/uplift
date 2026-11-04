@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { ArmId, Summary, Task } from '../../data/types';
 import { loadTask } from '../../data/load';
 import { shortId } from '../../data/classify';
@@ -22,20 +22,21 @@ const ALIAS_QUERY = 'SELECT col window FROM t';
 const COCHANGE = 'co-change: you edited sqlglot/parser.py but not sqlglot/generator.py';
 
 /** Default run shown for each approach: a shortcut and a look-ahead from conditions without hooks. */
-/** What can be followed from the published evidence. It is a reading of the outcome, not a replay: no run trace is published. */
-const TRACE = [
-  ['Original issue', 'A WINDOW clause raises a ParseError when read as SQLite.'],
-  ['Syntax ambiguity', 'WINDOW is also a valid column alias, so "1 WINDOW" reads as an alias.'],
-  ['Implementation', 'Twelve patches took three approaches: shortcut, look-ahead and one other.'],
-  ['Compatibility check', 'The repository\'s tests require WINDOW to keep working as an alias.'],
-  ['Graded outcome', 'All 4 look-ahead runs solved it. All 7 shortcut runs and the other run failed.'],
-] as const;
-
 const DEFAULT_RUN: Record<Approach, RunPick> = {
   shortcut: { arm: 'none', run: 0 },
   lookahead: { arm: 'handwritten', run: 0 },
   other: { arm: 'prose', run: 1 },
 };
+
+/** One step of the investigation: its number and question stay in view beside the material. */
+function Chapter({ n, title, children }: { n: number; title: string; children: ReactNode }) {
+  return (
+    <section className="chap" aria-labelledby={`chap-${n}`}>
+      <header className="chap__head"><span className="chap__n">{n}</span><h3 id={`chap-${n}`} className="pub-h3">{title}</h3></header>
+      <div className="chap__body">{children}</div>
+    </section>
+  );
+}
 
 export function WorkedExample({ summary }: { summary: Summary | null }) {
   const root = useRef<HTMLElement>(null);
@@ -49,6 +50,7 @@ export function WorkedExample({ summary }: { summary: Summary | null }) {
   const [left, setLeft] = useState<RunPick>(DEFAULT_RUN.shortcut);
   const [right, setRight] = useState<RunPick>(DEFAULT_RUN.lookahead);
   const [reading, setReading] = useState(false);
+  const [comparing, setComparing] = useState(false);
   useEffect(() => {
     if (!reading) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setReading(false); };
@@ -141,38 +143,60 @@ export function WorkedExample({ summary }: { summary: Summary | null }) {
           <p className="pub-lead">One task reveals why the outcome of a single run cannot establish whether an experimental setup helped.</p>
         </header>
 
-        <div className="worked__bug">
-          <div className="worked__explain">
-            <h3 className="pub-h3">What went wrong</h3>
-            <p>sqlglot incorrectly parsed a query containing a <code>WINDOW</code> clause. Reading it as SQLite, it raised a ParseError on the query from the issue:</p>
-            <pre className="worked__sql"><code>{ISSUE_QUERY}</code></pre>
-            <p>
-              <code>WINDOW</code> can also be an ordinary column alias, so the parser read <code>1 WINDOW</code> as "1, aliased as window" and
-              then tripped over <code>a AS (…)</code>. The important compatibility requirement: <code>WINDOW</code> must stay usable as a
-              normal alias, so this must keep working:
-            </p>
-            <pre className="worked__sql worked__sql--keep"><code>{ALIAS_QUERY}</code></pre>
-          </div>
+        <Chapter n={1} title="The issue">
+          <p>sqlglot failed to parse a query containing a <code>WINDOW</code> clause. Read as SQLite, it raised a ParseError on the query from the issue:</p>
+          <pre className="worked__sql"><code>{ISSUE_QUERY}</code></pre>
           <aside className="worked__card" aria-label="The featured task">
-            <p className="worked__card-k">Featured task</p>
-            <p className="worked__id">{FEATURED_TASK}</p>
+            <p className="worked__meta"><span className="worked__id">{FEATURED_TASK}</span> · Fresh bug, fixed upstream in 2026 · twelve runs</p>
             <p className="worked__title">{task?.title ?? 'Sqlite ParseError: Invalid expression / Unexpected token. for WINDOW'}</p>
-            <p className="worked__meta">Fresh bug, fixed upstream in 2026 · twelve runs</p>
-            {task && <Issue text={task.issue} />}
+            {task && <details className="worked__full"><summary>Read the full issue</summary><Issue text={task.issue} /></details>}
           </aside>
-        </div>
+        </Chapter>
 
-        <ol className="trace" aria-label="From the issue to the graded outcome">
-          {TRACE.map(([t, d], i) => <li key={t}><span className="trace__n">{i + 1}</span><strong>{t}</strong><span>{d}</span></li>)}
-        </ol>
+        <Chapter n={2} title="Why WINDOW is ambiguous">
+          <p><code>WINDOW</code> can also be an ordinary column alias, so the parser read <code>1 WINDOW</code> as "1, aliased as window" and then tripped over <code>a AS (…)</code>.</p>
+        </Chapter>
+
+        <Chapter n={3} title="The compatibility case">
+          <p><code>WINDOW</code> must stay usable as a normal alias, so this has to keep working. The repository's tests require it:</p>
+          <pre className="worked__sql worked__sql--keep"><code>{ALIAS_QUERY}</code></pre>
+        </Chapter>
 
         {error && <p className="load-error" role="alert">Could not load the task ({error}).</p>}
         {!task ? <div className="pub-skeleton pub-skeleton--board" role="status" aria-busy="true" aria-label="Loading the twelve runs" /> : (
           <>
-            <figure className="pub-figure worked__board">
-              <p className="pub-figure__title">All twelve runs, by condition</p>
-              <RunBoard task={task} arms={arms} a={pick} onSelect={(p) => setPick((cur) => (cur && cur.arm === p.arm && cur.run === p.run ? null : p))}
-                approaches={FEATURED_APPROACHES} accordion={!wide} />
+            <Chapter n={4} title="Three approaches">
+              <div className="worked__approaches">
+                <p>Read from the real diffs. <EvidenceBadge id="E13" /></p>
+                <div className="seg" role="group" aria-label="Approach">
+                  <button type="button" className="seg__btn" aria-pressed={only === 'all'} onClick={() => setOnly('all')}>All 12</button>
+                  {(['shortcut', 'lookahead', 'other'] as const).map((ap) => (
+                    <button key={ap} type="button" className="seg__btn" aria-pressed={only === ap} onClick={() => setOnly(ap)}>{APPROACH_INFO[ap].name} ({byApproach[ap].length})</button>
+                  ))}
+                </div>
+                <div className={`approaches${only === 'all' ? '' : ' is-single'}`}>
+                  {(only === 'all' || only === 'shortcut') && approachPanel('shortcut')}
+                  {(only === 'all' || only === 'lookahead') && approachPanel('lookahead')}
+                  {(only === 'all' || only === 'other') && approachPanel('other')}
+                </div>
+                <p className="caption"><span className="caption__n">Figure 5.</span> Real patches from <code>results.json</code>. Shortcut and look-ahead are shown side by side; switch to any run of an approach with the buttons above each patch.</p>
+              </div>
+            </Chapter>
+
+            <Chapter n={5} title="The twelve attempts">
+              <figure className="pub-figure worked__board">
+                <p className="pub-figure__title">All twelve runs, by condition</p>
+                <RunBoard task={task} arms={arms} a={pick} onSelect={(p) => setPick((cur) => (cur && cur.arm === p.arm && cur.run === p.run ? null : p))}
+                  approaches={FEATURED_APPROACHES} accordion={!wide} />
+                <figcaption className="caption">
+                  <span className="caption__n">Figure 4.</span> The twelve runs of <code>{shortId(task.id)}</code>: each condition's two repeats, with
+                  the result from the repository's real tests and the approach the patch took (read from the diffs). No condition is
+                  highlighted; select any run to inspect it.
+                </figcaption>
+              </figure>
+            </Chapter>
+
+            <Chapter n={6} title="One selected patch">
               {pick
                 ? (
                   <div className="worked__detail">
@@ -181,85 +205,68 @@ export function WorkedExample({ summary }: { summary: Summary | null }) {
                       taskId={shortId(task.id)} hasHooks={CONDITIONS[pick.arm].hasHooks} collapsible={!wide} />
                   </div>
                 )
-                : <p className="worked__hint">Select any run to read its patch and the hook messages it received.</p>}
-              <figcaption className="caption">
-                <span className="caption__n">Figure 4.</span> The twelve runs of <code>{shortId(task.id)}</code>: each condition's two repeats, with
-                the result from the repository's real tests and the approach the patch took (read from the diffs). No condition is
-                highlighted; select any run to inspect it.
-              </figcaption>
-            </figure>
+                : <p className="worked__hint">Select any run above to read its patch and the hook messages it received.</p>}
+            </Chapter>
 
-            <div className="worked__approaches">
-              <h3 className="pub-h3">The approaches the agent took <EvidenceBadge id="E13" /></h3>
-              <div className="seg" role="group" aria-label="Approach">
-                <button type="button" className="seg__btn" aria-pressed={only === 'all'} onClick={() => setOnly('all')}>All 12</button>
-                {(['shortcut', 'lookahead', 'other'] as const).map((ap) => (
-                  <button key={ap} type="button" className="seg__btn" aria-pressed={only === ap} onClick={() => setOnly(ap)}>{APPROACH_INFO[ap].name} ({byApproach[ap].length})</button>
-                ))}
-              </div>
-              <div className={`approaches${only === 'all' ? '' : ' is-single'}`}>
-                {(only === 'all' || only === 'shortcut') && approachPanel('shortcut')}
-                {(only === 'all' || only === 'lookahead') && approachPanel('lookahead')}
-                {(only === 'all' || only === 'other') && approachPanel('other')}
-              </div>
-              <p className="caption"><span className="caption__n">Figure 5.</span> Real patches from <code>results.json</code>. Shortcut and look-ahead are shown side by side; switch to any run of an approach with the buttons above each patch.</p>
-            </div>
+            <Chapter n={7} title="Two runs side by side">
+              {!comparing && <ToolButton onClick={() => setComparing(true)}>Compare two runs</ToolButton>}
+              {comparing && (
+                <section className={`wcmp${reading ? ' is-reading' : ''}`} aria-label="Compare two runs of this bug">
+                  <div className="wcmp__bar">
+                    <ToolButton icon="fit" pressed={reading} onClick={() => setReading(!reading)}>{reading ? 'Exit reading mode' : 'Reading mode'}</ToolButton>
+                  </div>
+                  <div className="wcmp__cols">
+                    {([[left, setLeft, 'First'], [right, setRight, 'Second']] as const).map(([p, set, name]) => {
+                      const run = task.results[p.arm].runs[p.run];
+                      return (
+                        <div key={name} className="wcmp__col">
+                          <label className="cc__against">{name} run
+                            <select value={`${p.arm}:${p.run}`} onChange={(e) => { const [a, r] = e.target.value.split(':'); set({ arm: a as ArmId, run: Number(r) }); }}>
+                              {arms.flatMap((a) => [0, 1].map((r) => (
+                                <option key={`${a.id}${r}`} value={`${a.id}:${r}`}>{a.label} · R{r + 1} · {APPROACH_INFO[FEATURED_APPROACHES[a.id][r]].name}</option>
+                              )))}
+                            </select>
+                          </label>
+                          <StatusBadge resolved={run.resolved} />
+                          <DiffViewer diff={run.diff} label={`${label(p.arm)}, repeat ${p.run + 1}`} preview={reading ? 400 : 40} />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+              )}
+            </Chapter>
 
-            <section className={`wcmp${reading ? ' is-reading' : ''}`} aria-label="Compare two runs of this bug">
-              <div className="wcmp__bar">
-                <h3 className="pub-h3">Compare two runs</h3>
-                <ToolButton icon="fit" pressed={reading} onClick={() => setReading(!reading)}>{reading ? 'Exit reading mode' : 'Reading mode'}</ToolButton>
+            <Chapter n={8} title="What this does and does not prove">
+              <div className="worked__why">
+                <div className="worked__why-text">
+                  <p>
+                    Tips + hooks went 2/2, while hooks-only went 0/2. That initially looks like a benefit from combining the two. But both
+                    conditions received the same kind of generic co-change warnings, including the failed hooks-only runs. The warning did
+                    not explain the WINDOW alias bug. The approach taken by the agent, not the setup, is the clearest explanation for the
+                    outcomes in this example.
+                  </p>
+                  <p className="worked__web">
+                    None of the 12 runs accessed the web, according to the documented web audit.
+                    <span className="worked__src"> Source: <a href={DOC_LINKS.readme} target="_blank" rel="noopener noreferrer">README</a> and <a href={DOC_LINKS.phaseLog} target="_blank" rel="noopener noreferrer">PHASE_LOG</a> (Phase 7). The published JSON does not include the raw traces behind the audit.</span>
+                  </p>
+                </div>
+                <div className="worked__evidence">
+                  <p className="worked__evidence-k">The hook message, as delivered</p>
+                  {evidence && <HookMessages hooks={[evidence]} />}
+                  <p className="worked__evidence-note">General architectural warnings from the repository's history (edit the parser, also check the generator and expressions). They say nothing about aliases or WINDOW.</p>
+                  <p className="worked__evidence-k">Runs that received this warning</p>
+                  <ul className="worked__warned">
+                    {warned.map((w) => (
+                      <li key={`${w.arm}${w.run}`} className={w.resolved ? 'is-ok' : 'is-fail'}>
+                        <span>{label(w.arm)} · repeat {w.run + 1}</span><span>{w.resolved ? '✓ Solved' : '✗ Not resolved'}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </div>
-              <div className="wcmp__cols">
-                {([[left, setLeft, 'First'], [right, setRight, 'Second']] as const).map(([p, set, name]) => {
-                  const run = task.results[p.arm].runs[p.run];
-                  return (
-                    <div key={name} className="wcmp__col">
-                      <label className="cc__against">{name} run
-                        <select value={`${p.arm}:${p.run}`} onChange={(e) => { const [a, r] = e.target.value.split(':'); set({ arm: a as ArmId, run: Number(r) }); }}>
-                          {arms.flatMap((a) => [0, 1].map((r) => (
-                            <option key={`${a.id}${r}`} value={`${a.id}:${r}`}>{a.label} · R{r + 1} · {APPROACH_INFO[FEATURED_APPROACHES[a.id][r]].name}</option>
-                          )))}
-                        </select>
-                      </label>
-                      <StatusBadge resolved={run.resolved} />
-                      <DiffViewer diff={run.diff} label={`${label(p.arm)}, repeat ${p.run + 1}`} preview={reading ? 400 : 40} />
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-
-            <div className="worked__why">
-              <div className="worked__why-text">
-                <h3 className="pub-h3">Why this example matters</h3>
-                <p>
-                  Tips + hooks went 2/2, while hooks-only went 0/2. That initially looks like a benefit from combining the two. But both
-                  conditions received the same kind of generic co-change warnings, including the failed hooks-only runs. The warning did
-                  not explain the WINDOW alias bug. The approach taken by the agent, not the setup, is the clearest explanation for the
-                  outcomes in this example.
-                </p>
-                <p className="worked__web">
-                  None of the 12 runs accessed the web, according to the documented web audit.
-                  <span className="worked__src"> Source: <a href={DOC_LINKS.readme} target="_blank" rel="noopener noreferrer">README</a> and <a href={DOC_LINKS.phaseLog} target="_blank" rel="noopener noreferrer">PHASE_LOG</a> (Phase 7). The published JSON does not include the raw traces behind the audit.</span>
-                </p>
-              </div>
-              <div className="worked__evidence">
-                <p className="worked__evidence-k">The hook message, as delivered</p>
-                {evidence && <HookMessages hooks={[evidence]} />}
-                <p className="worked__evidence-note">General architectural warnings from the repository's history (edit the parser, also check the generator and expressions). They say nothing about aliases or WINDOW.</p>
-                <p className="worked__evidence-k">Runs that received this warning</p>
-                <ul className="worked__warned">
-                  {warned.map((w) => (
-                    <li key={`${w.arm}${w.run}`} className={w.resolved ? 'is-ok' : 'is-fail'}>
-                      <span>{label(w.arm)} · repeat {w.run + 1}</span><span>{w.resolved ? '✓ Solved' : '✗ Not resolved'}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-
-            <p className="worked__point" role="note">Different approaches produced different outcomes. This one task cannot establish a causal benefit of any setup.</p>
+              <p className="worked__point" role="note">Different approaches produced different outcomes. This one task cannot establish a causal benefit of any setup.</p>
+            </Chapter>
             <Bridge to="matrix">Now inspect every other bug →</Bridge>
           </>
         )}

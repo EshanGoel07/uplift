@@ -37,6 +37,7 @@
   display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 1px solid transparent; border-radius: 50%; background: none;
   font-size: 0.8rem; font-variant-numeric: tabular-nums; color: var(--text-3); cursor: pointer; transition: color .2s, border-color .2s;
 }
+.story__rail button { background: rgba(9, 10, 12, 0.6); }
 .story__rail button:hover { color: var(--text); }
 .story__rail button[aria-current] { border-color: var(--ember); color: var(--text); }
 .story__rail button:focus-visible { outline: 2px solid var(--ember); outline-offset: 2px; }
@@ -75,6 +76,60 @@
   .story__step.is-active .sf__path, .story__canvas .sf__path { animation: none; }
 }
 
+/* The five-stage pipeline: a list on the stage, the active stage carrying the real file names. */
+.pipe { position: absolute; top: 50%; left: clamp(72px, 8vw, 128px); transform: translateY(-50%); display: grid; gap: var(--s-2); width: min(600px, 48vw); margin: 0; padding: 0; list-style: none; }
+.pipe__stage { display: grid; grid-template-columns: 32px minmax(0, 1fr); column-gap: var(--s-3); padding: var(--s-3) var(--s-4); border-left: 2px solid var(--border-soft); color: var(--text-3); transition: color .25s, border-color .25s; }
+.pipe__stage.is-past { color: var(--text-2); }
+.pipe__stage.is-on { border-color: var(--ember); color: var(--text); }
+.pipe__stage strong { font-weight: 600; }
+.pipe__n { font-variant-numeric: tabular-nums; }
+.pipe__files { grid-column: 2; height: 0; overflow: hidden; font-family: var(--font-mono, monospace); font-size: 0.74rem; color: var(--text-2); }
+.pipe__stage.is-on .pipe__files { height: auto; margin-top: var(--s-1); }
+.pipe__loop { margin-top: var(--s-2); padding: var(--s-2) var(--s-4); border-left: 2px dashed var(--border); font-size: 0.8rem; color: var(--text-3); transition: color .25s, border-color .25s; }
+.pipe__loop.is-on { border-color: var(--sp-violet); color: var(--text-2); }
+.pipe__mods { display: flex; flex-wrap: wrap; gap: var(--s-1) var(--s-2); margin-top: var(--s-3) !important; }
+.arch__more { margin-top: var(--s-6); }
+.arch__more > summary { min-height: 32px; color: var(--text-2); cursor: pointer; }
+.arch__more > summary:hover { color: var(--text); }
+.modmap__head { font-size: 11px; fill: var(--text-2); }
+.modmap__copy { fill: none; stroke: var(--sp-violet); stroke-dasharray: 5 4; }
+.modmap--near .modmap__node { cursor: pointer; }
+.modmap--near .modmap__node:focus-visible rect { stroke: var(--ember); }
+
+/* Findings: the chart holds still while its explanation is read. */
+.results__read { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(280px, 1fr); gap: var(--s-6); align-items: start; margin-top: var(--s-5); }
+.results__read .results__figure { position: sticky; top: calc(var(--nav-h) + var(--s-4)); margin: 0; }
+.results__steps { display: grid; margin: 0; padding: 0; list-style: none; }
+.results__steps li { min-height: 62vh; padding: var(--s-2) 0 var(--s-2) var(--s-5); border-left: 2px solid var(--border-soft); color: var(--text-2); opacity: 0.5; transition: opacity .25s, border-color .25s; }
+.results__steps li:last-child { min-height: 40vh; }
+.results__steps li.is-active { border-color: var(--ember); opacity: 1; }
+.results__steps h3 { margin-top: 0; color: var(--text); }
+.results__steps .sde__big { margin: var(--s-2) 0; }
+.results__read[data-read='0'] .ic-zero { stroke: var(--ember); stroke-width: 2; }
+.results__read[data-read='2'] .ic-band-label { fill: var(--ember); }
+@media (max-width: 1100px) {
+  .results__read { grid-template-columns: minmax(0, 1fr); }
+  .results__read .results__figure { position: static; }
+  .results__steps li { min-height: 0; padding-block: var(--s-4); opacity: 1; }
+}
+
+/* WINDOW: one numbered question at a time, its heading held in view beside the material. */
+.chap { display: grid; grid-template-columns: minmax(150px, 220px) minmax(0, 1fr); gap: var(--s-6); padding: var(--s-6) 0; border-top: 1px solid var(--border-soft); }
+.chap__head { position: sticky; top: calc(var(--nav-h) + var(--s-4)); align-self: start; display: grid; gap: var(--s-1); }
+.chap__n { font-variant-numeric: tabular-nums; color: var(--ember); }
+.chap__head h3 { margin: 0; }
+.chap__body { min-width: 0; color: var(--text-2); }
+.chap__body > p:first-child { margin-top: 0; }
+@media (max-width: 900px) {
+  .chap { grid-template-columns: minmax(0, 1fr); gap: var(--s-4); }
+  .chap__head { position: static; }
+}
+.worked__full > summary { min-height: 32px; color: var(--text-2); cursor: pointer; }
+.worked__full > summary:hover { color: var(--text); }
+.mx-more { margin-top: var(--s-2); }
+.mx-more > summary { min-height: 32px; color: var(--text-2); cursor: pointer; }
+.mx-more > summary:hover { color: var(--text); }
+
 /* While the study data loads, keep the story at about its real height, so the sections below do not look
    near the viewport and start fetching. */
 .onebug[aria-busy] { min-height: 300vh; }
@@ -101,3 +156,5 @@
 .story:not(.story--sticky) .assembly__inspect, .story:not(.story--sticky) .assembly__objects { position: static; width: auto; max-width: none; margin-top: 16px; }
 @media (max-width: 900px) { .assembly__inspect, .assembly__objects { display: none; } }
 @media (prefers-reduced-motion: reduce) { .assembly__parts button { transition: none; } }
+
+.srcx__main > button { justify-self: start; }

@@ -5,6 +5,8 @@ import { resolve } from 'node:path';
 import { changedFiles, CUTAWAY_ROOM, CUTAWAY_STATES, cutawayModel, diffStrokes, issueStrokes, TEST_FILE_TILE, workspaceModel } from '../../src/data/models';
 import { repoLayout, type RepoFile } from '../../src/data/repoLayout';
 import tree from '../../src/data/repoTree.json';
+import { FILE_COPIES, LINEAGE, PIPELINE } from '../../src/data/lineage';
+import { ROBUSTNESS } from '../../src/data/reportFigures';
 import { GRADING_CAPTION, GRADING_STATES, gradingModel } from '../../src/data/gradingModel';
 import { CONDITIONS, GRADING_STEPS, workspaceLayers } from '../../src/data/method';
 import type { ArmId } from '../../src/data/types';
@@ -180,4 +182,33 @@ describe('grading model', () => {
     expect(GRADING_STATES[moved]).toBe('check-both-test-lists');
   });
   it('says the cells are illustrative', () => expect(GRADING_CAPTION).toMatch(/illustrative/i));
+});
+
+describe('source pipeline', () => {
+  const modules: { name: string; imports: string[] }[] = JSON.parse(readFileSync(resolve(__dirname, '../../public/data/architecture.json'), 'utf-8')).modules;
+  it('has five stages, each built from real lineage stages, in lineage order', () => {
+    expect(PIPELINE).toHaveLength(5);
+    const order = PIPELINE.flatMap((p) => p.stages).map((id) => LINEAGE.findIndex((s) => s.id === id));
+    expect(order.every((i) => i >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+  });
+  it('names only modules that exist', () => {
+    const names = new Set(modules.map((m) => m.name));
+    for (const p of PIPELINE) for (const id of p.stages) for (const m of LINEAGE.find((s) => s.id === id)!.modules) expect(names.has(m), m).toBe(true);
+  });
+  it('labels the hook as a file copy because it really is not an import', () => {
+    expect(FILE_COPIES).toEqual([['generate', 'uplift_hook']]);
+    expect(modules.find((m) => m.name === 'generate')!.imports).not.toContain('uplift_hook');
+    expect(readFileSync(resolve(root, 'src/uplift/generate.py'), 'utf-8')).toContain('shutil.copy2(HOOK_SCRIPT, h / "uplift_hook.py")');
+  });
+});
+
+describe('findings copy', () => {
+  it('says every interval crosses zero in all four views, which the report figures confirm', () => {
+    expect(ROBUSTNESS).toHaveLength(4);
+    for (const r of ROBUSTNESS) for (const [, low, high] of Object.values(r.cells)) {
+      expect(low).toBeLessThan(0);
+      expect(high).toBeGreaterThan(0);
+    }
+  });
 });

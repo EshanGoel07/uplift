@@ -230,7 +230,7 @@ export function BackToTop() {
   return (
     <button type="button" className={`to-top${show ? ' is-visible' : ''}`} onClick={() => jumpTo('overview')}
             aria-label="Back to top" tabIndex={show ? 0 : -1} aria-hidden={!show}>
-      <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M8 13V3M3.5 7.5 8 3l4.5 4.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+      <Icon name="up" size={16} />
     </button>
   );
 }

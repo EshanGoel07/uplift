@@ -1,0 +1,21 @@
+import { chromium } from '@playwright/test';
+import { mkdirSync } from 'node:fs';
+// Gate 4 review captures: source story, findings, WINDOW and the Bug Atlas (QA helper).
+const dir = 'qa-screenshots/m15/g4';
+mkdirSync(dir, { recursive: true });
+const browser = await chromium.launch({ args: ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist'] });
+const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+await page.goto('http://localhost:4173/uplift/', { waitUntil: 'networkidle' });
+const at = async (sel, name) => { await page.locator(sel).first().evaluate((el) => el.scrollIntoView({ behavior: 'instant', block: 'start' })); await page.waitForTimeout(1600); await page.screenshot({ path: `${dir}/${name}.png` }); };
+await at('#results .results__read', 'findings');
+await at('.results__steps li:nth-child(3)', 'findings-3');
+await at('#explorer', 'window-1');
+await at('.chap:nth-of-type(4)', 'window-4');
+await at('#matrix', 'atlas');
+await at('#architecture', 'source-head');
+await at('#architecture .story__step[data-step="3"]', 'source-3');
+await at('#source-explorer', 'source-explorer');
+await page.locator('#method').first().evaluate((el) => el.scrollIntoView({ behavior: 'instant', block: 'start' }));
+await page.waitForTimeout(3000);
+await page.screenshot({ path: `${dir}/apparatus.png` });
+await browser.close();

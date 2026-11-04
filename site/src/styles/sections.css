@@ -9,7 +9,6 @@
 
 /* Explore runs: the matrix ---------------------------------------------- */
 .runs { padding: 104px 0 64px; border-top: 1px solid var(--border-soft); }
-.runs + .explorer { padding-top: 24px; border-top: 0; }
 .pub-skeleton--matrix { height: 640px; margin-top: 24px; }
 .pub-skeleton--card { height: 200px; }
 .ceiling { margin: 40px 0 28px; }
@@ -228,3 +227,6 @@
   .used-table tbody th { grid-column: 1 / -1; }
   .used-table td:last-child { text-align: right; color: var(--text-2); }
 }
+
+/* The run explorer continues the Bug Atlas above it. */
+section.explorer { padding-top: 24px; border-top: 0; }

@@ -3,6 +3,7 @@ const PATHS: Record<string, string> = {
   search: 'M7 12.5a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11ZM11 11l3.5 3.5',
   close: 'M3.5 3.5l9 9M12.5 3.5l-9 9',
   arrow: 'M3 8h10M9 4l4 4-4 4',
+  up: 'M8 13V3M3.5 7.5 8 3l4.5 4.5',
   external: 'M6 3H3v10h10v-3M9 3h4v4M13 3 7.5 8.5',
   copy: 'M5.5 5.5h8v8h-8zM2.5 10.5v-8h8',
   compare: 'M5.5 2.5v11M10.5 2.5v11M2.5 5.5l3-3 3 3M7.5 10.5l3 3 3-3',

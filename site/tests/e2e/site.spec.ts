@@ -86,6 +86,9 @@ test('results chart: five intervals, a zero baseline, the detectable effect, and
 test('matrix: 77 rows in 43/23/11 bands, working filters, and cell opens the explorer', async ({ page }) => {
   await page.goto(NOGL, { waitUntil: 'networkidle' });
   await page.locator('#matrix').scrollIntoViewIfNeeded();
+  await expect(page.locator('.tasklist li')).toHaveCount(77);
+  await page.getByRole('group', { name: 'Atlas view' }).getByRole('button', { name: 'Matrix' }).click();
+  await page.locator('.mx-more summary').click();
   const rows = page.locator('.mx-grid .mx-row:not(.mx-row--head)');
   await expect(rows).toHaveCount(77);
   await expect(page.locator('.mx-band__title')).toHaveText([/43\s*Always solved/, /23\s*Mixed/, /11\s*Never solved/]);
@@ -116,9 +119,9 @@ test('Bug Atlas: three views over one filtered dataset, sort, density and sharea
   await page.locator('#matrix').scrollIntoViewIfNeeded();
   await page.locator('.seg__btn', { hasText: 'Mixed (23)' }).click();
   await expect(page).toHaveURL(/group=mixed/);
-  await page.getByRole('group', { name: 'Atlas view' }).getByRole('button', { name: 'Task list' }).click();
   await expect(page.locator('.tasklist li')).toHaveCount(23);
   await page.getByRole('group', { name: 'Atlas view' }).getByRole('button', { name: 'Lattice' }).click();
+  await page.locator('.mx-more summary').click();
   await expect(page.locator('.minilat__bug')).toHaveCount(23);
   await expect(page.locator('.minilat__bug i')).toHaveCount(276);
   await page.getByRole('group', { name: 'Density' }).getByRole('button', { name: 'Compact' }).click();
@@ -213,9 +216,10 @@ test('WINDOW investigation: trace, approach selector, two-run comparison and rea
   await page.goto(NOGL, { waitUntil: 'networkidle' });
   const w = page.locator('#explorer');
   await w.scrollIntoViewIfNeeded();
-  await expect(w.locator('.trace li')).toHaveCount(5);
+  await expect(w.locator('.chap')).toHaveCount(8);
   await w.getByRole('group', { name: 'Approach' }).getByRole('button', { name: /Look-ahead/ }).click();
   await expect(w.locator('.approach')).toHaveCount(1);
+  await w.getByRole('button', { name: 'Compare two runs' }).click();
   await expect(w.locator('.wcmp .diff')).toHaveCount(2);
   await w.getByRole('button', { name: 'Reading mode' }).click();
   await expect(w.locator('.wcmp.is-reading')).toBeVisible();
@@ -231,6 +235,7 @@ test('architecture: real source, import lens, lineage, topology', async ({ page 
   await expect(a.locator('.src__code')).toContainText('def grade', { timeout: 10_000 });
   await a.locator('.srcx__fns button', { hasText: 'check_output' }).click();
   await expect(a.locator('tr.is-hit')).toContainText('check_output');
+  await a.locator('.arch__more summary').click();
   await a.locator('.ribbon button', { hasText: 'Workspace' }).click();
   await expect(a.locator('.srcx__head code')).toHaveText('src/uplift/workspace.py');
   await expect(a.locator('.ribbon__detail')).toContainText('no history');
@@ -238,6 +243,33 @@ test('architecture: real source, import lens, lineage, topology', async ({ page 
   await expect(a.locator('.topo__chain')).toContainText('Not published');
   await a.getByRole('group', { name: 'Topology mode' }).getByRole('button', { name: 'Condition focus' }).click();
   await expect(a.locator('.topo__dots button')).toHaveCount(77);
+});
+
+test('source: five pipeline stages first, one module\'s neighbourhood by default, and a labelled file copy', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(NOGL, { waitUntil: 'networkidle' });
+  const a = page.locator('#architecture');
+  await a.scrollIntoViewIfNeeded();
+  await expect(a.locator('.story__step')).toHaveCount(5);
+  await a.locator('.story__step[data-step="3"]').evaluate((el) => el.scrollIntoView({ behavior: 'instant', block: 'center' }));
+  await expect(a.locator('.pipe__stage.is-on')).toContainText('Workspace execution and grading');
+  await expect(a.locator('.pipe__stage.is-on')).toContainText('grade.py');
+  await expect(a.locator('.modmap--near')).toHaveAttribute('aria-label', /grade\.py: imported by/);
+  await expect(a.locator('.modmap--near .modmap__node')).toHaveCount(4);
+  await a.locator('.srcx__tree button', { hasText: 'generate.py' }).click();
+  await expect(a.locator('.modmap__copy')).toHaveCount(1);
+  await a.locator('.srcx__lens + button, button', { hasText: 'Show every module' }).first().click();
+  await expect(a.locator('.modmap:not(.modmap--near) .modmap__node')).toHaveCount(20);
+});
+
+test('findings: the chart stays beside four short explanations, and sensitivity never lifts an interval off zero', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(NOGL, { waitUntil: 'networkidle' });
+  const steps = page.locator('.results__steps li');
+  await expect(steps).toHaveCount(4);
+  await steps.nth(2).scrollIntoViewIfNeeded();
+  await expect(steps.nth(2)).toContainText('5.4–9.1');
+  await expect(page.locator('.results__read .results__figure')).toHaveCSS('position', 'sticky');
 });
 
 test('integrity: ledger, policy comparison, FAQ; guided tour can be stopped at any point', async ({ page }) => {
@@ -270,6 +302,7 @@ for (const width of [1241, 1280, 1366, 1440, 1600, 1920, 2560]) {
 test('matrix cells are keyboard navigable', async ({ page }) => {
   await page.goto(NOGL, { waitUntil: 'networkidle' });
   await page.locator('#matrix').scrollIntoViewIfNeeded();
+  await page.getByRole('group', { name: 'Atlas view' }).getByRole('button', { name: 'Matrix' }).click();
   const first = page.locator('.mx-task[tabindex="0"]');
   await first.focus();
   await page.keyboard.press('ArrowRight');
@@ -788,7 +821,7 @@ test.describe('WebGL', () => {
       await expect(page.locator('.wb-label').first()).toBeVisible({ timeout: 15_000 });
       // Labels stack at the origin until the Workbench chunk mounts and places them, so wait for that.
       await expect.poll(() => page.evaluate(() => {
-        const r = [...document.querySelectorAll('.wb__labels .wb-label')].map((e) => e.getBoundingClientRect()).filter((b) => b.width);
+        const r = [...document.querySelectorAll('.wb__labels .wb-label button')].map((e) => e.getBoundingClientRect()).filter((b) => b.width);
         let hits = r.length > 8 ? 0 : 99;
         for (let i = 0; i < r.length; i++) for (let j = i + 1; j < r.length; j++) if (r[i].left < r[j].right && r[i].right > r[j].left && r[i].top < r[j].bottom && r[i].bottom > r[j].top) hits++;
         return hits;

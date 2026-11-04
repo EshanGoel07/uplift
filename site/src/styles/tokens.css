@@ -4,6 +4,9 @@
 :root {
   color-scheme: dark;
 
+  /* Breakpoints are 900 px (phone layouts), 1100 px (text column) and 1240 px (full header). CSS cannot read
+     custom properties in media queries, so they are written out where they are used. */
+
   /* Background and surfaces: obsidian -> carbon -> graphite -> elevated */
   --obsidian: #090a0c;
   --carbon: #101214;

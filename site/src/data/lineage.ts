@@ -26,6 +26,18 @@ export const LINEAGE: Stage[] = [
   { id: 'export', name: 'Export', modules: ['analysis'], enters: 'Runs and the cost ledger', happens: 'Writes results.json, then the site splits it into summary and task files.', leaves: 'site/public/data', validated: 'Fails if the ledger disagrees with recorded costs.', limit: 'Patches are capped at 30,000 characters and scrubbed.' },
 ];
 
+/** The same lineage in five stages, for a first reading. Grouping only: every fact stays in LINEAGE. */
+export const PIPELINE: { id: string; name: string; stages: string[]; purpose: string }[] = [
+  { id: 'prepare', name: 'Task preparation', stages: ['ingest', 'mine'], purpose: 'Turn real sqlglot bugs into tasks that can be run and checked: each must fail before its fix and pass after it.' },
+  { id: 'dataset', name: 'Dataset construction and validation', stages: ['split', 'screen'], purpose: 'Decide which tasks and tests may be used, before any result is seen.' },
+  { id: 'configure', name: 'Configuration generation and tuning', stages: ['generate'], purpose: 'Write each setup from material dated before the test period. One tuned setup also reads results from dev tasks.' },
+  { id: 'execute', name: 'Workspace execution and grading', stages: ['workspace', 'agent', 'grade'], purpose: 'Run each attempt in its own workspace, then grade it with the real tests after the agent has exited.' },
+  { id: 'report', name: 'Statistical analysis and reporting', stages: ['analysis', 'export'], purpose: 'Compare each setup with No setup bug by bug, and publish what the site reads.' },
+];
+
+/** Links that are real but are not Python imports, so the map must not draw them as imports. */
+export const FILE_COPIES: [from: string, to: string][] = [['generate', 'uplift_hook']];
+
 /** Stage order of a module, used to lay out the module map. */
 export function stageOf(name: string): number {
   const i = LINEAGE.findIndex((s) => s.modules.includes(name));

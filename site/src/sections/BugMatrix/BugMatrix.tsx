@@ -3,6 +3,7 @@ import type { ArmId, Group, Summary, TaskMeta, TaskSet } from '../../data/types'
 import { GROUP_LABEL, GROUP_ORDER, groupCounts, groupOf, shortId, sortForMatrix } from '../../data/classify';
 import { useInView } from '../../hooks/useInView';
 import { Bridge } from '../../components/navigation/Bridge';
+import { Icon } from '../../components/atlas/Icon';
 import { condStyle } from '../../utils/condition';
 import { atlas, openTask, useAtlas } from '../../state/atlasStore';
 import { EmptyState } from '../../components/atlas/Primitives';
@@ -89,12 +90,13 @@ function Matrix({ summary, onOpenTask, selectedTask }: { summary: Summary } & Om
   const [groupF, setGroupF] = useState<GroupFilter>((param('group') as GroupFilter) || 'all');
   const [hookF, setHookF] = useState<HookFilter>((param('hooks') as HookFilter) || 'all');
   const [query, setQuery] = useState(param('q') ?? '');
-  const [view, setView] = useState<AtlasView>((param('atlas') as AtlasView) || 'matrix');
+  const [view, setView] = useState<AtlasView>((param('atlas') as AtlasView) || 'list');
   const [sort, setSort] = useState<SortKey>((param('sort') as SortKey) || 'solved');
   const [compact, setCompact] = useState(param('density') === 'compact');
   const condition = useAtlas((s) => s.condition);
+  const [more, setMore] = useState(setF !== 'all' || hookF !== 'all' || sort !== 'solved' || compact || !!condition);
   useEffect(() => {
-    writeParams({ set: setF === 'all' ? '' : setF, group: groupF === 'all' ? '' : groupF, hooks: hookF === 'all' ? '' : hookF, q: query, atlas: view === 'matrix' ? '' : view, sort: sort === 'solved' ? '' : sort, density: compact ? 'compact' : '' });
+    writeParams({ set: setF === 'all' ? '' : setF, group: groupF === 'all' ? '' : groupF, hooks: hookF === 'all' ? '' : hookF, q: query, atlas: view === 'list' ? '' : view, sort: sort === 'solved' ? '' : sort, density: compact ? 'compact' : '' });
   }, [setF, groupF, hookF, query, view, sort, compact]);
   const [focus, setFocus] = useState<{ r: number; c: number }>({ r: 0, c: 0 });
   const [tip, setTip] = useState<{ task: TaskMeta; arm: ArmId; x: number; y: number } | null>(null);
@@ -158,46 +160,53 @@ function Matrix({ summary, onOpenTask, selectedTask }: { summary: Summary } & Om
             <button key={v} type="button" className="seg__btn" aria-pressed={view === v} onClick={() => setView(v)}>{t}</button>
           ))}
         </div>
-        <label className="cc__against">Sort
-          <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)}>
-            <option value="solved">Most solved</option>
-            <option value="least">Least solved</option>
-            <option value="cost">Highest cost</option>
-            <option value="id">Task id</option>
-          </select>
-        </label>
-        <label className="cc__against">Condition
-          <select value={condition ?? ''} onChange={(e) => atlas.set({ condition: (e.target.value || null) as ArmId | null })}>
-            <option value="">All six</option>
-            {arms.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
-          </select>
-        </label>
-        <div className="seg" role="group" aria-label="Density">
-          <button type="button" className="seg__btn" aria-pressed={!compact} onClick={() => setCompact(false)}>Comfortable</button>
-          <button type="button" className="seg__btn" aria-pressed={compact} onClick={() => setCompact(true)}>Compact</button>
-        </div>
-      </div>
-      <div className="mx-toolbar" role="group" aria-label="Matrix filters">
-        <Seg label="Set" value={setF} onChange={setSetF} options={[['all', 'All'], ['test', 'Test'], ['fresh', 'Fresh']]} />
-        <Seg label="Outcome" value={groupF} onChange={setGroupF}
-             options={[['all', 'All'], ['always', `Always solved (${counts.always})`], ['mixed', `Mixed (${counts.mixed})`], ['never', `Never solved (${counts.never})`]]} />
-        <Seg label="Hooks" value={hookF} onChange={setHookF} options={[['all', 'All'], ['fired', 'Hooks fired'], ['none', 'No hooks']]} />
         <label className="mx-search">
           <span className="visually-hidden">Search bugs</span>
-          <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5" /><path d="m10.5 10.5 3 3" /></svg>
+          <Icon name="search" size={14} />
           <input type="search" placeholder="Search title or id" value={query} onChange={(e) => setQuery(e.target.value)} />
         </label>
       </div>
+      <div className="mx-toolbar" role="group" aria-label="Matrix filters">
+        <Seg label="Outcome" value={groupF} onChange={setGroupF}
+             options={[['all', 'All'], ['always', `Always solved (${counts.always})`], ['mixed', `Mixed (${counts.mixed})`], ['never', `Never solved (${counts.never})`]]} />
+      </div>
+      <details className="mx-more" open={more} onToggle={(e) => setMore(e.currentTarget.open)}>
+        <summary>More filters</summary>
+        <div className="mx-toolbar">
+          <Seg label="Set" value={setF} onChange={setSetF} options={[['all', 'All'], ['test', 'Test'], ['fresh', 'Fresh']]} />
+          <Seg label="Hooks" value={hookF} onChange={setHookF} options={[['all', 'All'], ['fired', 'Hooks fired'], ['none', 'No hooks']]} />
+          <label className="cc__against">Sort
+            <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)}>
+              <option value="solved">Most solved</option>
+              <option value="least">Least solved</option>
+              <option value="cost">Highest cost</option>
+              <option value="id">Task id</option>
+            </select>
+          </label>
+          <label className="cc__against">Condition
+            <select value={condition ?? ''} onChange={(e) => atlas.set({ condition: (e.target.value || null) as ArmId | null })}>
+              <option value="">All six</option>
+              {arms.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
+            </select>
+          </label>
+          <div className="seg" role="group" aria-label="Density">
+            <button type="button" className="seg__btn" aria-pressed={!compact} onClick={() => setCompact(false)}>Comfortable</button>
+            <button type="button" className="seg__btn" aria-pressed={compact} onClick={() => setCompact(true)}>Compact</button>
+          </div>
+        </div>
+      </details>
 
       <div className="mx-meta">
         <p className="mx-count" aria-live="polite">Showing {flat.length} of {summary.tasks.length} bugs</p>
-        <ul className="mx-legend" aria-label="Legend">
-          <li><span className="mx-swatch" data-v="2">2/2</span> both runs solved</li>
-          <li><span className="mx-swatch" data-v="1">1/2</span> one of two</li>
-          <li><span className="mx-swatch" data-v="0">0/2</span> neither</li>
-          <li><span className="tag tag--test">test</span> <span className="tag tag--fresh">fresh</span> task set</li>
-          <li><span className="hook-dot" aria-hidden="true" /> a hook message reached the agent</li>
-        </ul>
+        {view === 'matrix' && (
+          <ul className="mx-legend" aria-label="Legend">
+            <li><span className="mx-swatch" data-v="2">2/2</span> both runs solved</li>
+            <li><span className="mx-swatch" data-v="1">1/2</span> one of two</li>
+            <li><span className="mx-swatch" data-v="0">0/2</span> neither</li>
+            <li><span className="tag tag--test">test</span> <span className="tag tag--fresh">fresh</span> task set</li>
+            <li><span className="hook-dot" aria-hidden="true" /> a hook message reached the agent</li>
+          </ul>
+        )}
       </div>
 
       {view === 'list' && (
@@ -292,11 +301,13 @@ function Matrix({ summary, onOpenTask, selectedTask }: { summary: Summary } & Om
           </div>
         )}
       </div>}
-      <p className="caption mx-caption">
-        <span className="caption__n">Figure 6.</span> Resolved runs out of 2 for each bug (rows) under each condition (columns), grouped by
-        what happened across all twelve runs. Only the {counts.mixed} mixed bugs can tell conditions apart. Select any row or cell to open
-        that bug's twelve runs below.
-      </p>
+      {view === 'matrix' && (
+        <p className="caption mx-caption">
+          <span className="caption__n">Figure 6.</span> Resolved runs out of 2 for each bug (rows) under each condition (columns), grouped by
+          what happened across all twelve runs. Only the {counts.mixed} mixed bugs can tell conditions apart. Select any row or cell to open
+          that bug's twelve runs below.
+        </p>
+      )}
       <Bridge to="explorer-all">Open the run explorer ↓</Bridge>
     </div>
   );
