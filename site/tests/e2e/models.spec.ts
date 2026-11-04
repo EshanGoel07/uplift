@@ -10,7 +10,8 @@ const MODELS: Spec[] = [
 ];
 
 const go = (page: Page, section: string, i: number) => page.locator(`#${section} .story__step[data-step="${i}"]`).evaluate((el) => el.scrollIntoView({ behavior: 'instant', block: 'center' }));
-const assembly = (page: Page, id: string) => page.evaluate((k) => (window as any).__upliftDiag.assembly(k), id);
+// The Canvas, and so the diagnostics, may not have mounted yet; polling callers simply try again.
+const assembly = (page: Page, id: string) => page.evaluate((k) => (window as any).__upliftDiag?.assembly(k) ?? { settledAt: -1, selected: null }, id);
 
 async function litPixels(page: Page, section: string): Promise<number> {
   const box = (await page.locator(`#${section} .story__stage`).boundingBox())!;
