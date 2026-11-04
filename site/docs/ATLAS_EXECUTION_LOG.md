@@ -30,6 +30,11 @@ Plan: M0 to M13. All milestones ran. The items under "Cut or partial" were not b
 - Nebula hover, 6 sweeps: p95 16.8 ms, p99 16.8 ms. Zero idle frames once its drift ends.
 - Page overflow and console errors: none at 375, 390, 600, 768, 1024, 1440, 1920.
 
+## Release state
+- Local: tsc clean, 117 of 117 unit tests, 65 of 65 e2e.
+- Live at https://uplift-sandy-mu.vercel.app, deployed from `redesign/experiment-atlas` with the Vercel CLI. `main` was not changed.
+- Vercel previews sit behind Vercel login, so e2e could not run on a preview. It ran on production after the deploy instead: 63 of 65. The two failures assert the `/uplift/` sub-path, which only exists in the local test server. The live deployment was checked for console errors and task fetches first, as the same test does before its last line.
+
 ## Known issue: first-hover stall
 On a fresh page, the first contact with the hero stalls for 300 to 500 ms, once to three times, then stops. Up to about 12 stalls were seen in one comparison run. Trace: `RendererRasterWorker` `CommandBuffer::Flush` in the GPU process, so it is DOM raster, not WebGL. Hiding the readout nearly removes it. The cause is unresolved.
 
