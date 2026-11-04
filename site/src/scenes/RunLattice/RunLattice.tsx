@@ -3,11 +3,11 @@ import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import { BufferAttribute, BufferGeometry, Color, DoubleSide, InstancedBufferAttribute, InstancedMesh, Object3D, PerspectiveCamera, PlaneGeometry, Quaternion, ShaderMaterial, Vector2, Vector3 } from 'three';
 import { groupOf } from '../../data/classify';
 import { atlas } from '../../state/atlasStore';
-import { lattice, latticeHandlers, latticeLabels, latticeScroll, useLattice } from '../../state/latticeStore';
+import { lattice, latticeHandlers, latticeLabels, latticeProbe, latticeScroll, useLattice } from '../../state/latticeStore';
 import { requestFrame, scenes } from '../../state/sceneStore';
 import { ADDITIVE, HALO_FALLOFF, hazeMaterial } from '../materials/shared';
 import { CONDITION_COLOR, INTERFACE, OUTCOME } from '../palette';
-import { LANE, TILE_H, TILE_VISIBLE, TILE_W, instanceIndex, latticeLayout, outcomeAt, type LatticeLayout, type Vec3 } from './layout';
+import { LANE, REP, TILE_H, TILE_W, VISIBLE_H, VISIBLE_W, instanceIndex, latticeLayout, outcomeAt, type LatticeLayout, type Vec3 } from './layout';
 
 /**
  * The run lattice: every one of the 924 runs as a point of light on one curved sheet in the Nebula's
@@ -67,10 +67,11 @@ void main() {
   int i = int(aBug + 0.5);
   float design = uDesign[i], lift = uLift[i], glow = uGlow[i];
   bool inside = (uIso.x < 0.0 || abs(aBug - uIso.x) < 0.5) && (uIso.y < 0.0 || abs(aLane - uIso.y) < 0.5) && (uIso.z < 0.0 || abs(aRep - uIso.z) < 0.5);
-  float strength = mix(aWeight, 0.46, design) * (1.0 + lift * 2.0) + glow * 0.12;
+  float raised = smoothstep(0.0, 0.3, lift);
+  float strength = mix(mix(aWeight, 0.46, design), 1.2, raised) + glow * 0.12;
   if (!inside) strength *= 1.0 - uFade;
   vUv = uv;
-  vColor = mix(aOutcome, uDesignColor, design);
+  vColor = mix(mix(aOutcome, uDesignColor, design), vec3(1.0), raised * 0.16);
   vStrength = strength;
   vFocus = glow;
   vec4 world = modelMatrix * instanceMatrix * vec4(position.xy * uGrow, 0.0, 1.0);
@@ -86,7 +87,7 @@ varying vec3 vColor;
 varying float vStrength;
 varying float vFocus;
 void main() {
-  vec2 q = abs(vUv - 0.5) * 2.0 / vec2(1.0, ${TILE_VISIBLE.toFixed(4)});
+  vec2 q = abs(vUv - 0.5) * 2.0 / vec2(${VISIBLE_W.toFixed(4)}, ${VISIBLE_H.toFixed(4)});
   vec2 d = max(q - vec2(0.42, 0.56), 0.0) / vec2(0.34, 0.26);
   float edge = smoothstep(1.0, 0.8, length(d));
   float sheen = 0.78 + 0.32 * vUv.y;
@@ -300,6 +301,20 @@ export function RunLatticeScene() {
 
   useEffect(() => () => { setCursor(''); scenes.settle('lattice'); }, []);
 
+  // QA only: where a bug's column sits on the stage, from its top tile's upper edge to its bottom
+  // tile's lower edge, so a test can sweep every column exactly rather than guess at pixels.
+  useEffect(() => {
+    latticeProbe.column = (bug) => {
+      const { v, p } = scratch;
+      const point = (across: number) => {
+        v.fromArray(at(colAt(bug), across, p)).project(camera);
+        return { x: ((v.x + 1) / 2) * size.width, y: ((1 - v.y) / 2) * size.height };
+      };
+      return [point(laneAt(0) + REP * 2), point(laneAt(lanes - 1) - REP * 2)];
+    };
+    return () => { latticeProbe.column = null; };
+  }, [at, camera, colAt, laneAt, lanes, scratch, size]);
+
   useFrame((_, dtRaw) => {
     const m = mesh.current;
     // Inactive: no work and no frame requests. Elapsed time simply lands on the settled state on return.
@@ -313,7 +328,7 @@ export function RunLatticeScene() {
 
     // Camera: a fixed three-quarter view of the sheet, rising a little as the hero scrolls away. It
     // never follows the pointer.
-    const elT = (wide ? 0.13 : 0.1) + latticeScroll.value * 0.1;
+    const elT = (wide ? 0.24 : 0.1) + latticeScroll.value * 0.1;
     if (st.el === 0) { st.el = elT; st.camDirty = true; }
     if (Math.abs(elT - st.el) > 1e-4) {
       st.el += (elT - st.el) * (1 - Math.exp(-dt * 5));
@@ -324,7 +339,7 @@ export function RunLatticeScene() {
     if (st.camDirty) {
       st.camDirty = false;
       const { v, p } = scratch;
-      const yaw = wide ? -0.3 : 0, R = 20;
+      const yaw = wide ? -0.12 : 0, R = 20;
       camera.position.set(Math.sin(yaw) * Math.cos(st.el) * R, Math.sin(st.el) * R, Math.cos(yaw) * Math.cos(st.el) * R);
       camera.lookAt(0, 0, -0.9);
 
@@ -443,14 +458,24 @@ export function RunLatticeScene() {
   const bugOf = (e: ThreeEvent<PointerEvent | MouseEvent>) =>
     e.instanceId === undefined ? null : Math.floor(e.instanceId / perBug);
 
+  // Crossing from one tile to the next fires "out" for the old tile and then "move" for the new one, in
+  // the same event. So the bug under the pointer is tracked here: the store only catches up after React
+  // commits, and comparing with it would leave a bug cleared when two tiles belong to the same bug.
+  const pointerBug = useRef<number | null>(null);
+  const hover = (i: number | null) => {
+    if (i === pointerBug.current) return;
+    pointerBug.current = i;
+    latticeHandlers.onHover(i);
+  };
+
   return (
     <>
       <mesh geometry={hazePlane} material={materials.haze} position={[0, 0, -3.4]} scale={[21, 14, 1]} renderOrder={0} raycast={() => null} />
       <mesh geometry={filaments} material={materials.filament} renderOrder={1} raycast={() => null} />
       <instancedMesh ref={halo} args={[geo, materials.halo, count]} renderOrder={2} frustumCulled={false} raycast={() => null} />
       <instancedMesh ref={mesh} args={[geo, materials.tile, count]} renderOrder={3}
-        onPointerMove={(e) => { e.stopPropagation(); const i = bugOf(e); if (i !== lattice.get().hovered) latticeHandlers.onHover(i); setCursor('pointer'); }}
-        onPointerOut={() => { latticeHandlers.onHover(null); setCursor(''); }}
+        onPointerMove={(e) => { e.stopPropagation(); hover(bugOf(e)); setCursor('pointer'); }}
+        onPointerOut={() => { hover(null); setCursor(''); }}
         onClick={(e) => { e.stopPropagation(); const i = bugOf(e); if (i !== null) latticeHandlers.onPick(i); }} />
     </>
   );

@@ -51,3 +51,6 @@ export const latticeLabels: (HTMLElement | null)[] = [];
 
 /** 0..1 progress of the hero scrolling out, written by HeroStage and read by the camera. */
 export const latticeScroll = { value: 0 };
+
+/** QA only, read through `?diag`: a bug's column as stage-relative [top, bottom] points. */
+export const latticeProbe: { column: ((bug: number) => { x: number; y: number }[]) | null } = { column: null };

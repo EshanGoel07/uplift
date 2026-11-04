@@ -15,10 +15,16 @@ export const LANE = 0.98;       // row pitch
 export const BUG = 0.135;       // column pitch along the curve
 export const GROUP_GAP = 5;     // columns left empty between test and fresh bugs
 export const REP = 0.185;       // repeat offset from the row's centre
-export const TILE_W = BUG;      // tiles fill their pitch, so the pointer never falls between two
-export const TILE_H = LANE * 0.6;  // taller than the visible tile: bridges the gap between rows for the pointer
-export const TILE_VISIBLE = (REP * 2) / TILE_H;
-export const ARC = 1.3;         // radians of curve across the sheet
+// A tile's quad is the pointer's target as well as its picture, and it is larger than the visible tile.
+// Quads must meet across both axes: neighbouring columns, and the outer tiles of neighbouring rows
+// (LANE - 2 * REP apart, centre to centre), or a pointer moving down a column drops its bug.
+const OVERLAP = 0.06;
+export const TILE_W = BUG * 1.02;
+export const TILE_H = LANE - 2 * REP + OVERLAP;
+/** The visible tile as a fraction of its quad. */
+export const VISIBLE_W = BUG / TILE_W;
+export const VISIBLE_H = (REP * 2) / TILE_H;
+export const ARC = 1.7;         // radians of curve across the sheet
 
 export type Vec3 = [number, number, number];
 

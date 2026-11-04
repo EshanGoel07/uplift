@@ -71,14 +71,28 @@ Fix: `jumpTo` uses `replaceState`, so section moves create no history entry. The
 
 Decision: one curved additive sheet holding all 924 runs, with green and red for outcome and each condition as one fine filament. Mixed bugs burn brighter than bugs whose twelve runs all agree. The two-group split from RunLattice is kept as a gap in the sheet.
 
-## First-hover baseline
-Probe: `scripts/qa/m15-firsthover.mjs`, fresh page each trial, 1440×900, 8 s settle, Iris Xe.
+## First-hover findings
+Probes: `scripts/qa/m15-early-hover.mjs` (cold browser each trial, readout visible, 1440×900, Iris Xe) and `scripts/qa/m15-startup-profile.mjs`. Contact is measured from the moment the stage exists, about 1.0 to 1.4 s after navigation.
 
-| Build | Trials | Median | p95 | Worst | Frames over 50 ms | Long tasks |
-|---|---|---:|---:|---:|---:|---:|
-| Baseline, readout shown | 6 | 16.7 | 16.8 | 16.8 | 0 | 0 |
-| Baseline, readout hidden | 6 | 16.7 | 16.7 | 33.2 | 0 | 0 |
-| New Lattice, readout shown | 3 | 16.7 | 16.8 | 16.8 | 0 | 0 |
-| New Lattice, readout hidden | 3 | 16.7 | 16.7 | 16.8 | 0 | 0 |
+An earlier probe here waited 8 s, saw nothing, and missed the stall. **Early contact reproduces it. It is not fixed.**
 
-**The stall did not reproduce under this probe, on either build. It is not established as fixed.** The earlier reports used different timing, and this probe waits 8 s before first contact. M15.9 must retest with earlier contact and with a trace.
+| Build | Pointer | Contact | Trials with a frame over 50 ms | Worst frame |
+|---|---|---:|---:|---:|
+| Before M15 (`b9d434f`) | Moving | 0 ms | 4 of 4 | 299.9 ms |
+| Before M15 (`b9d434f`) | Still | 0 ms | 4 of 4 | 300.0 ms |
+| Final Gate 1 | Moving | 0 ms | 4 of 4 | 249.9 ms |
+| Final Gate 1 | Moving | 250 ms | 3 of 4 | 266.7 ms |
+| Final Gate 1 | Moving | 500, 1000, 2000 ms | 0 of 12 | 16.8 ms |
+
+The still-pointer control on the final build also stalled, in all 4 trials. So this stall is page startup, not hover: an early pointer only runs into it. These frames coincide with main-thread long tasks, which does not match the earlier raster/GPU account. That account may describe a separate effect; this work neither confirms nor rules it out.
+
+Headed runs were taken on an interim Gate 1 build: 3 of 3 trials stalled at 0 ms contact, worst 516.4 ms, and none at 500 or 1500 ms.
+
+**Startup long tasks, profiled:** about 600 ms at about 250 ms after navigation, from `Nav`'s mount effect, where the scroll-spy's `getBoundingClientRect` forces the first layout of the whole page. This exists before M15. Later tasks of about 240, 115 and 145 ms remain unattributed; they are the ones that land near first contact.
+
+**A regression, found and fixed:** the Lattice's noise-based haze raised shader linking from about 95 to 162 ms, with a final long task of up to 277 ms. Replacing the noise with layered sines removed it (final task about 129 ms, against about 150 ms before M15).
+
+**Next:** deal with the page's first layout in Gate 2, when the sections are restructured (`content-visibility` on off-screen chapters is the candidate), attribute the remaining tasks, and rerun the same probes.
+
+## Lattice hover
+`tests/e2e/site.spec.ts` sweeps all 77 columns, 25 points each (1,925 points), and requires the exact bug at every point. It first found 715 misses. Causes fixed: `out` and `move` fire together when crossing tiles, and the old handler compared against a stale store value, clearing hover inside one bug (carried over from the old Lattice); a 0.022 gap between neighbouring rows' pointer targets; and tiles overlapping too much where the camera angle squeezed columns at the far right. Result: 0 misses.

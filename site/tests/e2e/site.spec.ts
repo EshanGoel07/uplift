@@ -758,9 +758,9 @@ test.describe('WebGL', () => {
     const wrap = page.locator('.lattice__canvas-wrap');
     const box = (await wrap.boundingBox())!;
     const start = await page.locator('.lattice__pos').textContent();
-    // The front block of cubes sits in the lower right of the stage.
-    await page.mouse.move(box.x + box.width * 0.62, box.y + box.height * 0.68);
-    await page.mouse.move(box.x + box.width * 0.64, box.y + box.height * 0.68);
+    // The test bugs fill the left of the sheet; the gap before the fresh bugs has nothing to hover.
+    await page.mouse.move(box.x + box.width * 0.43, box.y + box.height * 0.68);
+    await page.mouse.move(box.x + box.width * 0.45, box.y + box.height * 0.68);
     await expect(page.locator('.lattice__pos')).not.toHaveText(start!);
     // The readout follows once the pointer pauses, and the lifted cube can move under a resting pointer.
     let id = '', prev = '-';
@@ -770,10 +770,30 @@ test.describe('WebGL', () => {
       id = (await page.locator('.lattice__bug-id').textContent())!;
       return id === prev;
     }, { timeout: 8000 }).toBe(true);
-    await page.mouse.click(box.x + box.width * 0.64, box.y + box.height * 0.68);
+    await page.mouse.click(box.x + box.width * 0.45, box.y + box.height * 0.68);
     await expect(page.locator('.insp .insp__id')).toContainText(id);
     await expect(page.locator('.insp')).toContainText('Task passport');
     expect(errors).toEqual([]);
+  });
+
+  test('a pointer sweep down all 77 columns never misses its bug', async ({ page }) => {
+    test.setTimeout(240_000);
+    await page.goto('./?diag&hero=runs', { waitUntil: 'networkidle' });
+    await expect(page.locator('.seg-dark button', { hasText: 'Outcomes' })).toHaveAttribute('aria-pressed', 'true', { timeout: 12_000 });
+    await page.waitForFunction(() => (window as any).__upliftDiag?.latticeColumn(0));
+    const box = (await page.locator('.lattice__canvas-wrap').boundingBox())!;
+    const missed: string[] = [];
+    for (let bug = 0; bug < 77; bug++) {
+      const [top, bottom] = await page.evaluate((b) => (window as any).__upliftDiag.latticeColumn(b), bug);
+      for (let i = 0; i <= 24; i++) {
+        const t = i / 24;
+        await page.mouse.move(box.x + top.x + (bottom.x - top.x) * t, box.y + top.y + (bottom.y - top.y) * t);
+        // Two animation frames: the pointer event has been handled and React has committed.
+        const hovered = await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => done((window as any).__upliftDiag.latticeHovered())))));
+        if (hovered !== bug) missed.push(`bug ${bug} at ${t.toFixed(2)}: ${hovered}`);
+      }
+    }
+    expect(missed).toEqual([]);
   });
 
   test('phones: the 2D Atlas, no canvas, and no three.js download', async ({ browser }) => {
@@ -872,7 +892,7 @@ test.describe('WebGL', () => {
     const box = (await wrap.boundingBox())!;
     const clip = { x: box.x, y: box.y, width: box.width, height: box.height };
     const before = await page.screenshot({ clip });
-    await page.mouse.move(box.x + box.width * 0.64, box.y + box.height * 0.68);
+    await page.mouse.move(box.x + box.width * 0.45, box.y + box.height * 0.68);
     await expect(page.locator('.lattice__pos')).not.toHaveText('Bug 51 of 77');
     await settled(page);
     expect((await page.screenshot({ clip })).equals(before)).toBe(false);

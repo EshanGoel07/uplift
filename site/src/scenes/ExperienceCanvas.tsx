@@ -2,6 +2,7 @@ import { Component, lazy, Suspense, useEffect, useState, type ReactNode } from '
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import type { Summary } from '../data/types';
 import { invalidations, requestFrame, scenes, setInvalidator, ui, useScenes, useUi } from '../state/sceneStore';
+import { lattice, latticeProbe } from '../state/latticeStore';
 import { workbenchBounds } from '../state/workbenchStore';
 import { useNear } from '../hooks/useNear';
 import { OFF } from './layout';
@@ -81,6 +82,8 @@ function Diagnostics() {
       activeScenes: () => scenes.list().filter((e) => e.visible).length,
       animating: () => scenes.list().some((e) => e.animating),
       workbenchBounds: () => ({ ...workbenchBounds }),
+      latticeHovered: () => lattice.get().hovered,
+      latticeColumn: (bug: number) => latticeProbe.column?.(bug) ?? null,
       renderer: () => ({ calls: gl.info.render.calls, triangles: gl.info.render.triangles, geometries: gl.info.memory.geometries, textures: gl.info.memory.textures, programs: gl.info.programs?.length ?? 0 }),
     };
     return () => { delete w.__upliftDiag; };

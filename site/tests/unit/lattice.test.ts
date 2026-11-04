@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { instanceIndex, latticeLayout, outcomeAt } from '../../src/scenes/RunLattice/layout';
+import { BUG, LANE, REP, TILE_H, TILE_W, VISIBLE_H, VISIBLE_W, instanceIndex, latticeLayout, outcomeAt } from '../../src/scenes/RunLattice/layout';
 
 interface Summary { tasks: { id: string; set: string; solved: Record<string, number> }[]; arms: { id: string; attempts: number; solved: number }[] }
 const summary = JSON.parse(readFileSync(resolve(__dirname, '../../public/data/summary.json'), 'utf-8')) as Summary;
@@ -49,6 +49,17 @@ describe.each([['wide', true], ['tall', false]])('%s arrangement', (_, wide) => 
     }
     expect(ids.size).toBe(924);
     expect(Math.max(...ids)).toBe(923);
+  });
+});
+
+describe('pointer targets', () => {
+  it('meet across rows and columns, so a pointer never falls between two tiles', () => {
+    expect(TILE_H).toBeGreaterThan(LANE - 2 * REP);
+    expect(TILE_W).toBeGreaterThan(BUG);
+  });
+  it('leave the visible tile inside its quad', () => {
+    expect(VISIBLE_W).toBeLessThanOrEqual(1);
+    expect(VISIBLE_H).toBeLessThanOrEqual(1);
   });
 });
 

@@ -1,5 +1,5 @@
 import { AdditiveBlending, Color, ShaderMaterial } from 'three';
-import { SIMPLEX_3D, SPECTRAL_RAMP } from '../shaders/noise';
+import { SPECTRAL_RAMP } from '../shaders/noise';
 import { SPECTRAL } from '../palette';
 
 // The shared Nebula material language: every luminous scene takes its light from here, so the Lattice,
@@ -21,7 +21,7 @@ export const HALO_FALLOFF = /* glsl */ `float haloFalloff(float d) { return exp(
 
 export interface HazeOpts { seed: number; intensity: number; warmth: number }
 
-/** A still spectral atmosphere behind a model: noise under a radial mask, warmer toward its centre. */
+/** A still spectral atmosphere behind a model: soft bands under a radial mask, warmer toward its centre. */
 export function hazeMaterial(o: HazeOpts): ShaderMaterial {
   return new ShaderMaterial({
     ...ADDITIVE,
@@ -38,7 +38,6 @@ export function hazeMaterial(o: HazeOpts): ShaderMaterial {
       void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
     `,
     fragmentShader: /* glsl */ `
-      ${SIMPLEX_3D}
       ${SPECTRAL_RAMP}
       uniform vec3 uCore;
       uniform float uSeed;
@@ -48,9 +47,9 @@ export function hazeMaterial(o: HazeOpts): ShaderMaterial {
       void main() {
         vec2 p = (vUv - 0.5) * 2.0;
         float mask = smoothstep(1.0, 0.1, length(p * vec2(1.0, 1.25)));
-        vec3 q = vec3(p * vec2(1.5, 1.1), uSeed);
-        float n = snoise(q) * 0.6 + snoise(q * 2.3 + 4.0) * 0.28;
-        float density = smoothstep(-0.55, 0.85, n);
+        // Layered sines, not noise: the haze is faint, and noise costs far more to compile on ANGLE.
+        float n = sin(p.x * 2.1 + uSeed) * 0.5 + sin(p.y * 3.3 - p.x * 1.3 + uSeed * 1.7) * 0.35 + sin((p.x + p.y) * 4.7 + uSeed * 0.6) * 0.15;
+        float density = smoothstep(-0.7, 0.9, n);
         vec3 c = spectral(0.5 + 0.42 * p.x + 0.3 * n);
         c = mix(c, uCore, smoothstep(0.55, 0.0, length(p)) * uWarmth);
         gl_FragColor = vec4(c, 1.0);
