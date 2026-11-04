@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ArmId, Summary, Task } from '../../data/types';
 import { shortId } from '../../data/classify';
 import { pct } from '../../data/format';
 import { loadTask } from '../../data/load';
+import { useInView } from '../../hooks/useInView';
 import { CONDITIONS } from '../../data/method';
 import { atlas, inCompare, openRun, toggleCompare, useAtlas } from '../../state/atlasStore';
 import { condStyle } from '../../utils/condition';
@@ -52,13 +53,16 @@ function PairedExplorer({ summary }: { summary: Summary }) {
   const state = useAtlas((s) => s);
   const meta = summary.tasks.find((t) => t.id === id)!;
   const [task, setTask] = useState<Task | null>(null);
+  const root = useRef<HTMLDivElement>(null);
+  const near = useInView(root, '600px 0px');
   useEffect(() => {
+    if (!near) return;
     let on = true;
     loadTask(id).then((t) => { if (on) setTask(t); }).catch(() => {});
     return () => { on = false; };
-  }, [id]);
+  }, [id, near]);
   return (
-    <div className="paired">
+    <div className="paired" ref={root}>
       <Kicker as="h3">Paired experiment</Kicker>
       <p className="paired__flow"><span>Same task</span><Icon name="arrow" size={13} /><span>Different condition</span><Icon name="arrow" size={13} /><span>Two repeats</span></p>
       <p className="paired__bug"><span className="insp__id">{shortId(id)}</span> {meta.title}</p>

@@ -29,7 +29,7 @@ test('loads from a sub-path with no errors and no task files on first paint', as
   const taskRequests: string[] = [];
   page.on('request', (r) => { if (r.url().includes('/data/tasks/')) taskRequests.push(r.url()); });
   await page.goto('./', { waitUntil: 'networkidle' });
-  await expect(page.locator('#hero-title')).toHaveText(/Do coding.agent setups actually help\?/);
+  await expect(page.locator('#hero-title')).toHaveText(/Do coding.agent setups actually make agents better/);
   await page.waitForTimeout(1000);
   expect(taskRequests).toEqual([]);
   expect(errors).toEqual([]);
@@ -57,9 +57,7 @@ test('navigation jumps to sections and marks the current one', async ({ page }) 
   await expect(page.locator('.nav__links a')).toHaveText(['Overview', 'Findings', 'Experiment', 'Investigation', 'Bug Atlas', 'Architecture', 'Integrity']);
   for (const [label, id] of [['Integrity', 'trust'], ['Findings', 'results'], ['Experiment', 'method'], ['Investigation', 'explorer']] as const) {
     await page.locator('.nav__links a', { hasText: label }).click();
-    await page.waitForTimeout(1600);
-    const top = await page.locator(`#${id}`).evaluate((el) => el.getBoundingClientRect().top);
-    expect(Math.abs(top)).toBeLessThan(120);
+    await expect.poll(() => page.locator(`#${id}`).evaluate((el) => Math.abs(el.getBoundingClientRect().top)), { timeout: 6000 }).toBeLessThan(120);
     await expect(page.locator('.nav__links a[aria-current]')).toHaveText(label);
   }
 });
@@ -101,9 +99,9 @@ test('matrix: 77 rows in 43/23/11 bands, working filters, and cell opens the exp
   expect(fresh).toBeLessThan(23);
   await page.locator('.seg__btn', { hasText: /^All$/ }).nth(0).click();
   await page.locator('.seg__btn', { hasText: /^All$/ }).nth(1).click();
-  await page.locator('.mx-search input').fill('WINDOW');
+  await page.locator('#matrix .mx-search input').fill('WINDOW');
   await expect(rows.first()).toContainText('WINDOW');
-  await page.locator('.mx-search input').fill('');
+  await page.locator('#matrix .mx-search input').fill('');
   await page.locator('.seg__btn', { hasText: 'Hooks fired' }).click();
   expect(await rows.count()).toBeLessThan(77);
   await page.locator('.seg__btn', { hasText: /^All$/ }).nth(2).click();
@@ -114,6 +112,156 @@ test('matrix: 77 rows in 43/23/11 bands, working filters, and cell opens the exp
   await expect(page.locator('.ex-head__title')).toHaveText('IS NOT NULL incorrect transformation', { timeout: 10_000 });
   await expect(page.locator('.ex-head__link')).toHaveAttribute('href', 'https://github.com/tobymao/sqlglot/pull/4331');
 });
+
+test('Bug Atlas: three views over one filtered dataset, sort, density and shareable filters', async ({ page }) => {
+  await page.goto(NOGL, { waitUntil: 'networkidle' });
+  await page.locator('#matrix').scrollIntoViewIfNeeded();
+  await page.locator('.seg__btn', { hasText: 'Mixed (23)' }).click();
+  await expect(page).toHaveURL(/group=mixed/);
+  await page.getByRole('group', { name: 'Atlas view' }).getByRole('button', { name: 'Task list' }).click();
+  await expect(page.locator('.tasklist li')).toHaveCount(23);
+  await page.getByRole('group', { name: 'Atlas view' }).getByRole('button', { name: 'Lattice' }).click();
+  await expect(page.locator('.minilat__bug')).toHaveCount(23);
+  await expect(page.locator('.minilat__bug i')).toHaveCount(276);
+  await page.getByRole('group', { name: 'Density' }).getByRole('button', { name: 'Compact' }).click();
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.locator('#matrix').scrollIntoViewIfNeeded();
+  await expect(page.locator('.minilat__bug')).toHaveCount(23);
+  await page.locator('.minilat__bug').first().click();
+  await expect(page.locator('.insp')).toContainText('Task passport');
+});
+
+test('deep links and Back/Forward restore the selection', async ({ page }) => {
+  await page.goto('./?nowebgl&task=4347&panel=task', { waitUntil: 'networkidle' });
+  await expect(page.locator('.insp .insp__id')).toHaveText('4347');
+  await expect(page.locator('.attempts tbody tr')).toHaveCount(6);
+  await page.locator('.attempts .run-cell').first().click();
+  await expect(page).toHaveURL(/cond=none/);
+  await expect(page.locator('.insp')).toContainText('Run record');
+  await expect(page.locator('.insp')).toContainText('NOT INCLUDED IN PUBLISHED EXPORT');
+  await page.goBack();
+  await expect(page.locator('.insp')).toContainText('Task passport');
+  await page.getByRole('button', { name: 'Close the inspector' }).click();
+  await expect(page.locator('.insp')).toHaveCount(0);
+  await page.goBack();
+  await expect(page.locator('.insp')).toHaveCount(1);
+});
+
+test('search palette: keyboard open, real records, no invented results', async ({ page }) => {
+  await page.goto(NOGL, { waitUntil: 'networkidle' });
+  await page.keyboard.press('Control+k');
+  const input = page.getByRole('combobox', { name: 'Search the study' });
+  await expect(input).toBeFocused();
+  await input.fill('zzz-not-a-bug');
+  await expect(page.locator('.palette')).toContainText('No matching records');
+  await input.fill('4347 tuned 2');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.insp')).toContainText('Run record');
+  await expect(page).toHaveURL(/task=4347/);
+  await page.keyboard.press('Control+k');
+  await input.fill('grade');
+  await expect(page.locator('.palette li', { hasText: 'grade' }).first()).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.palette')).toHaveCount(0);
+});
+
+test('comparison tray: runs of different bugs are refused as a matched pair', async ({ page }) => {
+  await page.goto('./?nowebgl&task=4347&cond=none&rep=1&panel=run', { waitUntil: 'networkidle' });
+  await page.getByRole('button', { name: 'Add to comparison' }).click();
+  await expect(page.locator('.tray')).toContainText('Add one more');
+  await page.goto('./?nowebgl&cmp=4347~none~0,fresh-63296846~none~0&panel=compare', { waitUntil: 'networkidle' });
+  await expect(page.locator('.insp')).toContainText('not a matched pair');
+  await page.goto('./?nowebgl&cmp=4347~none~0,4347~tuned~1&panel=compare', { waitUntil: 'networkidle' });
+  await expect(page.locator('.insp .cmp section')).toHaveCount(2);
+});
+
+test('findings: sensitivity views use the report figures, and the chart explains itself', async ({ page }) => {
+  await page.goto(NOGL, { waitUntil: 'networkidle' });
+  await page.locator('#results').scrollIntoViewIfNeeded();
+  await expect(page.locator('.findstrip')).toContainText('5 intervals cross zero');
+  await page.getByRole('button', { name: 'The zero line' }).click();
+  await expect(page.locator('.ic-readout')).toContainText('Zero means no difference');
+  await page.getByRole('group', { name: 'Sensitivity view' }).getByRole('button', { name: 'Exposed runs counted as failed' }).click();
+  await expect(page.locator('.ic-row').nth(3)).toContainText('−3.9');
+  await expect(page.locator('.ic-tools__status')).toContainText('5 of 5');
+  await page.getByRole('button', { name: 'Compare two conditions' }).click();
+  await page.locator('.ic-row').nth(0).click();
+  await page.locator('.ic-row').nth(4).click();
+  await expect(page.locator('.ic-pair')).toContainText('not a test of one against the other');
+});
+
+test('conditions: real artifacts, honest gaps, and the paired explorer', async ({ page }) => {
+  await page.goto(NOGL, { waitUntil: 'networkidle' });
+  const c = page.locator('#conditions');
+  await c.scrollIntoViewIfNeeded();
+  await c.locator('.cc__pick', { hasText: 'Generic tips file' }).click();
+  await c.locator('.cc__files button', { hasText: 'AGENTS.md' }).click();
+  await expect(c.locator('.artifact__text')).toContainText('Guidelines for AI coding agents');
+  await c.locator('.cc__pick', { hasText: 'Tips file (generated)' }).click();
+  await c.locator('.cc__files button', { hasText: 'AGENTS.md' }).click();
+  await expect(c.locator('.artifact')).toContainText('NOT INCLUDED IN PUBLISHED EXPORT');
+  await c.getByLabel('Compare with').selectOption('sensors');
+  await expect(c.locator('.cc__col')).toHaveCount(2);
+  await expect(c.locator('.paired__rows li')).toHaveCount(6);
+});
+
+test('WINDOW investigation: trace, approach selector, two-run comparison and reading mode', async ({ page }) => {
+  await page.goto(NOGL, { waitUntil: 'networkidle' });
+  const w = page.locator('#explorer');
+  await w.scrollIntoViewIfNeeded();
+  await expect(w.locator('.trace li')).toHaveCount(5);
+  await w.getByRole('group', { name: 'Approach' }).getByRole('button', { name: /Look-ahead/ }).click();
+  await expect(w.locator('.approach')).toHaveCount(1);
+  await expect(w.locator('.wcmp .diff')).toHaveCount(2);
+  await w.getByRole('button', { name: 'Reading mode' }).click();
+  await expect(w.locator('.wcmp.is-reading')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(w.locator('.wcmp.is-reading')).toHaveCount(0);
+});
+
+test('architecture: real source, import lens, lineage, topology', async ({ page }) => {
+  await page.goto(NOGL, { waitUntil: 'networkidle' });
+  const a = page.locator('#architecture');
+  await a.scrollIntoViewIfNeeded();
+  await expect(a.locator('.srcx__tree li')).toHaveCount(20, { timeout: 10_000 });
+  await expect(a.locator('.src__code')).toContainText('def grade', { timeout: 10_000 });
+  await a.locator('.srcx__fns button', { hasText: 'check_output' }).click();
+  await expect(a.locator('tr.is-hit')).toContainText('check_output');
+  await a.locator('.ribbon button', { hasText: 'Workspace' }).click();
+  await expect(a.locator('.srcx__head code')).toHaveText('src/uplift/workspace.py');
+  await expect(a.locator('.ribbon__detail')).toContainText('no history');
+  await a.getByRole('group', { name: 'Topology mode' }).getByRole('button', { name: 'Evidence focus' }).click();
+  await expect(a.locator('.topo__chain')).toContainText('Not published');
+  await a.getByRole('group', { name: 'Topology mode' }).getByRole('button', { name: 'Condition focus' }).click();
+  await expect(a.locator('.topo__dots button')).toHaveCount(77);
+});
+
+test('integrity: ledger, policy comparison, FAQ; guided tour can be stopped at any point', async ({ page }) => {
+  await page.goto(NOGL, { waitUntil: 'networkidle' });
+  await page.locator('#evidence-ledger').scrollIntoViewIfNeeded();
+  await page.getByRole('group', { name: 'Evidence status' }).getByRole('button', { name: 'Unavailable' }).click();
+  await expect(page.locator('.ledger__table tbody tr')).toHaveCount(3);
+  await expect(page.locator('.policy')).toContainText('The 924 reported runs');
+  await expect(page.locator('.faq details')).toHaveCount(6);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.getByRole('button', { name: 'Guided tour' }).click();
+  await expect(page.locator('.tour')).toContainText('Step 1 of 9');
+  await page.locator('.tour').getByRole('button', { name: 'Next' }).click();
+  await expect(page.locator('.tour')).toContainText('77 bugs');
+  await page.locator('.tour').getByRole('button', { name: 'Skip tour' }).click();
+  await expect(page.locator('.tour')).toHaveCount(0);
+});
+
+for (const width of [1241, 1280, 1366, 1440, 1600, 1920, 2560]) {
+  test(`header items do not overlap at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(NOGL, { waitUntil: 'networkidle' });
+    const items = await page.evaluate(() => [...document.querySelectorAll('.nav__brand, .nav__links a, .nav__search, .viewtog, .nav__ext, .nav__status')]
+      .map((e) => e.getBoundingClientRect()).filter((r) => r.width).map((r) => [r.left, r.right] as const));
+    for (let i = 1; i < items.length; i++) expect(items[i][0], `item ${i}`).toBeGreaterThanOrEqual(items[i - 1][1] - 0.5);
+    expect(items[items.length - 1][1]).toBeLessThanOrEqual(width);
+  });
+}
 
 test('matrix cells are keyboard navigable', async ({ page }) => {
   await page.goto(NOGL, { waitUntil: 'networkidle' });
@@ -454,6 +602,8 @@ test.describe('WebGL', () => {
       await page.locator('.herosw button', { hasText: '77 bugs' }).click();
       await page.waitForTimeout(400);
       await page.locator('#method .wb__stage').scrollIntoViewIfNeeded();
+      // The Workbench chunk loads as it approaches, so wait for it rather than for any one active scene.
+      await expect.poll(async () => (await diag<{ id: string; mounts: number }[]>(page, 'scenes')).find((s) => s.id === 'workbench')?.mounts, { timeout: 15_000 }).toBe(1);
       await expect.poll(() => diag(page, 'activeScenes')).toBe(1);
       await page.evaluate(() => window.scrollTo(0, 0));
       await page.waitForTimeout(300);
@@ -484,7 +634,7 @@ test.describe('WebGL', () => {
     // The stepper moves the one selection, which the URL and the Bench both follow.
     await page.locator('.lattice').getByRole('button', { name: 'Next bug' }).click();
     await expect(page).toHaveURL(/task=/);
-    await page.getByRole('button', { name: 'Guided' }).click();
+    await page.getByRole('button', { name: 'Guided', exact: true }).click();
     await expect(page.locator('.neb-guide')).toContainText('One node, one bug');
     await page.getByRole('button', { name: 'Exit guide' }).click();
     await expect(page.locator('.neb-guide')).toHaveCount(0);
@@ -545,6 +695,22 @@ test.describe('WebGL', () => {
     expect(b.right).toBeLessThanOrEqual(b.stageWidth);
     expect(errors).toEqual([]);
   });
+
+  for (const width of [1024, 1280, 1440]) {
+    test(`apparatus labels do not cover each other at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto('./?diag&hero=runs', { waitUntil: 'networkidle' });
+      await page.locator('#method .wb__stage').scrollIntoViewIfNeeded();
+      await expect(page.locator('.wb-label').first()).toBeVisible({ timeout: 15_000 });
+      await settled(page);
+      const rects = await page.evaluate(() => [...document.querySelectorAll('.wb__labels .wb-label')].map((e) => e.getBoundingClientRect()).filter((r) => r.width).map((r) => ({ l: r.left, r: r.right, t: r.top, b: r.bottom })));
+      expect(rects.length).toBeGreaterThan(8);
+      for (let i = 0; i < rects.length; i++) for (let j = i + 1; j < rects.length; j++) {
+        const a = rects[i], b = rects[j];
+        expect(a.l < b.r && a.r > b.l && a.t < b.b && a.b > b.t, `labels ${i} and ${j}`).toBe(false);
+      }
+    });
+  }
 
   test('rendering stops at rest: hero and workbench draw nothing while nothing changes', async ({ page }) => {
     await page.goto('./?diag&hero=runs', { waitUntil: 'networkidle' });

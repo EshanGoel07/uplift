@@ -2,6 +2,7 @@ import type { Summary } from '../../data/types';
 import { int, usd } from '../../data/format';
 import { DETECTABLE_MAX, DETECTABLE_MIN } from '../../data/reportFigures';
 import { jumpTo } from '../../components/navigation/Nav';
+import { atlas } from '../../state/atlasStore';
 import { HeroStage } from '../../components/figures/HeroStage';
 
 interface Props { summary: Summary | null }
@@ -40,6 +41,7 @@ export function Hero({ summary }: Props) {
             <div className="hero__actions">
               <a className="pbtn pbtn--primary" href="#method" onClick={(e) => { e.preventDefault(); jumpTo('method'); }}>Explore the experiment</a>
               <a className="pbtn" href="#explorer" onClick={(e) => { e.preventDefault(); jumpTo('explorer'); }}>Investigate the WINDOW bug</a>
+              <button type="button" className="pbtn hero__tour" onClick={() => atlas.set({ tour: 0 }, 'none')}>Guided tour</button>
             </div>
             <dl className="hero__stats" aria-label="The study at a glance">
               {stats.map((x) => (

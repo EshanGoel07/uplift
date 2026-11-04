@@ -1,9 +1,11 @@
-import { useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import type { ArmId, Group, Summary, TaskMeta, TaskSet } from '../../data/types';
 import { GROUP_LABEL, GROUP_ORDER, groupCounts, groupOf, shortId, sortForMatrix } from '../../data/classify';
 import { useInView } from '../../hooks/useInView';
 import { Bridge } from '../../components/navigation/Bridge';
 import { condStyle } from '../../utils/condition';
+import { atlas, openTask, useAtlas } from '../../state/atlasStore';
+import { EmptyState } from '../../components/atlas/Primitives';
 
 interface Props {
   summary: Summary | null;
@@ -30,7 +32,7 @@ export function BugMatrix({ summary, onOpenTask, selectedTask }: Props) {
     <section id="matrix" ref={root} className="pub runs" aria-labelledby="matrix-title">
       <div className="pub-container">
         <header className="pub-head">
-          <p className="pub-eyebrow">Explore runs</p>
+          <p className="pub-eyebrow">Bug Atlas</p>
           <h2 id="matrix-title" className="pub-title">All 77 bugs under all six conditions.</h2>
           <p className="pub-lead">
             Each cell is one bug under one condition: how many of its two runs the repository's real tests resolved. That is
@@ -69,13 +71,32 @@ function Ceiling({ summary }: { summary: Summary }) {
   );
 }
 
+type AtlasView = 'matrix' | 'list' | 'lattice';
+type SortKey = 'solved' | 'least' | 'cost' | 'id';
+const param = (k: string): string | null => (typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get(k));
+
+/** Filter state lives in the URL too, so a filtered Atlas can be shared. Replaces, so Back is not flooded. */
+function writeParams(p: Record<string, string>): void {
+  const q = new URLSearchParams(window.location.search);
+  for (const [k, v] of Object.entries(p)) { if (v) q.set(k, v); else q.delete(k); }
+  const s = q.toString();
+  window.history.replaceState(null, '', `${window.location.pathname}${s ? `?${s}` : ''}${window.location.hash}`);
+}
+
 const cellText = (v: number) => (v === 2 ? '2/2' : v === 1 ? '1/2' : '0/2');
 
 function Matrix({ summary, onOpenTask, selectedTask }: { summary: Summary } & Omit<Props, 'summary'>) {
-  const [setF, setSetF] = useState<SetFilter>('all');
-  const [groupF, setGroupF] = useState<GroupFilter>('all');
-  const [hookF, setHookF] = useState<HookFilter>('all');
-  const [query, setQuery] = useState('');
+  const [setF, setSetF] = useState<SetFilter>((param('set') as SetFilter) || 'all');
+  const [groupF, setGroupF] = useState<GroupFilter>((param('group') as GroupFilter) || 'all');
+  const [hookF, setHookF] = useState<HookFilter>((param('hooks') as HookFilter) || 'all');
+  const [query, setQuery] = useState(param('q') ?? '');
+  const [view, setView] = useState<AtlasView>((param('atlas') as AtlasView) || 'matrix');
+  const [sort, setSort] = useState<SortKey>((param('sort') as SortKey) || 'solved');
+  const [compact, setCompact] = useState(param('density') === 'compact');
+  const condition = useAtlas((s) => s.condition);
+  useEffect(() => {
+    writeParams({ set: setF === 'all' ? '' : setF, group: groupF === 'all' ? '' : groupF, hooks: hookF === 'all' ? '' : hookF, q: query, atlas: view === 'matrix' ? '' : view, sort: sort === 'solved' ? '' : sort, density: compact ? 'compact' : '' });
+  }, [setF, groupF, hookF, query, view, sort, compact]);
   const [focus, setFocus] = useState<{ r: number; c: number }>({ r: 0, c: 0 });
   const [tip, setTip] = useState<{ task: TaskMeta; arm: ArmId; x: number; y: number } | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
@@ -85,12 +106,16 @@ function Matrix({ summary, onOpenTask, selectedTask }: { summary: Summary } & Om
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return sortForMatrix(summary.tasks).filter((t) =>
+    const kept = sortForMatrix(summary.tasks).filter((t) =>
       (setF === 'all' || t.set === setF) &&
       (groupF === 'all' || groupOf(t.solved) === groupF) &&
       (hookF === 'all' || (hookF === 'fired' ? t.hooksFired : !t.hooksFired)) &&
       (!q || t.title.toLowerCase().includes(q) || t.id.toLowerCase().includes(q)));
-  }, [summary.tasks, setF, groupF, hookF, query]);
+    if (sort === 'least') kept.sort((a, b) => a.total - b.total);
+    else if (sort === 'cost') kept.sort((a, b) => b.cost - a.cost);
+    else if (sort === 'id') kept.sort((a, b) => a.id.localeCompare(b.id));
+    return kept;
+  }, [summary.tasks, setF, groupF, hookF, query, sort]);
 
   const bands = GROUP_ORDER.map((g) => ({ g, rows: rows.filter((t) => groupOf(t.solved) === g) })).filter((b) => b.rows.length);
   const flat = bands.flatMap((b) => b.rows);
@@ -127,7 +152,32 @@ function Matrix({ summary, onOpenTask, selectedTask }: { summary: Summary } & Om
 
   let rowIndex = -1;
   return (
-    <div className="mx">
+    <div className={`mx${compact ? ' is-compact' : ''}`}>
+      <div className="mx-views">
+        <div className="seg" role="group" aria-label="Atlas view">
+          {([['matrix', 'Matrix'], ['list', 'Task list'], ['lattice', 'Lattice']] as const).map(([v, t]) => (
+            <button key={v} type="button" className="seg__btn" aria-pressed={view === v} onClick={() => setView(v)}>{t}</button>
+          ))}
+        </div>
+        <label className="cc__against">Sort
+          <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)}>
+            <option value="solved">Most solved</option>
+            <option value="least">Least solved</option>
+            <option value="cost">Highest cost</option>
+            <option value="id">Task id</option>
+          </select>
+        </label>
+        <label className="cc__against">Condition
+          <select value={condition ?? ''} onChange={(e) => atlas.set({ condition: (e.target.value || null) as ArmId | null })}>
+            <option value="">All six</option>
+            {arms.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
+          </select>
+        </label>
+        <div className="seg" role="group" aria-label="Density">
+          <button type="button" className="seg__btn" aria-pressed={!compact} onClick={() => setCompact(false)}>Comfortable</button>
+          <button type="button" className="seg__btn" aria-pressed={compact} onClick={() => setCompact(true)}>Compact</button>
+        </div>
+      </div>
       <div className="mx-toolbar" role="group" aria-label="Matrix filters">
         <Seg label="Set" value={setF} onChange={setSetF} options={[['all', 'All'], ['test', 'Test'], ['fresh', 'Fresh']]} />
         <Seg label="Outcome" value={groupF} onChange={setGroupF}
@@ -151,8 +201,37 @@ function Matrix({ summary, onOpenTask, selectedTask }: { summary: Summary } & Om
         </ul>
       </div>
 
-      <p className="mx-swipe" aria-hidden="true">Swipe sideways to see all six conditions →</p>
-      <div className="mx-scroll" ref={wrapRef} onScroll={() => setTip(null)}>
+      {view === 'list' && (
+        <ul className="tasklist">
+          {flat.map((t) => (
+            <li key={t.id} className={t.id === selectedTask ? 'is-sel' : undefined}>
+              <button type="button" onClick={() => openTask(t.id)}>
+                <span className={`tag tag--${t.set}`}>{t.set}</span>
+                <span className="tasklist__t">{t.title}</span>
+                <span className="tasklist__id">{shortId(t.id)}</span>
+                <span className={`chip-g g-${groupOf(t.solved)}`}>{GROUP_LABEL[groupOf(t.solved)]}</span>
+                <span className="tasklist__n">{t.total}/12</span>
+              </button>
+            </li>
+          ))}
+          {flat.length === 0 && <EmptyState title="No bugs match these filters">Clear a filter to see more of the 77 bugs.</EmptyState>}
+        </ul>
+      )}
+
+      {view === 'lattice' && (
+        <div className="minilat" role="group" aria-label="Every run of each matching bug. Columns are bugs; rows are conditions and repeats.">
+          {flat.map((t) => (
+            <button key={t.id} type="button" className={`minilat__bug${t.id === selectedTask ? ' is-sel' : ''}`} onClick={() => openTask(t.id)} aria-label={`${shortId(t.id)}: ${t.total} of 12 runs solved`} title={`${shortId(t.id)}: ${t.title}`}>
+              {arms.flatMap((a) => [0, 1].map((k) => <i key={`${a.id}${k}`} className={`${k < t.solved[a.id] ? 'ok' : 'no'}${condition && condition !== a.id ? ' dim' : ''}`} />))}
+            </button>
+          ))}
+          {flat.length === 0 && <EmptyState title="No bugs match these filters" />}
+        </div>
+      )}
+      {view === 'lattice' && <p className="caption">Each column is one bug and each cell one run, in condition order. Within a pair the solved run is drawn first: the summary records how many of the two solved, so order within a pair is not meaningful here. The run record shows each repeat exactly.</p>}
+
+      {view === 'matrix' && <p className="mx-swipe" aria-hidden="true">Swipe sideways to see all six conditions →</p>}
+      {view === 'matrix' && <div className="mx-scroll" ref={wrapRef} onScroll={() => setTip(null)}>
         <div ref={gridRef} className="mx-grid" role="grid" aria-label="Bugs by condition: resolved runs out of 2" aria-rowcount={flat.length + 1}
              style={{ ['--cols' as string]: cols }} onMouseLeave={() => setTip(null)}>
           <div className="mx-row mx-row--head" role="row">
@@ -186,7 +265,7 @@ function Matrix({ summary, onOpenTask, selectedTask }: { summary: Summary } & Om
                       const v = t.solved[a.id];
                       const c = i + 1;
                       return (
-                        <div key={a.id} role="gridcell" className="mx-cell" data-v={v} data-r={r} data-c={c}
+                        <div key={a.id} role="gridcell" className={`mx-cell${condition && condition !== a.id ? ' is-dim' : ''}`} data-v={v} data-r={r} data-c={c}
                              tabIndex={fr === r && focus.c === c ? 0 : -1}
                              aria-label={`${t.title}, ${a.label}: ${v} of 2 runs resolved`}
                              onKeyDown={(e) => onKey(e, r, c)}
@@ -213,7 +292,7 @@ function Matrix({ summary, onOpenTask, selectedTask }: { summary: Summary } & Om
             <p className="mx-tooltip__note">Click or press Enter to open in the explorer</p>
           </div>
         )}
-      </div>
+      </div>}
       <p className="caption mx-caption">
         <span className="caption__n">Figure 6.</span> Resolved runs out of 2 for each bug (rows) under each condition (columns), grouped by
         what happened across all twelve runs. Only the {counts.mixed} mixed bugs can tell conditions apart. Select any row or cell to open

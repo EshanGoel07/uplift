@@ -101,7 +101,15 @@ export function HeroStage({ summary }: Props) {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  const shown = hovered ?? focus;
+  // The readout follows the pointer only once it pauses. Repainting this text on every bug crossed made
+  // the GPU process stall for up to half a second while the canvas was also drawing; the lift in the
+  // scene stays immediate, because it is a uniform.
+  const [read, setRead] = useState<number | null>(null);
+  useEffect(() => {
+    const id = window.setTimeout(() => setRead(hovered), 160);
+    return () => window.clearTimeout(id);
+  }, [hovered]);
+  const shown = read ?? focus;
   const t = tasks[shown];
   const choose = (m: LatticeMode) => { setTouched(true); setMode(m); };
   const step = (d: number) => { setHovered(null); atlas.set({ task: tasks[(focus + d + tasks.length) % tasks.length].id }); };

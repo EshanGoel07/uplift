@@ -358,3 +358,10 @@ stage lists.
 - Checks: typecheck, `npm test` 36/36, build, `npm run e2e` 22/22. Three new tests: ceiling bar,
   limitations order, footer links. The integrity test now also covers the timeline, the source links
   and the failure table.
+
+## Experiment Atlas (Nov 2026)
+
+Nebula Atlas, shared selection with deep links, inspector, search, comparison tray, Findings views, Conditions
+control room, Apparatus presets, WINDOW investigation, Bug Atlas views, Architecture section, evidence ledger and
+guided tour. Full record, defects found, measurements and cuts: [docs/ATLAS_EXECUTION_LOG.md](docs/ATLAS_EXECUTION_LOG.md).
+

@@ -7,6 +7,7 @@ import {
 } from '../../data/reportFigures';
 import { DOC_LINKS, SOURCE_LINKS } from '../../data/links';
 import { Bridge } from '../../components/navigation/Bridge';
+import { EvidenceBadge, EvidenceLedger } from '../../components/atlas/Evidence';
 
 const ext = { target: '_blank', rel: 'noopener noreferrer' } as const;
 const ROB_ARMS = ['prose', 'sensors', 'both', 'handwritten', 'tuned'] as const;
@@ -51,7 +52,7 @@ export function Trust({ summary }: { summary: Summary | null }) {
         <div id="web-leak-investigation" className="investigation">
           <header className="investigation__head">
             <p className="investigation__k">The web-leak investigation</p>
-            <h3>{WEB_EXPOSED} of {runs} runs reached the real fix or newer upstream code.</h3>
+            <h3>{WEB_EXPOSED} of {runs} runs reached the real fix or newer upstream code. <EvidenceBadge id="E07" /></h3>
             <p>That is {(WEB_EXPOSED / runs * 100).toFixed(1)}% of the runs, and a lower bound. Workspaces had no git history, but the agent could still reach the web.</p>
           </header>
 
@@ -192,6 +193,24 @@ export function Trust({ summary }: { summary: Summary | null }) {
             </div>
             <p className="dk-fine">Muse Spark also labelled every failure, but those labels are not verified causes (its "broke other tests" label was used 67 times, 65 of them on runs where every previously passing test still passed), so only the checked facts are shown. Run-to-run noise is real too: the two repeats of a condition disagreed on {REPEAT_DISAGREE.pairs} of {REPEAT_DISAGREE.of} bug-condition pairs.</p>
           </article>
+        </div>
+        <div className="policy">
+          <h3 className="pub-h3">Network policy, then and now <EvidenceBadge id="E08" /></h3>
+          <div className="pub-table-wrap">
+            <table className="pub-table">
+              <caption>The block applies to new runs only. It does not change any reported result.</caption>
+              <thead><tr><th scope="col">When</th><th scope="col">Agent network</th><th scope="col">Filesystem</th></tr></thead>
+              <tbody>
+                <tr><th scope="row">The {runs} reported runs</th><td>Default: the web was reachable</td><td>Readable outside the workspace</td></tr>
+                <tr><th scope="row">New runs</th><td>Blocked except the model API, confirmed with a probe run</td><td>Still readable outside the workspace</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div id="evidence-ledger" className="ledger-wrap">
+          <h3 className="pub-h3">Evidence and provenance ledger</h3>
+          <p className="muted">Each major claim on this site, where it comes from, and how far you can follow it.</p>
+          <EvidenceLedger />
         </div>
         <Bridge to="limitations">What this study cannot tell you →</Bridge>
       </div>

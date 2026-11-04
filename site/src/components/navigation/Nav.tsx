@@ -16,24 +16,34 @@ export const NAV_ITEMS = [
 
 const headerHeight = (): number => (document.querySelector('.nav') as HTMLElement | null)?.offsetHeight ?? 64;
 
+let jumpSeq = 0;
+
 export function jumpTo(id: string): void {
   const el = document.getElementById(id);
   if (!el) return;
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
   history.replaceState(null, '', `${location.pathname}${location.search}#${id}`);
-  // Content above can grow while we scroll (a bug loading in the explorer): re-aim once it settles,
-  // so the heading always lands just below the sticky header.
+  // Content above can grow while we scroll (a bug loading in the explorer): once the scroll has stopped,
+  // re-aim so the heading lands just below the sticky header. A newer jump or the reader's own input wins.
+  const mine = ++jumpSeq;
   let tries = 0;
+  let last = Number.NaN;
+  let stopped = false;
+  const stop = () => { stopped = true; for (const t of ['wheel', 'touchstart', 'keydown']) window.removeEventListener(t, stop); };
+  for (const t of ['wheel', 'touchstart', 'keydown']) window.addEventListener(t, stop, { passive: true });
   const settle = () => {
+    if (stopped || mine !== jumpSeq) { stop(); return; }
+    if (window.scrollY !== last) { last = window.scrollY; window.setTimeout(settle, 140); return; }
     const top = el.getBoundingClientRect().top;
     const want = headerHeight() + 8;
     if (Math.abs(top - want) > 24 && tries++ < 4) {
-      window.scrollTo({ top: window.scrollY + top - want, behavior: 'auto' });
+      window.scrollTo({ top: window.scrollY + top - want, behavior: 'instant' });
+      last = Number.NaN;
       window.setTimeout(settle, 250);
-    }
+    } else stop();
   };
-  window.setTimeout(settle, reduce ? 50 : 700);
+  window.setTimeout(settle, 140);
   // Move focus for keyboard and screen-reader users without scrolling again.
   const heading = el.querySelector<HTMLElement>('h1, h2');
   if (heading) { heading.setAttribute('tabindex', '-1'); heading.focus({ preventScroll: true }); }

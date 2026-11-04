@@ -18,7 +18,8 @@ for (const w of widths.split(',').map(Number)) {
   for (const id of sels.split(',')) {
     await page.evaluate((i) => document.getElementById(i)?.scrollIntoView({ block: 'start' }), id);
     await page.waitForTimeout(1600);
-    await page.screenshot({ path: join(out, `${w}-${id}.png`) });
+    if (process.env.FULL) await page.locator(`#${id}`).screenshot({ path: join(out, `${w}-${id}.png`) });
+    else await page.screenshot({ path: join(out, `${w}-${id}.png`) });
   }
   await page.close();
 }

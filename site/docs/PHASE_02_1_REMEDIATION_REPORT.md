@@ -157,3 +157,8 @@ stage at 3 widths; no overflow at 7 widths. The single-canvas, scene-switching, 
 7. **Older item from Phase 02 still open:** lattice pixel ratio capped at 1.5 on low-tier devices.
 
 Phase 03 not started. Waiting for review.
+
+## Later correction
+A later probe found a stall this report's measurement did not show: on a fresh page, the first contact with the hero
+stalls 300 to 500 ms in DOM raster. It reproduces on this phase's commit. See `ATLAS_EXECUTION_LOG.md`.
+

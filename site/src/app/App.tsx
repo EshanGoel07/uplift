@@ -14,6 +14,7 @@ import { BugMatrix } from '../sections/BugMatrix/BugMatrix';
 import { BugExplorer } from '../sections/BugExplorer/BugExplorer';
 import { WorkedExample } from '../sections/WorkedExample/WorkedExample';
 import { Trust } from '../sections/Trust/Trust';
+import { GuidedTour } from '../components/atlas/GuidedTour';
 import { Conditions } from '../sections/Conditions/Conditions';
 import { Methodology } from '../sections/Methodology/Methodology';
 import { BuiltVsUsed } from '../sections/BuiltVsUsed/BuiltVsUsed';
@@ -23,6 +24,7 @@ import { Footer } from '../sections/Footer/Footer';
 
 // three.js, R3F and the shaders load in their own chunk, once a section requests a 3D scene.
 const ExperienceCanvas = lazy(() => import('../scenes/ExperienceCanvas'));
+const Architecture = lazy(() => import('../sections/Architecture/Architecture').then((m) => ({ default: m.Architecture })));
 
 /** If WebGL fails at runtime (no context, lost driver), every section falls back to its SVG/HTML version. */
 class WebGLBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
@@ -74,6 +76,7 @@ export function App() {
         <WorkedExample summary={summary} />
         <BugMatrix summary={summary} onOpenTask={openTask} selectedTask={taskId} />
         <BugExplorer summary={summary} taskId={taskId} onSelectTask={selectTask} />
+        <Suspense fallback={<div className="pub-skeleton pub-skeleton--matrix" />}><Architecture summary={summary} /></Suspense>
         <Trust summary={summary} />
         <BuiltVsUsed />
         <Limitations />
@@ -84,6 +87,7 @@ export function App() {
       <InspectorPanel summary={summary} />
       <ComparisonTray summary={summary} />
       <CommandPalette summary={summary} />
+      <GuidedTour />
       <svg className="thread" aria-hidden="true"><line ref={(el) => { nebulaDom.thread = el; }} visibility="hidden" /></svg>
     </>
   );

@@ -322,16 +322,28 @@ export function WorkbenchScene({ summary }: Props) {
     // the model does.
     if (refit) {
       o.updateMatrixWorld();
+      // Each label is lifted clear of those already placed, so neighbours never cover each other on a
+      // narrow stage. Transforms do not dirty layout, so these reads stay cheap.
+      const placed: DOMRect[] = [];
       const place = (key: string, at: [number, number, number]) => {
         const el = wbLabels[key];
         if (!el) return;
         tmpV.set(at[0], at[1], at[2]).applyMatrix4(g.matrixWorld).project(camera);
         const cx = (tmpV.x * 0.5 + 0.5) * window.innerWidth - r.left;
-        const cy = (-tmpV.y * 0.5 + 0.5) * window.innerHeight - r.top;
-        el.style.transform = `translate(${cx.toFixed(1)}px, ${cy.toFixed(1)}px)`;
+        let cy = (-tmpV.y * 0.5 + 0.5) * window.innerHeight - r.top;
+        const write = () => { el.style.transform = `translate(${cx.toFixed(1)}px, ${cy.toFixed(1)}px)`; };
+        write();
+        for (let k = 0; k < 6; k++) {
+          const b = el.getBoundingClientRect();
+          if (!b.width) return;
+          const hit = placed.find((p) => b.left < p.right + 2 && b.right > p.left - 2 && b.top < p.bottom + 2 && b.bottom > p.top - 2);
+          if (!hit) { placed.push(b); return; }
+          cy -= b.bottom - hit.top + 3;
+          write();
+        }
       };
-      MODULE_LABELS.forEach((l) => place(l.key, l.at));
       for (let i = 0; i < LANES; i++) place(`lane${i}`, laneLabelAt(i));
+      MODULE_LABELS.forEach((l) => place(l.key, l.at));
     }
 
     if (busy) scenes.animate('workbench'); else scenes.settle('workbench');

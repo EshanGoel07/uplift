@@ -1,5 +1,6 @@
 import { DETECTABLE_MAX, DETECTABLE_MIN, NETWORK_BLOCK, WEB_EXPOSED, WEB_EXPOSED_DEV } from '../../data/reportFigures';
 import { DOC_LINKS } from '../../data/links';
+import { Faq } from '../../components/atlas/Faq';
 
 // README.md "## Limitations" and PHASE_LOG.md (Phases 4-7), grouped; meaning unchanged, nothing left out.
 // Artifacts sits before Measurement so the two page columns balance (6 and 7 points).
@@ -55,6 +56,7 @@ export function Limitations() {
             </div>
           ))}
         </div>
+        <Faq />
       </div>
     </section>
   );

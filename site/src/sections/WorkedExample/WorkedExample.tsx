@@ -12,6 +12,8 @@ import { RunBoard, type RunPick } from '../../components/explorer/RunBoard';
 import { HookMessages, RunPanel, StatusBadge } from '../../components/explorer/RunPanel';
 import { DiffViewer } from '../../components/explorer/DiffViewer';
 import { Issue } from '../../components/explorer/Issue';
+import { EvidenceBadge } from '../../components/atlas/Evidence';
+import { ToolButton } from '../../components/atlas/Primitives';
 
 /** The query from the issue, and the alias use the fix must keep working (README worked example). */
 const ISSUE_QUERY = 'SELECT 1 WINDOW a AS (PARTITION BY fake_column);';
@@ -20,6 +22,15 @@ const ALIAS_QUERY = 'SELECT col window FROM t';
 const COCHANGE = 'co-change: you edited sqlglot/parser.py but not sqlglot/generator.py';
 
 /** Default run shown for each approach: a shortcut and a look-ahead from conditions without hooks. */
+/** What can be followed from the published evidence. It is a reading of the outcome, not a replay: no run trace is published. */
+const TRACE = [
+  ['Original issue', 'A WINDOW clause raises a ParseError when read as SQLite.'],
+  ['Syntax ambiguity', 'WINDOW is also a valid column alias, so "1 WINDOW" reads as an alias.'],
+  ['Implementation', 'Twelve patches took three approaches: shortcut, look-ahead and one other.'],
+  ['Compatibility check', 'The repository\'s tests require WINDOW to keep working as an alias.'],
+  ['Graded outcome', 'All 4 look-ahead runs solved it. All 7 shortcut runs and the other run failed.'],
+] as const;
+
 const DEFAULT_RUN: Record<Approach, RunPick> = {
   shortcut: { arm: 'none', run: 0 },
   lookahead: { arm: 'handwritten', run: 0 },
@@ -34,6 +45,16 @@ export function WorkedExample({ summary }: { summary: Summary | null }) {
   const [error, setError] = useState<string | null>(null);
   const [pick, setPick] = useState<RunPick | null>(null);
   const [shown, setShown] = useState<Record<Approach, RunPick>>(DEFAULT_RUN);
+  const [only, setOnly] = useState<Approach | 'all'>('all');
+  const [left, setLeft] = useState<RunPick>(DEFAULT_RUN.shortcut);
+  const [right, setRight] = useState<RunPick>(DEFAULT_RUN.lookahead);
+  const [reading, setReading] = useState(false);
+  useEffect(() => {
+    if (!reading) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setReading(false); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [reading]);
 
   useEffect(() => {
     if (!near) return;
@@ -115,7 +136,7 @@ export function WorkedExample({ summary }: { summary: Summary | null }) {
     <section id="explorer" ref={root} className="pub worked" aria-labelledby="worked-title">
       <div className="pub-container">
         <header className="pub-head">
-          <p className="pub-eyebrow">Worked example</p>
+          <p className="pub-eyebrow">WINDOW investigation</p>
           <h2 id="worked-title" className="pub-title">One bug. Twelve attempts. Two fundamentally different approaches.</h2>
           <p className="pub-lead">One task reveals why the outcome of a single run cannot establish whether an experimental setup helped.</p>
         </header>
@@ -141,6 +162,10 @@ export function WorkedExample({ summary }: { summary: Summary | null }) {
           </aside>
         </div>
 
+        <ol className="trace" aria-label="From the issue to the graded outcome">
+          {TRACE.map(([t, d], i) => <li key={t}><span className="trace__n">{i + 1}</span><strong>{t}</strong><span>{d}</span></li>)}
+        </ol>
+
         {error && <p className="load-error" role="alert">Could not load the task ({error}).</p>}
         {!task ? <div className="pub-skeleton pub-skeleton--board" role="status" aria-busy="true" aria-label="Loading the twelve runs" /> : (
           <>
@@ -165,14 +190,45 @@ export function WorkedExample({ summary }: { summary: Summary | null }) {
             </figure>
 
             <div className="worked__approaches">
-              <h3 className="pub-h3">The approaches the agent took</h3>
-              <div className="approaches">
-                {approachPanel('shortcut')}
-                {approachPanel('lookahead')}
-                {approachPanel('other')}
+              <h3 className="pub-h3">The approaches the agent took <EvidenceBadge id="E13" /></h3>
+              <div className="seg" role="group" aria-label="Approach">
+                <button type="button" className="seg__btn" aria-pressed={only === 'all'} onClick={() => setOnly('all')}>All 12</button>
+                {(['shortcut', 'lookahead', 'other'] as const).map((ap) => (
+                  <button key={ap} type="button" className="seg__btn" aria-pressed={only === ap} onClick={() => setOnly(ap)}>{APPROACH_INFO[ap].name} ({byApproach[ap].length})</button>
+                ))}
+              </div>
+              <div className={`approaches${only === 'all' ? '' : ' is-single'}`}>
+                {(only === 'all' || only === 'shortcut') && approachPanel('shortcut')}
+                {(only === 'all' || only === 'lookahead') && approachPanel('lookahead')}
+                {(only === 'all' || only === 'other') && approachPanel('other')}
               </div>
               <p className="caption"><span className="caption__n">Figure 5.</span> Real patches from <code>results.json</code>. Shortcut and look-ahead are shown side by side; switch to any run of an approach with the buttons above each patch.</p>
             </div>
+
+            <section className={`wcmp${reading ? ' is-reading' : ''}`} aria-label="Compare two runs of this bug">
+              <div className="wcmp__bar">
+                <h3 className="pub-h3">Compare two runs</h3>
+                <ToolButton icon="fit" pressed={reading} onClick={() => setReading(!reading)}>{reading ? 'Exit reading mode' : 'Reading mode'}</ToolButton>
+              </div>
+              <div className="wcmp__cols">
+                {([[left, setLeft, 'First'], [right, setRight, 'Second']] as const).map(([p, set, name]) => {
+                  const run = task.results[p.arm].runs[p.run];
+                  return (
+                    <div key={name} className="wcmp__col">
+                      <label className="cc__against">{name} run
+                        <select value={`${p.arm}:${p.run}`} onChange={(e) => { const [a, r] = e.target.value.split(':'); set({ arm: a as ArmId, run: Number(r) }); }}>
+                          {arms.flatMap((a) => [0, 1].map((r) => (
+                            <option key={`${a.id}${r}`} value={`${a.id}:${r}`}>{a.label} · R{r + 1} · {APPROACH_INFO[FEATURED_APPROACHES[a.id][r]].name}</option>
+                          )))}
+                        </select>
+                      </label>
+                      <StatusBadge resolved={run.resolved} />
+                      <DiffViewer diff={run.diff} label={`${label(p.arm)}, repeat ${p.run + 1}`} preview={reading ? 400 : 40} />
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
 
             <div className="worked__why">
               <div className="worked__why-text">
