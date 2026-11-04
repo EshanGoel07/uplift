@@ -1,4 +1,4 @@
-import { AdditiveBlending, Color, ShaderMaterial } from 'three';
+import { AdditiveBlending, Color, ShaderMaterial, Vector3 } from 'three';
 import { SPECTRAL_RAMP } from '../shaders/noise';
 import { INTERFACE, SPECTRAL } from '../palette';
 
@@ -82,6 +82,89 @@ export function filamentLineMaterial(accent: string): ShaderMaterial {
         gl_FragColor = vec4(uColor, 1.0);
         #include <colorspace_fragment>
         gl_FragColor = vec4(gl_FragColor.rgb * uFade, uFade);
+      }`,
+  });
+}
+
+/** The light every part of a story model shares, written once a frame. */
+export interface KeyLight { uKeyP: { value: Vector3 }; uWarm: { value: number }; uCool: { value: number } }
+export const keyLight = (): KeyLight => ({ uKeyP: { value: new Vector3() }, uWarm: { value: 1 }, uCool: { value: 0.3 } });
+
+/**
+ * Graphite for the story models: lit by one warm source at the model's centre and a cool spectral rim,
+ * carrying luminous inks per vertex. Everything shares this one program, so a model has one shader to compile.
+ *
+ * `aInk` is colour and strength. `aGate` is (seq, solid): a positive seq opens as the part's `uReveal` reaches it,
+ * a negative one closes, and 0 is always open. With solid = 1 the gate removes the surface, not just its ink.
+ */
+export function graphiteMaterial(accent: string, key: KeyLight): ShaderMaterial {
+  return new ShaderMaterial({
+    uniforms: {
+      ...key,
+      uBase: { value: new Color(INTERFACE.carbon) }, uTop: { value: new Color(INTERFACE.elevated) },
+      uAccent: { value: new Color(accent) }, uSelectColor: { value: new Color(INTERFACE.ember) },
+      uWarmColor: { value: new Color(SPECTRAL.amber) }, uCoolA: { value: new Color(SPECTRAL.cyan) }, uCoolB: { value: new Color(SPECTRAL.violet) },
+      uFade: { value: 1 }, uGlow: { value: 0 }, uSelect: { value: 0 }, uDim: { value: 1 }, uReveal: { value: 0 }, uInkRest: { value: 0.6 },
+    },
+    vertexShader: /* glsl */ `
+      attribute vec4 aInk; attribute vec2 aGate;
+      varying vec3 vWorld; varying vec3 vN; varying vec4 vInk; varying vec2 vGate;
+      void main() {
+        vec4 w = modelMatrix * vec4(position, 1.0);
+        vWorld = w.xyz;
+        vN = normalize(mat3(modelMatrix) * normal);
+        vInk = aInk; vGate = aGate;
+        gl_Position = projectionMatrix * viewMatrix * w;
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform vec3 uBase; uniform vec3 uTop; uniform vec3 uAccent; uniform vec3 uSelectColor;
+      uniform vec3 uWarmColor; uniform vec3 uCoolA; uniform vec3 uCoolB; uniform vec3 uKeyP;
+      uniform float uWarm; uniform float uCool; uniform float uFade; uniform float uGlow;
+      uniform float uSelect; uniform float uDim; uniform float uReveal; uniform float uInkRest;
+      varying vec3 vWorld; varying vec3 vN; varying vec4 vInk; varying vec2 vGate;
+      void main() {
+        float s = vGate.x;
+        float open = s >= 0.0 ? smoothstep(s - 0.03, s, uReveal) : 1.0 - smoothstep(-s - 0.03, -s, uReveal);
+        if (vGate.y > 0.5 && open < 0.02) discard;
+        vec3 N = normalize(vN);
+        vec3 V = normalize(cameraPosition - vWorld);
+        vec3 L = uKeyP - vWorld;
+        float d2 = dot(L, L);
+        L /= sqrt(d2);
+        float fall = uWarm * 22.0 / (d2 + 9.0);
+        float diff = max(dot(N, L), 0.0) * fall;
+        float spec = pow(max(dot(N, normalize(L + V)), 0.0), 48.0) * fall;
+        float sky = 0.5 + 0.5 * N.y;
+        float rim = pow(1.0 - max(dot(N, V), 0.0), 3.0);
+        vec3 c = mix(uBase, uTop, sky * 0.7);
+        c += uWarmColor * (diff * 0.042 + spec * 0.2);
+        c += mix(uCoolA, uCoolB, smoothstep(-6.0, 6.0, vWorld.x + vWorld.y)) * rim * (0.05 + uCool * 0.26);
+        c += uAccent * (rim * 0.1 + uGlow * (0.003 + sky * 0.008));
+        c += vInk.rgb * vInk.a * open * mix(uInkRest, 1.3, uGlow);
+        c = mix(c, c + uSelectColor * (0.02 + rim * 0.34), uSelect);
+        float grey = dot(c, vec3(0.3, 0.55, 0.15));
+        c = mix(vec3(grey), c, smoothstep(0.3, 1.0, uDim)) * mix(0.26, 1.0, uDim);
+        gl_FragColor = vec4(c, uFade * (vGate.y > 0.5 ? open : 1.0));
+        #include <colorspace_fragment>
+      }`,
+  });
+}
+
+/** Soft light around a source, drawn by the material rather than by bloom. */
+export function haloMaterial(color: string): ShaderMaterial {
+  return new ShaderMaterial({
+    ...ADDITIVE,
+    depthTest: false,
+    uniforms: { uColor: { value: new Color(color) }, uAmount: { value: 0 } },
+    vertexShader: /* glsl */ `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: /* glsl */ `
+      ${HALO_FALLOFF}
+      uniform vec3 uColor; uniform float uAmount; varying vec2 vUv;
+      void main() {
+        gl_FragColor = vec4(uColor, 1.0);
+        #include <colorspace_fragment>
+        float a = haloFalloff(length(vUv - 0.5) * 2.0) * uAmount;
+        gl_FragColor = vec4(gl_FragColor.rgb * a, a);
       }`,
   });
 }

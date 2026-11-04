@@ -19,6 +19,10 @@ interface Props {
   model: Model;
   /** Extra controls, such as a condition picker. They sit on the stage, so using them never moves the reader. */
   controls?: ReactNode;
+  /** The one state these controls belong to. */
+  controlsAt?: number;
+  /** One quiet line on the stage for the current state. */
+  caption?: (state: number) => ReactNode;
 }
 
 /**
@@ -26,7 +30,7 @@ interface Props {
  * parts and an explanation of the selected part, so nothing depends on the pointer. Without WebGL, on
  * phones, or while the scene loads, the 2D figure shows the same parts from the same data.
  */
-export function AssemblyStory({ id, sectionId, eyebrow, title, lead, steps, states, model, controls }: Props) {
+export function AssemblyStory({ id, sectionId, eyebrow, title, lead, steps, states, model, controls, controlsAt, caption }: Props) {
   const webgl = useUi((s) => s.webgl);
   const failed = useUi((s) => s.assembly3dFailed);
   const reduced = useUi((s) => s.reducedMotion);
@@ -37,6 +41,7 @@ export function AssemblyStory({ id, sectionId, eyebrow, title, lead, steps, stat
   const mounted = useScenes(() => scenes.get(sceneId).mounted);
   const state = useAssembly(() => assemblies[id].state);
   const selected = useAssembly(() => assemblies[id].selected);
+  const turned = useAssembly(() => assemblies[id].yaw !== 0 || assemblies[id].pitch !== 0);
 
   useEffect(() => { setAssembly(id, { model }); }, [id, model]);
   useEffect(() => { setAssembly(id, { reduced }); }, [id, reduced]);
@@ -76,8 +81,12 @@ export function AssemblyStory({ id, sectionId, eyebrow, title, lead, steps, stat
   const reset = useCallback(() => { setAssembly(id, { yaw: 0, pitch: 0, selected: null }); requestFrame('state'); }, [id]);
   const onStep = useCallback((i: number) => setAssembly(id, { state: i }), [id]);
 
-  const present = model.parts.filter((p) => (p.poses[state]?.on ?? 0) > 0.5);
+  const present = model.parts.filter((p) => !p.inert && (p.poses[state]?.on ?? 0) > 0.5);
   const part = model.parts.find((p) => p.id === selected);
+  const about = model.steps?.[state];
+  const inFocus = about ? present.filter((p) => about.includes(p.id)) : present;
+  const rest = present.filter((p) => !inFocus.includes(p));
+  const toggle = (pid: string) => setAssembly(id, { selected: selected === pid ? null : pid });
 
   return (
     <section id={sectionId} className="pub onebug assembly" aria-labelledby={`${sectionId}-title`}>
@@ -100,21 +109,9 @@ export function AssemblyStory({ id, sectionId, eyebrow, title, lead, steps, stat
             <div className="story__canvas" ref={stage} aria-hidden="true" data-scene={id}
                  onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}>
               {(!use3d || !mounted) && <AssemblyFigure model={model} state={active} title={steps[active].title} />}
-              {use3d && (
-                <div className="story__labels">
-                  <span className={`story__label${part ? ' is-on' : ''}`} ref={(el) => { assemblies[id].label = el; }}>{part?.title ?? ''}</span>
-                </div>
-              )}
             </div>
             <div className="assembly__inspect">
-              {controls}
-              <ul className="assembly__parts" aria-label="Parts of this model">
-                {present.map((p) => (
-                  <li key={p.id}>
-                    <button type="button" aria-pressed={selected === p.id} onClick={() => setAssembly(id, { selected: selected === p.id ? null : p.id })}>{p.title}</button>
-                  </li>
-                ))}
-              </ul>
+              {controls && (controlsAt === undefined || controlsAt === state) && <div className="assembly__picker">{controls}</div>}
               {part && (
                 <div className="assembly__detail" role="status">
                   <p className="assembly__detail-title">{part.title}</p>
@@ -122,7 +119,24 @@ export function AssemblyStory({ id, sectionId, eyebrow, title, lead, steps, stat
                   {part.source && <p className="assembly__source"><Icon name="source" size={13} /><code>{part.source}</code></p>}
                 </div>
               )}
-              {use3d && <ToolButton icon="reset" onClick={reset}>Reset view</ToolButton>}
+            </div>
+            <div className="assembly__objects">
+              {caption && <p className="assembly__caption">{caption(state)}</p>}
+              <div className="assembly__row">
+                <ul className="assembly__parts" aria-label="Objects in this step">
+                  {inFocus.map((p) => (
+                    <li key={p.id}><button type="button" aria-pressed={selected === p.id} onClick={() => toggle(p.id)}>{p.title}</button></li>
+                  ))}
+                </ul>
+                {use3d && (turned || selected) && <ToolButton icon="reset" onClick={reset}>Reset view</ToolButton>}
+              </div>
+              {rest.length > 0 && (
+                <ul className="assembly__parts assembly__all" aria-label="Other objects in the model">
+                  {rest.map((p) => (
+                    <li key={p.id}><button type="button" aria-pressed={selected === p.id} onClick={() => toggle(p.id)}>{p.title}</button></li>
+                  ))}
+                </ul>
+              )}
             </div>
           </>
         )}

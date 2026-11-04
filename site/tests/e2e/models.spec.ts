@@ -4,7 +4,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 interface Spec { section: string; id: string; states: string[] }
 const MODELS: Spec[] = [
-  { section: 'workspace', id: 'workspace', states: ['snapshot', 'issue', 'setup', 'assembled', 'patch'] },
+  { section: 'workspace', id: 'workspace', states: ['assembled', 'exploded', 'issue', 'setup', 'running', 'patch'] },
   { section: 'cutaway', id: 'cutaway', states: ['agent-input', 'hidden', 'patch', 'prepare', 'run', 'result'] },
   { section: 'grading', id: 'grading', states: ['check-the-run-finished', 'reset-the-test-files', 'apply-the-hidden-tests', 'clear-stale-bytecode', 'run-pytest', 'parse-each-test', 'cross-check-the-counts', 'check-both-test-lists', 'record-the-verdict'] },
 ];
@@ -67,19 +67,19 @@ for (const [width, height] of [[1440, 900], [1920, 1080]]) {
   }
 }
 
-test('workspace: parts can be inspected by list, keyboard and pointer, and reset', async ({ page }) => {
+test('workspace: objects can be inspected by list, keyboard and pointer, and reset', async ({ page }) => {
   await page.goto('./?diag', { waitUntil: 'networkidle' });
-  await go(page, 'workspace', 4);
-  await expect.poll(async () => (await assembly(page, 'workspace')).settledAt, { timeout: 15_000 }).toBe(4);
+  await go(page, 'workspace', 2);
+  await expect.poll(async () => (await assembly(page, 'workspace')).settledAt, { timeout: 15_000 }).toBe(2);
   const parts = page.locator('#workspace .assembly__parts button');
   await parts.filter({ hasText: 'Issue input' }).click();
   await expect(page.locator('#workspace .assembly__detail')).toContainText('fixed prompt');
   await expect(page.locator('#workspace .assembly__detail')).toContainText('src/uplift/runner.py');
   await parts.filter({ hasText: 'Issue input' }).press('Enter');
   await expect(page.locator('#workspace .assembly__detail')).toHaveCount(0);
-  // A click on the model picks the part under the pointer.
+  // A click on the model picks the object under the pointer: the repository, low in the frame.
   const box = (await page.locator('#workspace .story__canvas').boundingBox())!;
-  await page.mouse.click(box.x + box.width * 0.28, box.y + box.height * 0.5);
+  await page.mouse.click(box.x + box.width * 0.34, box.y + box.height * 0.8);
   await expect.poll(async () => (await assembly(page, 'workspace')).selected).not.toBeNull();
   await expect(page.locator('#workspace .assembly__detail')).toBeVisible();
   await page.locator('#workspace').getByRole('button', { name: 'Reset view' }).click();
@@ -88,18 +88,21 @@ test('workspace: parts can be inspected by list, keyboard and pointer, and reset
 
 test('workspace: each condition shows only what it really installed', async ({ page }) => {
   await page.goto('./?diag', { waitUntil: 'networkidle' });
-  await go(page, 'workspace', 4);
-  const parts = page.locator('#workspace .assembly__parts button');
+  await go(page, 'workspace', 3);
+  const parts = page.locator('#workspace .assembly__parts:not(.assembly__all) button');
   const pick = page.getByRole('group', { name: 'Condition shown in this model' });
   await pick.getByRole('button', { name: 'No setup' }).click();
-  await expect(parts).toHaveCount(6);
-  await expect(parts.filter({ hasText: 'AGENTS.md' })).toHaveCount(0);
+  await expect(parts).toHaveCount(0);
+  await expect(page).toHaveURL(/cond=none/);
   await pick.getByRole('button', { name: 'Tips + hooks' }).click();
-  await expect(parts).toHaveCount(8);
+  await expect(parts).toHaveCount(2);
   await pick.getByRole('button', { name: 'Hooks (generated)' }).click();
-  await expect(parts).toHaveCount(7);
+  await expect(parts).toHaveCount(1);
   await expect(parts.filter({ hasText: 'AGENTS.md' })).toHaveCount(0);
   await expect(parts.filter({ hasText: 'Hook configuration' })).toHaveCount(1);
+  // The picker belongs to this step alone.
+  await go(page, 'workspace', 5);
+  await expect(pick).toHaveCount(0);
 });
 
 test('cutaway: the hidden tests stay on the evaluator side, and the agent is gone before they are used', async ({ page }) => {
@@ -127,9 +130,9 @@ test('grading: the verdict appears only at the last step, and any gate can be in
 
 test('models carry their full story with no WebGL, and on phones', async ({ page }) => {
   await page.goto('./?nowebgl', { waitUntil: 'networkidle' });
-  await go(page, 'workspace', 2);
+  await go(page, 'workspace', 3);
   await expect(page.locator('#workspace .story__canvas .story__figure')).toHaveAttribute('aria-label', /AGENTS\.md/);
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(page.locator('#workspace .story__step .story__figure')).toHaveCount(5);
+  await expect(page.locator('#workspace .story__step .story__figure')).toHaveCount(6);
   await expect(page.locator('canvas')).toHaveCount(0);
 });

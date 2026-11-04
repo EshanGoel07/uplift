@@ -34,7 +34,7 @@ export const WORKSPACE_STEPS: { title: string; detail: string }[] = [
 export const GRADING_STEPS: { title: string; detail: string }[] = [
   { title: 'Check the run finished', detail: 'A run that hit an infrastructure failure is kept out of grading. It is not scored as a failed attempt.' },
   { title: 'Reset the test files', detail: 'The files in the task\'s test patch go back to the base commit. Grading runs in the agent\'s own workspace, after it has exited.' },
-  { title: 'Apply the hidden tests', detail: 'The real fix\'s test patch, which the agent never saw, is applied now. If it cannot apply, the run is not resolved.' },
+  { title: 'Apply the hidden tests', detail: 'The real fix\'s test patch, which was never in the agent\'s workspace, is applied now. If it cannot apply, the run is not resolved.' },
   { title: 'Clear stale bytecode', detail: 'Every __pycache__ folder outside .venv is deleted, so old compiled code cannot answer for the new source.' },
   { title: 'Run pytest', detail: 'The test files run with the workspace\'s own interpreter and an isolated pytest config, with a 900-second limit.' },
   { title: 'Parse each test', detail: 'Per-test results are read from pytest\'s -rA output.' },
@@ -114,6 +114,10 @@ export interface ConditionSpec {
   receives: string[];
   notReceives: string[];
   files: string[];
+  /** Lines in this condition's AGENTS.md, where it has one. */
+  agentsLines?: number;
+  /** The checks its hooks run (generate.py ARMS, tune.py). */
+  hookChecks?: string[];
   why: string;
 }
 const HOOK_FILES = ['.muse/hooks.json', '.muse/uplift_hooks/uplift_hook.py', '.muse/uplift_hooks/config.json'];
@@ -126,35 +130,35 @@ export const CONDITIONS: Record<ArmId, ConditionSpec> = {
     why: 'The baseline every other condition is compared with.',
   },
   prose: {
-    hasTips: true, hasHooks: false,
+    hasTips: true, hasHooks: false, agentsLines: 13,
     receives: ['A 13-line AGENTS.md written by Muse Spark from the repo\'s docs, commit history, risk map and 150 dated review comments, all from before the test period'],
     notReceives: ['Hooks or any runtime feedback'],
     files: ['AGENTS.md'],
     why: 'Does repo-specific written guidance help?',
   },
   sensors: {
-    hasTips: false, hasHooks: true,
+    hasTips: false, hasHooks: true, hookChecks: ['lint', 'cochange', 'verify'],
     receives: ['After each edit: ruff lint and format checks, and co-change warnings from git history', 'Before stopping: a verify step runs related tests and can block finishing (at most twice)'],
     notReceives: ['Any AGENTS.md'],
     files: HOOK_FILES,
     why: 'Does feedback while the agent works help?',
   },
   both: {
-    hasTips: true, hasHooks: true,
+    hasTips: true, hasHooks: true, agentsLines: 13, hookChecks: ['lint', 'cochange', 'verify'],
     receives: ['The generated AGENTS.md', 'The generated hooks'],
     notReceives: ['Nothing beyond the two generated setups'],
     files: ['AGENTS.md', ...HOOK_FILES],
     why: 'Do the two together help more than either?',
   },
   handwritten: {
-    hasTips: true, hasHooks: false,
+    hasTips: true, hasHooks: false, agentsLines: 60,
     receives: ['A 60-line generic best-practice AGENTS.md, written by us in the style commonly shared online (arms/handwritten/AGENTS.md)'],
     notReceives: ['Anything specific to sqlglot', 'Hooks'],
     files: ['AGENTS.md'],
     why: 'Does a generic, non-repo-specific setup help?',
   },
   tuned: {
-    hasTips: true, hasHooks: true,
+    hasTips: true, hasHooks: true, agentsLines: 11, hookChecks: ['lint', 'verify'],
     receives: ['An 11-line AGENTS.md and hooks (lint and verify) rewritten by Muse Spark after reading dev-task results only'],
     notReceives: ['Co-change hooks (dropped by the tuning)', 'Any test or fresh task information (the code refuses it)'],
     files: ['AGENTS.md', ...HOOK_FILES],
