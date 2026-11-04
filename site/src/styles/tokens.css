@@ -1,36 +1,40 @@
-/* Uplift design tokens: OBSIDIAN x EMBER interface. Spectral colours live only in the 3D scenes
-   (src/scenes/palette.ts) and are mirrored here solely for the static fallback poster. */
+/* Uplift design tokens: OBSIDIAN x NEBULA x EMBER.
+   One permanent dark theme. src/scenes/palette.ts is the 3D source of the same values;
+   tests/unit/palette.test.ts keeps the two in step. */
 :root {
-  /* Foundations */
+  color-scheme: dark;
+
+  /* Background and surfaces: obsidian -> carbon -> graphite -> elevated */
   --obsidian: #090a0c;
   --carbon: #101214;
   --graphite: #171a1d;
   --elevated: #202428;
   --border: #303337;
   --border-soft: #22262a;
+  --border-strong: #4a4e53;   /* original hover border */
 
-  /* Ember (brand + meaning only) */
+  /* Ember: brand, selection, focus and progress only. Never an outcome. */
   --ember: #ff7138;
   --burnt: #c9552d;
   --apricot: #ffb17a;
   --ember-12: rgba(255, 113, 56, 0.12);
   --ember-24: rgba(255, 113, 56, 0.24);
+  --on-ember: #170a04;        /* ink on an ember fill (original .btn--ember) */
 
-  /* Text */
+  /* Text: warm ivory. --text-3 is below 4.5:1, so rules, ticks and decoration only. */
   --text: #f5f1eb;
   --text-2: #a8a29b;
   --text-3: #77716b;
 
-  /* Semantic status */
+  /* Experimental outcomes: solved / failed / mixed, always paired with a glyph */
   --ok: #63c78c;
   --fail: #f07868;
   --warn: #e7b45a;
-  --selected: #ff7138;
   --ok-14: rgba(99, 199, 140, 0.14);
   --fail-14: rgba(240, 120, 104, 0.14);
   --warn-14: rgba(231, 180, 90, 0.14);
 
-  /* Spectral (3D world only) */
+  /* Nebula spectrum (also scenes/palette.ts SPECTRAL) */
   --sp-cyan: #00c9ef;
   --sp-blue: #247ceb;
   --sp-violet: #6553c7;
@@ -38,17 +42,27 @@
   --sp-amber: #ffb66f;
   --sp-core: #ffe5ac;
 
-  /* Type */
+  /* The six conditions, in STREAM_COLORS order (scenes/palette.ts CONDITION_COLOR) */
+  --cond-none: var(--sp-core);
+  --cond-prose: var(--sp-cyan);
+  --cond-sensors: var(--sp-blue);
+  --cond-both: var(--sp-violet);
+  --cond-handwritten: var(--sp-magenta);
+  --cond-tuned: var(--sp-amber);
+
+  /* Type: original families, readable scale */
   --font-sans: 'Geist Variable', 'Geist', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-mono: 'Geist Mono Variable', 'Geist Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
 
-  --fs-display: clamp(2.2rem, 1.1rem + 2.6vw, 3.45rem);
-  --fs-h2: clamp(1.9rem, 1.2rem + 2.4vw, 3.3rem);
-  --fs-h3: clamp(1.15rem, 1rem + 0.5vw, 1.45rem);
-  --fs-lead: clamp(1.05rem, 0.95rem + 0.45vw, 1.3rem);
-  --fs-body: 1rem;
-  --fs-small: 0.875rem;
+  --fs-display: clamp(2.5rem, 1.35rem + 4vw, 4.6rem);
+  --fs-h2: clamp(1.85rem, 1.25rem + 2.1vw, 2.9rem);
+  --fs-h3: clamp(1.15rem, 1.05rem + 0.4vw, 1.35rem);
+  --fs-lead: clamp(1.1rem, 1rem + 0.45vw, 1.3rem);
+  --fs-body: 1.0625rem;
+  --fs-small: 0.9rem;
+  --fs-caption: 0.875rem;
   --fs-label: 0.72rem;
+  --measure: 66ch;
 
   /* Space and shape */
   --s-1: 4px;
@@ -62,9 +76,9 @@
   --s-9: 112px;
   --radius: 10px;
   --radius-sm: 6px;
-  --maxw: 1240px;
-  --gutter: clamp(18px, 4vw, 40px);
-  --nav-h: 60px;
+  --maxw: 1280px;
+  --gutter: clamp(20px, 4vw, 48px);
+  --nav-h: 64px;
 
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 }

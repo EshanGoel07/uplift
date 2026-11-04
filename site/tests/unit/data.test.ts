@@ -117,6 +117,45 @@ describe('generated summary.json', () => {
   });
 });
 
+describe('arm labels and descriptions come from the data', () => {
+  it('uses the six current labels, each with a description, also in summary.json', () => {
+    expect(source.arms.map((a) => a.label)).toEqual([
+      'No setup', 'Tips file (generated)', 'Hooks (generated)', 'Tips + hooks', 'Generic tips file', 'Tuned by Muse Spark',
+    ]);
+    for (const a of source.arms) expect(a.description.length).toBeGreaterThan(10);
+    expect(summary.arms.map((a) => a.description)).toEqual(source.arms.map((a) => a.description));
+    expect(source.arms.find((a) => a.id === 'handwritten')!.description)
+      .toBe('A generic best-practice file, written by us in the style commonly shared online.');
+    for (const a of source.arms) expect(`${a.label} ${a.description}`.toLowerCase()).not.toContain('copied');
+  });
+});
+
+describe('featured WINDOW example matches the story the page tells', () => {
+  const task = source.tasks.find((t) => t.id === FEATURED_TASK)!;
+  const runs = ARMS.flatMap((arm) => task.results[arm].runs.map((r) => ({ arm, ...r })));
+  const added = (diff: string) => diff.split('\n').filter((l) => l.startsWith('+')).join('\n');
+  const shortcut = runs.filter((r) => /ID_VAR_TOKENS\s*-\s*\{\s*TokenType\.WINDOW\s*\}/.test(added(r.diff)));
+
+  it('has 12 runs; the 7 shortcut runs all fail, 4 of the other 5 pass', () => {
+    expect(runs).toHaveLength(12);
+    expect(shortcut).toHaveLength(7);
+    expect(shortcut.every((r) => !r.resolved)).toBe(true);
+    const rest = runs.filter((r) => !shortcut.includes(r));
+    expect(rest.filter((r) => r.resolved)).toHaveLength(4);
+    expect(rest.filter((r) => !r.resolved)).toHaveLength(1);
+  });
+
+  it('Tips + hooks 2/2, Hooks 0/2, and both got the same co-change warning', () => {
+    expect(task.results.both.solved).toBe(2);
+    expect(task.results.sensors.solved).toBe(0);
+    for (const arm of ['both', 'sensors'] as const) {
+      for (const r of task.results[arm].runs) {
+        expect(r.hooks.join('\n')).toContain('co-change: you edited sqlglot/parser.py but not sqlglot/generator.py');
+      }
+    }
+  });
+});
+
 describe('labels and links', () => {
   it('retitles only the web-leak trust card', () => {
     const titles = source.trust.map((c) => trustTitle(c.title));

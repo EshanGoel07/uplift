@@ -1,181 +1,138 @@
-import { useEffect, useRef, useState } from 'react';
+import { Component, lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { EffectComposer, Bloom } from '@react-three/postprocessing';
-import { HalfFloatType, PerspectiveCamera, WebGLRenderTarget } from 'three';
 import type { Summary } from '../data/types';
-import { live, requestFrame, setInvalidator, ui, useUi, type SceneName } from '../state/sceneStore';
-import { OFF, clientToWorld, pointerWorld } from './layout';
-import { SignalField } from './SignalField/SignalField';
-import { ExperimentStreams } from './ExperimentStreams/ExperimentStreams';
-import { MatrixSurface } from './MatrixSurface/MatrixSurface';
-import { PipelineEngine } from './PipelineEngine/PipelineEngine';
-import { HeroHotspots } from '../components/interface/HeroHotspots';
+import { invalidations, requestFrame, scenes, setInvalidator, ui, useScenes, useUi } from '../state/sceneStore';
+import { workbenchBounds } from '../state/workbenchStore';
+import { useNear } from '../hooks/useNear';
+import { OFF } from './layout';
+import { NebulaScene } from './Nebula/NebulaScene';
+import { RunLatticeScene } from './RunLattice/RunLattice';
+import { StageView } from './StageView';
 
-export const frameCount = { n: 0 };
-if (typeof window !== 'undefined') (window as unknown as { __upliftFrames: typeof frameCount }).__upliftFrames = frameCount;
+// Workbench-only code (the scene and postprocessing) lives behind this one dynamic import. It renders
+// into this canvas: no second renderer, just a later chunk. Do not import it statically.
+// A failed download is an expected condition, not a crash: the section stays on its 2D diagram.
+const WorkbenchLayer = lazy(() => import('./Workbench/WorkbenchLayer').catch(() => {
+  ui.set({ workbench3dFailed: true });
+  return { default: (() => null) as unknown as typeof import('./Workbench/WorkbenchLayer').default };
+}));
 
-/** Which scene is on screen, from the scroll-driven visibility values. */
-function computeActive(): SceneName | null {
-  const hero = window.scrollY < window.innerHeight * 3 ? 1 - live.heroOut : 0;
-  const matrix = live.matrix >= 0.999 ? 0 : live.matrixVis;
-  const pipeline = live.pipelineVis * (1 - live.pipelineOut);
-  const best = Math.max(hero, matrix, pipeline);
-  if (best < 0.05) return null;
-  return best === hero ? 'hero' : best === matrix ? 'matrix' : 'pipeline';
-}
-
-/** Advances simulation time, tracks the pointer and the active scene, and wires on-demand frames. */
-function Driver() {
-  const invalidate = useThree((s) => s.invalidate);
-  const camera = useThree((s) => s.camera) as PerspectiveCamera;
-  const lastPointer = useRef<{ x: number; y: number } | null>(null);
-
-  useEffect(() => {
-    setInvalidator(() => invalidate());
-    const onMove = (e: PointerEvent) => {
-      lastPointer.current = { x: e.clientX, y: e.clientY };
-      live.pointer.active = e.pointerType === 'mouse' || ui.get().interact;
-      invalidate();
-    };
-    const onLeave = () => { live.pointer.active = false; };
-    const onScroll = () => {
-      requestAnimationFrame(() => ui.set({ activeScene: computeActive() }));
-      invalidate();
-    };
-    window.addEventListener('pointermove', onMove, { passive: true });
-    document.addEventListener('pointerleave', onLeave);
-    window.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('resize', onScroll);
-    onScroll();
-    return () => {
-      setInvalidator(null);
-      window.removeEventListener('pointermove', onMove);
-      document.removeEventListener('pointerleave', onLeave);
-      window.removeEventListener('scroll', onScroll);
-      window.removeEventListener('resize', onScroll);
-    };
-  }, [invalidate]);
-
-  useFrame((_, dt) => {
-    frameCount.n++;
-    const s = ui.get();
-    if (!s.paused) live.time += Math.min(dt, 0.05);  // reduced motion starts paused; Resume opts in
-    if (lastPointer.current) clientToWorld(lastPointer.current.x, lastPointer.current.y, camera, pointerWorld);
-  }, -1);
-  return null;
+/** If the Workbench chunk or scene fails, the section shows its 2D diagram; the lattice carries on. */
+class WorkbenchBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  componentDidCatch() { ui.set({ workbench3dFailed: true }); }
+  render() { return this.state.failed ? null : this.props.children; }
 }
 
 /**
- * Compiles every shader with KHR_parallel_shader_compile before the first frame, so linking the
- * programs never blocks the main thread. The canvas stays on frameloop 'never' until this resolves.
+ * The one WebGL canvas of the site. Everything 3D renders here, through one renderer:
+ *
+ *   frame:  scene callbacks (priority 0)
+ *        -> main pass, the default scene at full size (priority 1): a plain render, or the bloom
+ *           composer, which arrives with the lazy Workbench layer
+ *        -> stage views, scenes with their own camera, scissored to a DOM stage (priority 2)
+ *
+ * The frameloop is always 'demand'. A frame happens because something changed: the
+ * registry (a visible stage moved, or visibility flipped), a store (selection), or a scene that is
+ * animating and asks for its next frame. At rest nothing runs.
+ *
+ * To add a scene: extend SceneId, request it from its section with a stage element, and mount it here
+ * (in the default scene, like the workbench, or in a StageView, like the lattice).
  */
-function Precompile({ onDone, offscreen }: { onDone: () => void; offscreen: boolean }) {
-  const gl = useThree((s) => s.gl);
-  const scene = useThree((s) => s.scene);
-  const camera = useThree((s) => s.camera);
+export const frameCount = { n: 0 };
+if (typeof window !== 'undefined') (window as unknown as { __upliftFrames: typeof frameCount }).__upliftFrames = frameCount;
+
+const LATTICE_CAMERA = { fov: 34, near: 0.1, far: 120, position: [0, 4, 10] as [number, number, number] };
+const NEBULA_CAMERA = { fov: 34, near: 0.1, far: 60, position: [0, 0, 8.4] as [number, number, number] };
+
+/** Wires on-demand frames and counts them. */
+function FrameDriver() {
+  const invalidate = useThree((s) => s.invalidate);
   useEffect(() => {
-    let live = true;
-    const done = () => { if (live) onDone(); };
-    const r = gl as unknown as { compileAsync?: (s: unknown, c: unknown) => Promise<unknown> };
-    if (!r.compileAsync) { done(); return () => { live = false; }; }
-    // The bloom composer renders the scene into an offscreen half-float target, which changes the
-    // program keys (linear output). Compile with such a target bound so the first frame reuses them.
-    const rt = offscreen ? new WebGLRenderTarget(1, 1, { type: HalfFloatType }) : null;
-    const prev = gl.getRenderTarget();
-    if (rt) gl.setRenderTarget(rt);
-    const p = r.compileAsync(scene, camera);
-    if (rt) gl.setRenderTarget(prev);
-    p.then(done, done).finally(() => rt?.dispose());
-    return () => { live = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    setInvalidator(() => invalidate());
+    return () => setInvalidator(null);
+  }, [invalidate]);
+  useFrame(() => { frameCount.n++; }, -1);
   return null;
 }
 
-/** Selective bloom (only values above ~0.92 glow), faded in after the first frames. */
-function FadeInBloom({ target, levels }: { target: number; levels: number }) {
-  const bloom = useRef<{ intensity: number } | null>(null);
-  const start = useRef<number | null>(null);
-  useFrame((state) => {
-    const b = bloom.current;
-    if (!b) return;
-    start.current ??= state.clock.elapsedTime;
-    const k = Math.min(1, (state.clock.elapsedTime - start.current) / 0.8);
-    b.intensity = target * k * k * (3 - 2 * k);
-    if (k < 1) requestFrame();
-  });
-  return (
-    <EffectComposer multisampling={0}>
-      <Bloom ref={bloom as never} mipmapBlur levels={levels} luminanceThreshold={0.92} luminanceSmoothing={0.12} intensity={0} radius={0.72} />
-    </EffectComposer>
-  );
+/** The main pass when bloom is not drawing: priority callbacks switch off R3F's automatic render. */
+function MainPass({ enabled }: { enabled: boolean }) {
+  useFrame((s) => { if (enabled) { s.gl.setRenderTarget(null); s.gl.render(s.scene, s.camera); } }, 1);
+  return null;
 }
 
-/** True once the element is within `margin` of the viewport (and stays true). */
-function useNear(selector: string, margin: string): boolean {
-  const [near, setNear] = useState(false);
+/** Development/`?diag` only: read-only engine state on `window.__upliftDiag`. Ordinary visitors never get it. */
+const DIAG = typeof window !== 'undefined' && (import.meta.env.DEV || new URLSearchParams(window.location.search).has('diag'));
+let contexts = 0;
+function Diagnostics() {
+  const gl = useThree((s) => s.gl);
+  const frameloop = useThree((s) => s.frameloop);
   useEffect(() => {
-    if (near) return;
-    let io: IntersectionObserver | null = null;
-    const attach = () => {
-      const el = document.querySelector(selector);
-      if (!el) { window.setTimeout(attach, 400); return; }
-      io = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setNear(true); io?.disconnect(); } }, { rootMargin: margin });
-      io.observe(el);
+    const w = window as unknown as { __upliftDiag?: unknown };
+    w.__upliftDiag = {
+      contexts: () => contexts,
+      canvases: () => document.querySelectorAll('canvas').length,
+      frames: () => frameCount.n,
+      frameloop: () => frameloop,
+      invalidations: () => ({ ...invalidations }),
+      scenes: () => scenes.list().map((e) => ({ id: e.id, phase: scenes.phase(e.id), mounted: e.mounted, visible: e.visible, animating: e.animating, visibility: e.visibility, mounts: e.mounts, disposals: e.disposals })),
+      activeScenes: () => scenes.list().filter((e) => e.visible).length,
+      animating: () => scenes.list().some((e) => e.animating),
+      workbenchBounds: () => ({ ...workbenchBounds }),
+      renderer: () => ({ calls: gl.info.render.calls, triangles: gl.info.render.triangles, geometries: gl.info.memory.geometries, textures: gl.info.memory.textures, programs: gl.info.programs?.length ?? 0 }),
     };
-    attach();
-    return () => io?.disconnect();
-  }, [selector, margin, near]);
-  return near;
+    return () => { delete w.__upliftDiag; };
+  }, [gl, frameloop]);
+  return null;
 }
 
 export default function ExperienceCanvas({ summary }: { summary: Summary | null }) {
-  const [compiled, setCompiled] = useState(false);
-  // Scenes mount as their sections approach, so start-up work is split into small pieces.
-  const needMatrix = useNear('#matrix', '120% 0px');
-  const needPipeline = useNear('#method', '120% 0px');
-  const [needStreams, setNeedStreams] = useState(false);
-
-  useEffect(() => {
-    if (!compiled) return;
-    const id = window.setTimeout(() => setNeedStreams(true), 900);
-    const early = () => setNeedStreams(true);
-    window.addEventListener('scroll', early, { once: true, passive: true });
-    return () => { window.clearTimeout(id); window.removeEventListener('scroll', early); };
-  }, [compiled]);
-  const paused = useUi((s) => s.paused);
-  const reduced = useUi((s) => s.reducedMotion);
+  const [ready, setReady] = useState(false);
+  // Scenes mount as their sections approach, so start-up work is split into small pieces. Phones and
+  // no-WebGL browsers never request the workbench, so it never loads into the renderer there.
+  const wantLattice = useScenes(() => scenes.get('lattice').requested);
+  const wantNebula = useScenes(() => scenes.get('nebula').requested);
+  const wantWorkbench = useScenes(() => scenes.get('workbench').requested);
+  const nearWorkbench = useNear('#method', '120% 0px');
+  const workbenchShown = useScenes(() => scenes.get('workbench').visible);
+  const workbenchMounted = useScenes(() => scenes.get('workbench').mounted);
+  const workbenchFailed = useUi((s) => s.workbench3dFailed);
   const active = useUi((s) => s.activeScene);
   const lowTier = useUi((s) => s.lowTier);
-  const running = !paused && active !== null;
-  // Phones and low-core devices skip the bloom pass; the core's halo sprite still glows.
+  const mountWorkbench = !!summary && nearWorkbench && wantWorkbench && !workbenchFailed;
+  // Phones and low-core devices skip the bloom pass.
   const bloom = !lowTier && !OFF.has('bloom');
-
-  // A still, composed frame for reduced motion.
-  useEffect(() => { if (reduced) live.time = 14; }, [reduced]);
+  // The plain main pass keeps drawing until the composer's chunk has actually arrived.
+  const composing = bloom && workbenchMounted && workbenchShown;
+  // Which pass draws the main scene changed: it needs a frame (React state does not wake the renderer).
+  useEffect(() => { requestFrame('visibility'); }, [composing]);
 
   return (
-    <>
-      <div className={`experience${compiled ? ' is-ready' : ''}`} aria-hidden="true" style={{ visibility: active ? 'visible' : 'hidden' }}>
-        <Canvas
-          eventSource={document.getElementById('root')!}
-          eventPrefix="client"
-          frameloop={!compiled ? 'never' : running ? 'always' : 'demand'}
-          dpr={lowTier ? [1, 1.5] : [1, 2]}
-          camera={{ fov: 35, position: [0, 0, 10], near: 0.1, far: 60 }}
-          gl={{ antialias: false, alpha: true, powerPreference: 'high-performance', stencil: false }}
-          onCreated={({ gl }) => { gl.setClearColor(0x000000, 0); }}
-        >
-          <Driver />
-          <Precompile offscreen={bloom} onDone={() => { setCompiled(true); window.setTimeout(requestFrame, 30); }} />
-          <SignalField />
-          {needStreams && !OFF.has('streams') && <ExperimentStreams />}
-          {needMatrix && summary && <MatrixSurface summary={summary} />}
-          {needPipeline && <PipelineEngine />}
-          {bloom && <FadeInBloom target={0.95} levels={6} />}
-        </Canvas>
-      </div>
-      <HeroHotspots summary={summary} />
-    </>
+    <div className={`experience${ready ? ' is-ready' : ''}`} aria-hidden="true" style={{ visibility: active ? 'visible' : 'hidden' }}>
+      <Canvas
+        eventSource={document.getElementById('root')!}
+        eventPrefix="client"
+        frameloop="demand"
+        dpr={lowTier ? [1, 1.5] : [1, 2]}
+        camera={{ fov: 35, position: [0, 0, 10], near: 0.1, far: 60 }}
+        gl={{ antialias: true, alpha: true, powerPreference: 'high-performance', stencil: false }}
+        onCreated={({ gl }) => { contexts++; gl.setClearColor(0x000000, 0); setReady(true); }}
+      >
+        <FrameDriver />
+        {DIAG && <Diagnostics />}
+        <MainPass enabled={!composing} />
+        {mountWorkbench && (
+          <WorkbenchBoundary>
+            <Suspense fallback={null}>
+              <WorkbenchLayer summary={summary} bloom={bloom} composing={composing} />
+            </Suspense>
+          </WorkbenchBoundary>
+        )}
+        {wantNebula && <StageView id="nebula" camera={NEBULA_CAMERA}><NebulaScene /></StageView>}
+        {wantLattice && <StageView id="lattice" camera={LATTICE_CAMERA}><RunLatticeScene /></StageView>}
+      </Canvas>
+    </div>
   );
 }

@@ -1,26 +1,32 @@
 import { Component, lazy, Suspense, useCallback, useEffect, useState, type ReactNode } from 'react';
 import type { Summary } from '../data/types';
 import { loadSummary } from '../data/load';
-import { FEATURED_TASK } from '../data/reportFigures';
+import { atlas, selectTask, useAtlas } from '../state/atlasStore';
+import { CommandPalette } from '../components/atlas/CommandPalette';
+import { ComparisonTray, InspectorPanel } from '../components/atlas/Inspector';
+import { SectionProgress } from '../components/atlas/SectionProgress';
+import { nebulaDom } from '../state/nebulaStore';
 import { BackToTop, Nav, jumpTo } from '../components/navigation/Nav';
-import { SceneControls } from '../components/controls/SceneControls';
-import { ui, useUi } from '../state/sceneStore';
-import { scheduleRefresh } from '../hooks/useGsap';
+import { scenes, ui, useScenes, useUi } from '../state/sceneStore';
 import { Hero } from '../sections/Hero/Hero';
 import { Results } from '../sections/Results/Results';
 import { BugMatrix } from '../sections/BugMatrix/BugMatrix';
 import { BugExplorer } from '../sections/BugExplorer/BugExplorer';
+import { WorkedExample } from '../sections/WorkedExample/WorkedExample';
 import { Trust } from '../sections/Trust/Trust';
+import { GuidedTour } from '../components/atlas/GuidedTour';
+import { Conditions } from '../sections/Conditions/Conditions';
 import { Methodology } from '../sections/Methodology/Methodology';
 import { BuiltVsUsed } from '../sections/BuiltVsUsed/BuiltVsUsed';
 import { Limitations } from '../sections/Limitations/Limitations';
 import { FutureWork } from '../sections/FutureWork/FutureWork';
 import { Footer } from '../sections/Footer/Footer';
 
-// three.js, R3F and the shaders load in their own chunk, after the page is readable.
+// three.js, R3F and the shaders load in their own chunk, once a section requests a 3D scene.
 const ExperienceCanvas = lazy(() => import('../scenes/ExperienceCanvas'));
+const Architecture = lazy(() => import('../sections/Architecture/Architecture').then((m) => ({ default: m.Architecture })));
 
-/** If WebGL fails at runtime (no context, lost driver), fall back to the static poster. */
+/** If WebGL fails at runtime (no context, lost driver), every section falls back to its SVG/HTML version. */
 class WebGLBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
   state = { failed: false };
   static getDerivedStateFromError() { return { failed: true }; }
@@ -31,35 +37,29 @@ class WebGLBoundary extends Component<{ children: ReactNode }, { failed: boolean
 export function App() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [taskId, setTaskId] = useState<string>(FEATURED_TASK);
+  const taskId = useAtlas((s) => s.task);
+  const view = useAtlas((s) => s.view);
+  useEffect(() => { document.documentElement.dataset.view = view; }, [view]);
   const webgl = useUi((s) => s.webgl);
-  const lowTier = useUi((s) => s.lowTier);
-  // The 3D layer mounts once the page is interactive, so it never delays the readable hero.
+  // The one canvas mounts when a section first requests a scene, and stays: it is a single persistent
+  // renderer, and scenes come and go inside it.
+  const wanted = useScenes(() => scenes.list().some((e) => e.requested));
   const [mount3d, setMount3d] = useState(false);
-  useEffect(() => {
-    if (!webgl) return;
-    const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number };
-    const go = () => setMount3d(true);
-    if (w.requestIdleCallback) w.requestIdleCallback(go, { timeout: lowTier ? 2500 : 1200 });
-    else window.setTimeout(go, 300);
-  }, [webgl, lowTier]);
+  useEffect(() => { if (wanted) setMount3d(true); }, [wanted]);
 
   useEffect(() => {
     loadSummary().then(setSummary).catch((e: Error) => setError(e.message));
   }, []);
 
-  // Trigger positions depend on layout: refresh once data and fonts are in.
-  useEffect(() => { if (summary) scheduleRefresh(60); }, [summary]);
-  useEffect(() => { document.fonts?.ready.then(() => scheduleRefresh(60)); }, []);
-
   const openTask = useCallback((id: string) => {
-    setTaskId(id);
-    requestAnimationFrame(() => jumpTo('explorer'));
+    atlas.set({ task: id }, 'push');
+    requestAnimationFrame(() => jumpTo('explorer-all'));
   }, []);
 
   return (
     <>
       <Nav />
+      <SectionProgress />
       {webgl && mount3d && (
         <WebGLBoundary>
           <Suspense fallback={null}>
@@ -67,21 +67,28 @@ export function App() {
           </Suspense>
         </WebGLBoundary>
       )}
-      <SceneControls />
       <main id="main">
         <Hero summary={summary} />
-        {error && <p className="container load-error" role="alert">Could not load the study data ({error}). The raw file is at <a href="./data/results.json">data/results.json</a>.</p>}
+        {error && <p className="pub-container load-error" role="alert">Could not load the study data ({error}). The raw file is at <a href="./data/results.json">data/results.json</a>.</p>}
         <Results summary={summary} />
+        <Conditions summary={summary} />
+        <Methodology summary={summary} onOpenTask={openTask} />
+        <WorkedExample summary={summary} />
         <BugMatrix summary={summary} onOpenTask={openTask} selectedTask={taskId} />
-        <BugExplorer summary={summary} taskId={taskId} onSelectTask={setTaskId} />
+        <BugExplorer summary={summary} taskId={taskId} onSelectTask={selectTask} />
+        <Suspense fallback={<div className="pub-skeleton pub-skeleton--matrix" />}><Architecture summary={summary} /></Suspense>
         <Trust summary={summary} />
-        <Methodology />
         <BuiltVsUsed />
         <Limitations />
         <FutureWork />
       </main>
       <Footer />
       <BackToTop />
+      <InspectorPanel summary={summary} />
+      <ComparisonTray summary={summary} />
+      <CommandPalette summary={summary} />
+      <GuidedTour />
+      <svg className="thread" aria-hidden="true"><line ref={(el) => { nebulaDom.thread = el; }} visibility="hidden" /></svg>
     </>
   );
 }

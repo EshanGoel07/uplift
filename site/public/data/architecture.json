@@ -1,0 +1,1990 @@
+{
+ "modules": [
+  {
+   "name": "analysis",
+   "path": "src/uplift/analysis.py",
+   "lines": 280,
+   "doc": "Results of a finished batch: load the runs, compare arms, write site/data/results.json.",
+   "items": [
+    {
+     "name": "Batch",
+     "kind": "class",
+     "line": 44,
+     "end": 53,
+     "doc": ""
+    },
+    {
+     "name": "load",
+     "kind": "function",
+     "line": 56,
+     "end": 78,
+     "doc": "`d` is .uplift/<repo>. `split_sets` is {\"test\": ids, \"fresh\": ids}."
+    },
+    {
+     "name": "ledger_cost",
+     "kind": "function",
+     "line": 81,
+     "end": 94,
+     "doc": "The proxy's settled cost of these runs. Each agent run has a row naming its run folder; a"
+    },
+    {
+     "name": "run_cost",
+     "kind": "function",
+     "line": 97,
+     "end": 98,
+     "doc": ""
+    },
+    {
+     "name": "per_task",
+     "kind": "function",
+     "line": 101,
+     "end": 104,
+     "doc": "{arm: [share of this arm's runs solved, per task]}."
+    },
+    {
+     "name": "percentile_ci",
+     "kind": "function",
+     "line": 107,
+     "end": 109,
+     "doc": ""
+    },
+    {
+     "name": "sd",
+     "kind": "function",
+     "line": 112,
+     "end": 114,
+     "doc": ""
+    },
+    {
+     "name": "bootstrap",
+     "kind": "function",
+     "line": 117,
+     "end": 138,
+     "doc": "Resample tasks with replacement, the same tasks for every arm, so differences stay paired."
+    },
+    {
+     "name": "arm_rows",
+     "kind": "function",
+     "line": 141,
+     "end": 153,
+     "doc": ""
+    },
+    {
+     "name": "read_trace",
+     "kind": "function",
+     "line": 156,
+     "end": 161,
+     "doc": ""
+    },
+    {
+     "name": "fired_records",
+     "kind": "function",
+     "line": 164,
+     "end": 178,
+     "doc": "Hook evaluations that produced a message. The log also has one line per quiet evaluation,"
+    },
+    {
+     "name": "sent_messages",
+     "kind": "function",
+     "line": 181,
+     "end": 204,
+     "doc": "(messages that reached the model, fired records that did not)."
+    },
+    {
+     "name": "cut_diff",
+     "kind": "function",
+     "line": 207,
+     "end": 210,
+     "doc": ""
+    },
+    {
+     "name": "scrub",
+     "kind": "function",
+     "line": 213,
+     "end": 216,
+     "doc": "Absolute workspace paths in pytest output say nothing about the run, and name the build machine."
+    },
+    {
+     "name": "first_line",
+     "kind": "function",
+     "line": 219,
+     "end": 220,
+     "doc": ""
+    },
+    {
+     "name": "trust_cards",
+     "kind": "function",
+     "line": 223,
+     "end": 249,
+     "doc": ""
+    },
+    {
+     "name": "export",
+     "kind": "function",
+     "line": 252,
+     "end": 280,
+     "doc": "(results.json content, notes for the caller). `tasks` is {id: Task}."
+    }
+   ],
+   "imports": [
+    "batch",
+    "screen"
+   ],
+   "external": []
+  },
+  {
+   "name": "batch",
+   "path": "src/uplift/batch.py",
+   "lines": 260,
+   "doc": "Validate many tasks in parallel: one `uplift validate` subprocess per task, so tasks are",
+   "items": [
+    {
+     "name": "_done",
+     "kind": "function",
+     "line": 35,
+     "end": 42,
+     "doc": "A finished result exists. Crashed runs (`error`) are retried."
+    },
+    {
+     "name": "validate_subprocess",
+     "kind": "function",
+     "line": 45,
+     "end": 59,
+     "doc": "Run `uplift validate` for one task. Returns an error record if it crashed, else None"
+    },
+    {
+     "name": "reason",
+     "kind": "function",
+     "line": 62,
+     "end": 66,
+     "doc": ""
+    },
+    {
+     "name": "category",
+     "kind": "function",
+     "line": 69,
+     "end": 83,
+     "doc": ""
+    },
+    {
+     "name": "run_batch",
+     "kind": "function",
+     "line": 86,
+     "end": 132,
+     "doc": "Validate every id in `lists` ({list name: ids}). `validate_one(task_id)` returns an"
+    },
+    {
+     "name": "check_plan",
+     "kind": "function",
+     "line": 135,
+     "end": 140,
+     "doc": "Ablation arms run on dev tasks only; test/fresh tasks only ever get the report arms."
+    },
+    {
+     "name": "build_plan",
+     "kind": "function",
+     "line": 143,
+     "end": 148,
+     "doc": "Task by task, so a batch stopped early leaves whole tasks to compare across arms."
+    },
+    {
+     "name": "run_path",
+     "kind": "function",
+     "line": 151,
+     "end": 152,
+     "doc": ""
+    },
+    {
+     "name": "read_result",
+     "kind": "function",
+     "line": 155,
+     "end": 159,
+     "doc": ""
+    },
+    {
+     "name": "gzip_logs",
+     "kind": "function",
+     "line": 162,
+     "end": 168,
+     "doc": ""
+    },
+    {
+     "name": "run_plan",
+     "kind": "function",
+     "line": 171,
+     "end": 260,
+     "doc": "Run every run without a result (an errored run has one, so delete its folder to retry)."
+    }
+   ],
+   "imports": [
+    "runner"
+   ],
+   "external": []
+  },
+  {
+   "name": "cli",
+   "path": "src/uplift/cli.py",
+   "lines": 834,
+   "doc": "`uplift` command line.",
+   "items": [
+    {
+     "name": "repo_dir",
+     "kind": "function",
+     "line": 30,
+     "end": 31,
+     "doc": ""
+    },
+    {
+     "name": "cmd_tasks_load",
+     "kind": "function",
+     "line": 34,
+     "end": 45,
+     "doc": ""
+    },
+    {
+     "name": "cmd_tasks_split",
+     "kind": "function",
+     "line": 48,
+     "end": 64,
+     "doc": ""
+    },
+    {
+     "name": "cmd_risk",
+     "kind": "function",
+     "line": 67,
+     "end": 78,
+     "doc": ""
+    },
+    {
+     "name": "_task",
+     "kind": "function",
+     "line": 84,
+     "end": 89,
+     "doc": ""
+    },
+    {
+     "name": "cmd_validate",
+     "kind": "function",
+     "line": 92,
+     "end": 101,
+     "doc": ""
+    },
+    {
+     "name": "cmd_validate_batch",
+     "kind": "function",
+     "line": 104,
+     "end": 138,
+     "doc": ""
+    },
+    {
+     "name": "cmd_recompute_fresh",
+     "kind": "function",
+     "line": 141,
+     "end": 158,
+     "doc": "Re-derive fresh F2P/P2P from kept raw pytest logs with the current parser (no test runs)."
+    },
+    {
+     "name": "cmd_mine_fresh",
+     "kind": "function",
+     "line": 161,
+     "end": 197,
+     "doc": ""
+    },
+    {
+     "name": "arm_dir",
+     "kind": "function",
+     "line": 203,
+     "end": 211,
+     "doc": "An arm's files: generated arms in .uplift/<repo>/arms/<arm>, hand-written ones in arms/<arm>."
+    },
+    {
+     "name": "cmd_generate",
+     "kind": "function",
+     "line": 214,
+     "end": 259,
+     "doc": "One Muse Spark call (through the proxy) -> AGENTS.md + hook settings -> arm directories."
+    },
+    {
+     "name": "cmd_probe_hooks",
+     "kind": "function",
+     "line": 262,
+     "end": 267,
+     "doc": ""
+    },
+    {
+     "name": "cmd_probe_network",
+     "kind": "function",
+     "line": 270,
+     "end": 274,
+     "doc": ""
+    },
+    {
+     "name": "cmd_run_one",
+     "kind": "function",
+     "line": 277,
+     "end": 292,
+     "doc": ""
+    },
+    {
+     "name": "cmd_regrade",
+     "kind": "function",
+     "line": 295,
+     "end": 310,
+     "doc": "Free: re-grade finished runs from their saved agent.patch (fresh workspace, real tests)."
+    },
+    {
+     "name": "cmd_tune",
+     "kind": "function",
+     "line": 313,
+     "end": 355,
+     "doc": "Paid: only through scripts/paid.sh. One Muse Spark call on dev results -> the tuned arm."
+    },
+    {
+     "name": "manifest_feedback",
+     "kind": "function",
+     "line": 358,
+     "end": 360,
+     "doc": "The same hook feedback mode as the generated arms."
+    },
+    {
+     "name": "_screen_items",
+     "kind": "function",
+     "line": 366,
+     "end": 371,
+     "doc": ""
+    },
+    {
+     "name": "cmd_screen_plan",
+     "kind": "function",
+     "line": 374,
+     "end": 386,
+     "doc": "Free: what `paid.sh screen` will ask, and its estimated cost. No model calls."
+    },
+    {
+     "name": "cmd_screen",
+     "kind": "function",
+     "line": 389,
+     "end": 401,
+     "doc": "Paid: only through scripts/paid.sh. Prompts hold only the issue and the added test lines."
+    },
+    {
+     "name": "_screened_outcomes",
+     "kind": "function",
+     "line": 404,
+     "end": 413,
+     "doc": "{(task, seed): {arm: resolved}} for tasks the screen keeps; a run with an error counts False."
+    },
+    {
+     "name": "cmd_screen_report",
+     "kind": "function",
+     "line": 416,
+     "end": 439,
+     "doc": ""
+    },
+    {
+     "name": "cmd_screen_table",
+     "kind": "function",
+     "line": 442,
+     "end": 462,
+     "doc": "Free: per-arm results on the screened lists, from the per-test results in result.json."
+    },
+    {
+     "name": "cmd_plan_batch",
+     "kind": "function",
+     "line": 465,
+     "end": 506,
+     "doc": ""
+    },
+    {
+     "name": "cmd_run_batch",
+     "kind": "function",
+     "line": 509,
+     "end": 545,
+     "doc": "Paid: only through scripts/paid.sh."
+    },
+    {
+     "name": "_load_batch",
+     "kind": "function",
+     "line": 548,
+     "end": 552,
+     "doc": ""
+    },
+    {
+     "name": "cmd_export",
+     "kind": "function",
+     "line": 555,
+     "end": 571,
+     "doc": "Free: site/data/results.json from a finished batch."
+    },
+    {
+     "name": "cmd_web_audit",
+     "kind": "function",
+     "line": 574,
+     "end": 589,
+     "doc": "Free: what each run reached on the network, from its saved trace."
+    },
+    {
+     "name": "_label_items",
+     "kind": "function",
+     "line": 592,
+     "end": 596,
+     "doc": ""
+    },
+    {
+     "name": "cmd_label_plan",
+     "kind": "function",
+     "line": 599,
+     "end": 606,
+     "doc": "Free: what `paid.sh label` will ask, and its estimated cost. No model calls."
+    },
+    {
+     "name": "cmd_label",
+     "kind": "function",
+     "line": 609,
+     "end": 621,
+     "doc": "Paid: only through scripts/paid.sh. Prompts hold only the issue, the fix's files and the diff."
+    },
+    {
+     "name": "cmd_report",
+     "kind": "function",
+     "line": 624,
+     "end": 634,
+     "doc": "Free: reports/main.md and charts. Same inputs, same numbers."
+    },
+    {
+     "name": "main",
+     "kind": "function",
+     "line": 637,
+     "end": 830,
+     "doc": ""
+    }
+   ],
+   "imports": [
+    "analysis",
+    "batch",
+    "generate",
+    "gitutil",
+    "label",
+    "mine",
+    "netprobe",
+    "probe",
+    "report",
+    "risk",
+    "runner",
+    "screen",
+    "split",
+    "tasks",
+    "tune",
+    "webaudit"
+   ],
+   "external": []
+  },
+  {
+   "name": "generate",
+   "path": "src/uplift/generate.py",
+   "lines": 310,
+   "doc": "Setup generator: Muse Spark writes a repo-specific AGENTS.md and the settings for three hook",
+   "items": [
+    {
+     "name": "LeakageError",
+     "kind": "class",
+     "line": 48,
+     "end": 49,
+     "doc": ""
+    },
+    {
+     "name": "_dt",
+     "kind": "function",
+     "line": 52,
+     "end": 54,
+     "doc": ""
+    },
+    {
+     "name": "filter_before",
+     "kind": "function",
+     "line": 57,
+     "end": 64,
+     "doc": "Keep items whose every date field in `keys` is present and at or before `cutoff` (the"
+    },
+    {
+     "name": "assert_before",
+     "kind": "function",
+     "line": 67,
+     "end": 83,
+     "doc": "Every dated item anywhere in the inputs must be at or before the cutoff."
+    },
+    {
+     "name": "gh_json",
+     "kind": "function",
+     "line": 86,
+     "end": 90,
+     "doc": ""
+    },
+    {
+     "name": "review_comments",
+     "kind": "function",
+     "line": 93,
+     "end": 117,
+     "doc": "Inline review comments created before `cutoff`, on PRs merged before it (most-discussed"
+    },
+    {
+     "name": "_show",
+     "kind": "function",
+     "line": 123,
+     "end": 132,
+     "doc": ""
+    },
+    {
+     "name": "collect_inputs",
+     "kind": "function",
+     "line": 135,
+     "end": 167,
+     "doc": "Everything the generator may see, each item dated. The cutoff is the snapshot's commit date."
+    },
+    {
+     "name": "build_messages",
+     "kind": "function",
+     "line": 190,
+     "end": 192,
+     "doc": ""
+    },
+    {
+     "name": "call_model",
+     "kind": "function",
+     "line": 195,
+     "end": 204,
+     "doc": "One chat completion through the budget proxy (which holds the key; we send `dummy`)."
+    },
+    {
+     "name": "parse_spec",
+     "kind": "function",
+     "line": 207,
+     "end": 236,
+     "doc": "Parse and validate the model's JSON. Returns (spec, problems); problems make it unusable."
+    },
+    {
+     "name": "hook_config",
+     "kind": "function",
+     "line": 239,
+     "end": 245,
+     "doc": ""
+    },
+    {
+     "name": "hooks_json",
+     "kind": "function",
+     "line": 248,
+     "end": 258,
+     "doc": "Muse `.muse/hooks.json`: `{\"hooks\": {<event>: [matcher groups]}}`. The hook probe showed the"
+    },
+    {
+     "name": "render_arms",
+     "kind": "function",
+     "line": 261,
+     "end": 286,
+     "doc": "Write one directory per arm under `out_root`. Returns {arm: files}."
+    },
+    {
+     "name": "paths_named",
+     "kind": "function",
+     "line": 292,
+     "end": 303,
+     "doc": "Every file path the setup names: in the generated rules (AGENTS.md text, co-change rules,"
+    },
+    {
+     "name": "check_paths",
+     "kind": "function",
+     "line": 306,
+     "end": 310,
+     "doc": "Paths that do not exist at `commit` (reported, never silently fixed). A path also counts"
+    }
+   ],
+   "imports": [
+    "gitutil"
+   ],
+   "external": []
+  },
+  {
+   "name": "gitutil",
+   "path": "src/uplift/gitutil.py",
+   "lines": 90,
+   "doc": "Thin wrappers around git. Uplift only *reads* the target repo's history and",
+   "items": [
+    {
+     "name": "GitError",
+     "kind": "class",
+     "line": 10,
+     "end": 11,
+     "doc": ""
+    },
+    {
+     "name": "git",
+     "kind": "function",
+     "line": 14,
+     "end": 18,
+     "doc": ""
+    },
+    {
+     "name": "git_ok",
+     "kind": "function",
+     "line": 21,
+     "end": 23,
+     "doc": ""
+    },
+    {
+     "name": "default_branch",
+     "kind": "function",
+     "line": 26,
+     "end": 34,
+     "doc": ""
+    },
+    {
+     "name": "commit_before",
+     "kind": "function",
+     "line": 37,
+     "end": 43,
+     "doc": "Last first-parent commit on the default branch committed strictly before the given time."
+    },
+    {
+     "name": "commit_date",
+     "kind": "function",
+     "line": 46,
+     "end": 47,
+     "doc": ""
+    },
+    {
+     "name": "is_ancestor",
+     "kind": "function",
+     "line": 50,
+     "end": 51,
+     "doc": ""
+    },
+    {
+     "name": "Worktree",
+     "kind": "class",
+     "line": 54,
+     "end": 69,
+     "doc": "A throwaway detached worktree at a given commit (removed on exit)."
+    },
+    {
+     "name": "ensure_commit",
+     "kind": "function",
+     "line": 72,
+     "end": 77,
+     "doc": "Make sure a commit exists locally; PR-branch commits may need an explicit fetch."
+    },
+    {
+     "name": "patch_already_present",
+     "kind": "function",
+     "line": 80,
+     "end": 84,
+     "doc": "True if the patch's changes are already in the tree (it reverse-applies cleanly)."
+    },
+    {
+     "name": "patch_applies",
+     "kind": "function",
+     "line": 87,
+     "end": 90,
+     "doc": ""
+    }
+   ],
+   "imports": [],
+   "external": []
+  },
+  {
+   "name": "grade",
+   "path": "src/uplift/grade.py",
+   "lines": 190,
+   "doc": "Grading: did the code in a workspace fix the bug without breaking anything?",
+   "items": [
+    {
+     "name": "Grade",
+     "kind": "class",
+     "line": 27,
+     "end": 37,
+     "doc": ""
+    },
+    {
+     "name": "_scan",
+     "kind": "function",
+     "line": 50,
+     "end": 64,
+     "doc": "(results, counts of each status line, number of sub-test entries left unparsed)."
+    },
+    {
+     "name": "parse_pytest",
+     "kind": "function",
+     "line": 67,
+     "end": 74,
+     "doc": "Map test node id -> outcome from `pytest -rA` short summary lines."
+    },
+    {
+     "name": "summary_counts",
+     "kind": "function",
+     "line": 77,
+     "end": 87,
+     "doc": "Counts from pytest's final `=== 1 failed, 38 passed in 1.05s ===` line, or None."
+    },
+    {
+     "name": "check_output",
+     "kind": "function",
+     "line": 90,
+     "end": 109,
+     "doc": "Cross-check the parsed result lines against pytest's own summary. Returns a problem"
+    },
+    {
+     "name": "_passed",
+     "kind": "function",
+     "line": 112,
+     "end": 113,
+     "doc": ""
+    },
+    {
+     "name": "clear_bytecode",
+     "kind": "function",
+     "line": 116,
+     "end": 122,
+     "doc": "Delete __pycache__ outside the virtualenv. Python only checks source mtime+size, so a"
+    },
+    {
+     "name": "pytest_config",
+     "kind": "function",
+     "line": 129,
+     "end": 135,
+     "doc": "The workspace's own pytest config file (pytest's lookup order), else an empty one."
+    },
+    {
+     "name": "run_tests",
+     "kind": "function",
+     "line": 138,
+     "end": 158,
+     "doc": "Run the given pytest node ids with the workspace's own interpreter."
+    },
+    {
+     "name": "reset_test_files",
+     "kind": "function",
+     "line": 161,
+     "end": 169,
+     "doc": "Put test files back to the starting commit, so agent edits to tests can't affect grading."
+    },
+    {
+     "name": "grade",
+     "kind": "function",
+     "line": 172,
+     "end": 190,
+     "doc": ""
+    }
+   ],
+   "imports": [
+    "gitutil"
+   ],
+   "external": []
+  },
+  {
+   "name": "label",
+   "path": "src/uplift/label.py",
+   "lines": 180,
+   "doc": "Why did failed runs fail? Simple rules first, then one Muse Spark label per failed run.",
+   "items": [
+    {
+     "name": "changed_files",
+     "kind": "function",
+     "line": 47,
+     "end": 48,
+     "doc": ""
+    },
+    {
+     "name": "rules",
+     "kind": "function",
+     "line": 51,
+     "end": 56,
+     "doc": ""
+    },
+    {
+     "name": "build_messages",
+     "kind": "function",
+     "line": 59,
+     "end": 65,
+     "doc": "The whole prompt. No arm, no test results, no rule output may go in here."
+    },
+    {
+     "name": "parse_label",
+     "kind": "function",
+     "line": 68,
+     "end": 75,
+     "doc": ""
+    },
+    {
+     "name": "item_path",
+     "kind": "function",
+     "line": 78,
+     "end": 79,
+     "doc": ""
+    },
+    {
+     "name": "collect",
+     "kind": "function",
+     "line": 82,
+     "end": 95,
+     "doc": "One item per failed run, with its rule results and its prompt. No model calls."
+    },
+    {
+     "name": "estimate_usd",
+     "kind": "function",
+     "line": 98,
+     "end": 100,
+     "doc": ""
+    },
+    {
+     "name": "judge",
+     "kind": "function",
+     "line": 103,
+     "end": 120,
+     "doc": "One saved record, reused if there. Raises if no usable label comes back: never guess."
+    },
+    {
+     "name": "run",
+     "kind": "function",
+     "line": 123,
+     "end": 131,
+     "doc": ""
+    },
+    {
+     "name": "saved",
+     "kind": "function",
+     "line": 134,
+     "end": 136,
+     "doc": ""
+    },
+    {
+     "name": "agreement",
+     "kind": "function",
+     "line": 139,
+     "end": 149,
+     "doc": "For each rule with a matching label: runs where both, only the rule, only Muse Spark said so."
+    },
+    {
+     "name": "report_section",
+     "kind": "function",
+     "line": 152,
+     "end": 180,
+     "doc": ""
+    }
+   ],
+   "imports": [
+    "analysis",
+    "generate",
+    "report"
+   ],
+   "external": []
+  },
+  {
+   "name": "mine",
+   "path": "src/uplift/mine.py",
+   "lines": 347,
+   "doc": "Fresh tasks: recent bug fixes mined straight from the repo's history.",
+   "items": [
+    {
+     "name": "Commit",
+     "kind": "class",
+     "line": 44,
+     "end": 50,
+     "doc": ""
+    },
+    {
+     "name": "is_library_file",
+     "kind": "function",
+     "line": 53,
+     "end": 54,
+     "doc": ""
+    },
+    {
+     "name": "is_test_file",
+     "kind": "function",
+     "line": 57,
+     "end": 58,
+     "doc": ""
+    },
+    {
+     "name": "filter_reason",
+     "kind": "function",
+     "line": 61,
+     "end": 73,
+     "doc": "Why a commit is not a candidate, or None if it is one."
+    },
+    {
+     "name": "linked_issue",
+     "kind": "function",
+     "line": 76,
+     "end": 79,
+     "doc": "Issue number from 'closes/fixes/resolves #N' (or an issues URL) in the message."
+    },
+    {
+     "name": "gh_issue",
+     "kind": "function",
+     "line": 82,
+     "end": 90,
+     "doc": "`gh issue view`, or None on error. Includes `url` so PRs can be told apart, and dates /"
+    },
+    {
+     "name": "pr_number",
+     "kind": "function",
+     "line": 93,
+     "end": 96,
+     "doc": "The squash-merge PR number: a trailing '(#N)' in the subject."
+    },
+    {
+     "name": "_ts",
+     "kind": "function",
+     "line": 99,
+     "end": 100,
+     "doc": ""
+    },
+    {
+     "name": "issue_matches_commit",
+     "kind": "function",
+     "line": 103,
+     "end": 113,
+     "doc": "Is this issue really the one the commit fixes? A squashed PR from a fork can say"
+    },
+    {
+     "name": "problem_statement",
+     "kind": "function",
+     "line": 116,
+     "end": 129,
+     "doc": "(statement, skip reason). Only real issues count: a PR body describes the fix."
+    },
+    {
+     "name": "list_commits",
+     "kind": "function",
+     "line": 132,
+     "end": 144,
+     "doc": "First-parent, non-merge commits on the default branch since `since`, newest first."
+    },
+    {
+     "name": "changed_files",
+     "kind": "function",
+     "line": 147,
+     "end": 148,
+     "doc": ""
+    },
+    {
+     "name": "split_patches",
+     "kind": "function",
+     "line": 151,
+     "end": 156,
+     "doc": "(patch, test_patch): the commit's diff outside / inside the test directory."
+    },
+    {
+     "name": "test_modules",
+     "kind": "function",
+     "line": 159,
+     "end": 169,
+     "doc": "Touched test files pytest would collect (tests/**/test_*.py) that exist after the patch."
+    },
+    {
+     "name": "f2p_p2p",
+     "kind": "function",
+     "line": 172,
+     "end": 177,
+     "doc": "F2P = failed/errored in (1) and passed in (2); P2P = passed in both."
+    },
+    {
+     "name": "lists_from_logs",
+     "kind": "function",
+     "line": 180,
+     "end": 200,
+     "doc": "(f2p, p2p, problem) recomputed with the current parser from kept raw pytest output:"
+    },
+    {
+     "name": "recompute_lists",
+     "kind": "function",
+     "line": 203,
+     "end": 223,
+     "doc": "Recompute F2P/P2P for fresh tasks from the first log dir that has logs for each task"
+    },
+    {
+     "name": "measure",
+     "kind": "function",
+     "line": 226,
+     "end": 265,
+     "doc": "Run the touched test files on base+tests and base+tests+fix. Returns (f2p, p2p, skip reason)."
+    },
+    {
+     "name": "MineStats",
+     "kind": "class",
+     "line": 269,
+     "end": 284,
+     "doc": ""
+    },
+    {
+     "name": "mine",
+     "kind": "function",
+     "line": 287,
+     "end": 347,
+     "doc": "Newest-first scan; stops once `limit` tasks are accepted. `fetch_issue` / `measure_fn`"
+    }
+   ],
+   "imports": [
+    "gitutil",
+    "grade",
+    "tasks",
+    "workspace"
+   ],
+   "external": []
+  },
+  {
+   "name": "netprobe",
+   "path": "src/uplift/netprobe.py",
+   "lines": 127,
+   "doc": "Network probe: is the agent really cut off? One tiny Muse Code run (through the budget guard) in",
+   "items": [
+    {
+     "name": "build_workspace",
+     "kind": "function",
+     "line": 35,
+     "end": 46,
+     "doc": ""
+    },
+    {
+     "name": "host_status",
+     "kind": "function",
+     "line": 49,
+     "end": 53,
+     "doc": "HTTP status from outside the sandbox: the control. This is us, not the agent."
+    },
+    {
+     "name": "offered_tools",
+     "kind": "function",
+     "line": 56,
+     "end": 69,
+     "doc": "Every tool the model was offered in any request, namespaced or provider-hosted."
+    },
+    {
+     "name": "final_text",
+     "kind": "function",
+     "line": 72,
+     "end": 75,
+     "doc": "The last text the model wrote."
+    },
+    {
+     "name": "verdict",
+     "kind": "function",
+     "line": 78,
+     "end": 104,
+     "doc": ""
+    },
+    {
+     "name": "run",
+     "kind": "function",
+     "line": 107,
+     "end": 127,
+     "doc": ""
+    }
+   ],
+   "imports": [
+    "analysis",
+    "batch",
+    "gitutil",
+    "runner",
+    "webaudit"
+   ],
+   "external": []
+  },
+  {
+   "name": "probe",
+   "path": "src/uplift/probe.py",
+   "lines": 151,
+   "doc": "Hook capability probe: can Muse Code hooks (a) block an action and (b) feed text back into",
+   "items": [
+    {
+     "name": "hooks_config",
+     "kind": "function",
+     "line": 73,
+     "end": 78,
+     "doc": "Event-keyed hook config (Claude-Code-like matcher groups). `wrapped` nests it under \"hooks\"."
+    },
+    {
+     "name": "build_workspace",
+     "kind": "function",
+     "line": 81,
+     "end": 94,
+     "doc": ""
+    },
+    {
+     "name": "analyse",
+     "kind": "function",
+     "line": 97,
+     "end": 125,
+     "doc": "What worked, from files on disk, the hook log and the agent's output."
+    },
+    {
+     "name": "run",
+     "kind": "function",
+     "line": 128,
+     "end": 151,
+     "doc": ""
+    }
+   ],
+   "imports": [
+    "gitutil"
+   ],
+   "external": []
+  },
+  {
+   "name": "report",
+   "path": "src/uplift/report.py",
+   "lines": 286,
+   "doc": "`uplift report`: reports/main.md and PNG charts from a finished batch. Free and offline.",
+   "items": [
+    {
+     "name": "pct",
+     "kind": "function",
+     "line": 26,
+     "end": 27,
+     "doc": ""
+    },
+    {
+     "name": "pts",
+     "kind": "function",
+     "line": 30,
+     "end": 31,
+     "doc": ""
+    },
+    {
+     "name": "compute",
+     "kind": "function",
+     "line": 34,
+     "end": 60,
+     "doc": "Every number in the report."
+    },
+    {
+     "name": "dev_rows",
+     "kind": "function",
+     "line": 63,
+     "end": 71,
+     "doc": "Solved and wins/losses vs none on the same (task, seed), screened dev tasks."
+    },
+    {
+     "name": "hook_delivery",
+     "kind": "function",
+     "line": 74,
+     "end": 84,
+     "doc": "{arm: {\"runs_with_messages\", \"messages\", \"not_delivered\"}} for arms with hooks."
+    },
+    {
+     "name": "web_section",
+     "kind": "function",
+     "line": 87,
+     "end": 120,
+     "doc": "The route round the leakage checks, and whether the result survives without it."
+    },
+    {
+     "name": "limitations",
+     "kind": "function",
+     "line": 123,
+     "end": 125,
+     "doc": ""
+    },
+    {
+     "name": "table",
+     "kind": "function",
+     "line": 128,
+     "end": 130,
+     "doc": ""
+    },
+    {
+     "name": "markdown",
+     "kind": "function",
+     "line": 133,
+     "end": 197,
+     "doc": ""
+    },
+    {
+     "name": "charts",
+     "kind": "function",
+     "line": 200,
+     "end": 273,
+     "doc": ""
+    },
+    {
+     "name": "write",
+     "kind": "function",
+     "line": 276,
+     "end": 286,
+     "doc": ""
+    }
+   ],
+   "imports": [
+    "analysis",
+    "batch",
+    "label",
+    "screen",
+    "webaudit"
+   ],
+   "external": [
+    "matplotlib"
+   ]
+  },
+  {
+   "name": "risk",
+   "path": "src/uplift/risk.py",
+   "lines": 188,
+   "doc": "Risk map from git history, using ONLY commits up to the snapshot (no leakage).",
+   "items": [
+    {
+     "name": "Commit",
+     "kind": "class",
+     "line": 32,
+     "end": 41,
+     "doc": ""
+    },
+    {
+     "name": "read_history",
+     "kind": "function",
+     "line": 44,
+     "end": 65,
+     "doc": "Non-merge commits reachable from `until` (the snapshot), newest first."
+    },
+    {
+     "name": "_percentiles",
+     "kind": "function",
+     "line": 68,
+     "end": 74,
+     "doc": ""
+    },
+    {
+     "name": "szz_lite",
+     "kind": "function",
+     "line": 77,
+     "end": 100,
+     "doc": "For the newest `limit` fix commits: blame the lines each fix deleted or changed"
+    },
+    {
+     "name": "build_risk_map",
+     "kind": "function",
+     "line": 103,
+     "end": 183,
+     "doc": ""
+    },
+    {
+     "name": "save",
+     "kind": "function",
+     "line": 186,
+     "end": 188,
+     "doc": ""
+    }
+   ],
+   "imports": [
+    "gitutil"
+   ],
+   "external": []
+  },
+  {
+   "name": "runner",
+   "path": "src/uplift/runner.py",
+   "lines": 268,
+   "doc": "Run one task: validate it (real fix) or attempt it with an agent (with or without a setup).",
+   "items": [
+    {
+     "name": "muse_args",
+     "kind": "function",
+     "line": 45,
+     "end": 47,
+     "doc": "Arguments for `muse exec`. Every agent run goes through here, so none can skip the block."
+    },
+    {
+     "name": "RunResult",
+     "kind": "class",
+     "line": 51,
+     "end": 68,
+     "doc": ""
+    },
+    {
+     "name": "_start_ref",
+     "kind": "function",
+     "line": 71,
+     "end": 72,
+     "doc": ""
+    },
+    {
+     "name": "prepare",
+     "kind": "function",
+     "line": 75,
+     "end": 78,
+     "doc": ""
+    },
+    {
+     "name": "validate",
+     "kind": "function",
+     "line": 81,
+     "end": 113,
+     "doc": "A task is valid if, on every repeat: before the fix, at least one FAIL_TO_PASS test fails;"
+    },
+    {
+     "name": "hook_counts",
+     "kind": "function",
+     "line": 116,
+     "end": 128,
+     "doc": "{check: {\"runs\": n, \"fired\": n}} from the sensor hooks' log (empty if no hook ran)."
+    },
+    {
+     "name": "agent_end",
+     "kind": "function",
+     "line": 131,
+     "end": 142,
+     "doc": "Muse's own last word on a failed run, e.g. `run ended with Failed: model did not reach a"
+    },
+    {
+     "name": "infra_failure",
+     "kind": "function",
+     "line": 145,
+     "end": 160,
+     "doc": "Why this run can't be graded, or \"\". A non-zero exit alone is not such a reason: Muse exits 1"
+    },
+    {
+     "name": "attempt",
+     "kind": "function",
+     "line": 163,
+     "end": 248,
+     "doc": "One agent attempt. Muse Code runs through guarded_muse.py (budget cap enforced)."
+    },
+    {
+     "name": "regrade",
+     "kind": "function",
+     "line": 251,
+     "end": 268,
+     "doc": "Grade a finished run offline: agent.patch on a fresh workspace, no model calls. The patch"
+    }
+   ],
+   "imports": [
+    "gitutil",
+    "grade",
+    "screen",
+    "tasks",
+    "workspace"
+   ],
+   "external": []
+  },
+  {
+   "name": "screen",
+   "path": "src/uplift/screen.py",
+   "lines": 285,
+   "doc": "Task screening: does the issue describe what each FAIL_TO_PASS test checks?",
+   "items": [
+    {
+     "name": "PatchedFile",
+     "kind": "class",
+     "line": 48,
+     "end": 50,
+     "doc": ""
+    },
+    {
+     "name": "parse_hunks",
+     "kind": "function",
+     "line": 53,
+     "end": 64,
+     "doc": "{path: [(old start, old count, body lines)]} from a unified diff."
+    },
+    {
+     "name": "apply_hunks",
+     "kind": "function",
+     "line": 67,
+     "end": 81,
+     "doc": ""
+    },
+    {
+     "name": "patched_files",
+     "kind": "function",
+     "line": 84,
+     "end": 90,
+     "doc": ""
+    },
+    {
+     "name": "_span",
+     "kind": "function",
+     "line": 93,
+     "end": 95,
+     "doc": ""
+    },
+    {
+     "name": "_test_spans",
+     "kind": "function",
+     "line": 98,
+     "end": 100,
+     "doc": ""
+    },
+    {
+     "name": "_find",
+     "kind": "function",
+     "line": 103,
+     "end": 109,
+     "doc": ""
+    },
+    {
+     "name": "lines_for_test",
+     "kind": "function",
+     "line": 112,
+     "end": 132,
+     "doc": "The lines to show for one F2P test, and where they came from: `test` (added inside that"
+    },
+    {
+     "name": "build_messages",
+     "kind": "function",
+     "line": 135,
+     "end": 142,
+     "doc": "The whole prompt: the issue and the added lines. Nothing else may go in here."
+    },
+    {
+     "name": "parse_verdict",
+     "kind": "function",
+     "line": 145,
+     "end": 152,
+     "doc": ""
+    },
+    {
+     "name": "collect",
+     "kind": "function",
+     "line": 155,
+     "end": 168,
+     "doc": "One item per (task, F2P test): what will be asked. No model calls."
+    },
+    {
+     "name": "estimate_usd",
+     "kind": "function",
+     "line": 171,
+     "end": 174,
+     "doc": ""
+    },
+    {
+     "name": "item_path",
+     "kind": "function",
+     "line": 177,
+     "end": 179,
+     "doc": ""
+    },
+    {
+     "name": "judge",
+     "kind": "function",
+     "line": 182,
+     "end": 204,
+     "doc": "One saved record, reused if already there (a stopped screen resumes without paying twice)."
+    },
+    {
+     "name": "run",
+     "kind": "function",
+     "line": 207,
+     "end": 215,
+     "doc": ""
+    },
+    {
+     "name": "apply_rule",
+     "kind": "function",
+     "line": 218,
+     "end": 226,
+     "doc": "{task id: {\"list\", \"keep\", \"exclude\", \"dropped\"}}."
+    },
+    {
+     "name": "save",
+     "kind": "function",
+     "line": 229,
+     "end": 234,
+     "doc": ""
+    },
+    {
+     "name": "load",
+     "kind": "function",
+     "line": 237,
+     "end": 238,
+     "doc": ""
+    },
+    {
+     "name": "sha256",
+     "kind": "function",
+     "line": 241,
+     "end": 242,
+     "doc": ""
+    },
+    {
+     "name": "resolved",
+     "kind": "function",
+     "line": 245,
+     "end": 252,
+     "doc": "Resolved under the screened lists, from the per-test results of a full grade. Anything that"
+    },
+    {
+     "name": "summary",
+     "kind": "function",
+     "line": 255,
+     "end": 265,
+     "doc": ""
+    },
+    {
+     "name": "sample",
+     "kind": "function",
+     "line": 268,
+     "end": 275,
+     "doc": "n random judgements each of yes and no, for checking by hand."
+    },
+    {
+     "name": "paired",
+     "kind": "function",
+     "line": 278,
+     "end": 285,
+     "doc": "Per arm: {\"resolved\", \"wins\", \"losses\", \"tasks\"} against `base` on the same (task, seed)."
+    }
+   ],
+   "imports": [
+    "generate",
+    "gitutil",
+    "tasks"
+   ],
+   "external": []
+  },
+  {
+   "name": "split",
+   "path": "src/uplift/split.py",
+   "lines": 120,
+   "doc": "Chronological dev/test split, plus the leakage cutoff.",
+   "items": [
+    {
+     "name": "Split",
+     "kind": "class",
+     "line": 28,
+     "end": 55,
+     "doc": ""
+    },
+    {
+     "name": "make_split",
+     "kind": "function",
+     "line": 58,
+     "end": 71,
+     "doc": ""
+    },
+    {
+     "name": "snapshot_before",
+     "kind": "function",
+     "line": 74,
+     "end": 78,
+     "doc": "(commit, date) of the last default-branch commit at least `margin_days` before `cutoff`."
+    },
+    {
+     "name": "attach_snapshot",
+     "kind": "function",
+     "line": 81,
+     "end": 84,
+     "doc": ""
+    },
+    {
+     "name": "leakage_at",
+     "kind": "function",
+     "line": 87,
+     "end": 100,
+     "doc": "For each task, confirm its fix and its new tests are NOT already in the snapshot."
+    },
+    {
+     "name": "check_leakage",
+     "kind": "function",
+     "line": 103,
+     "end": 106,
+     "doc": "For every test task, confirm its fix and its new tests are NOT in the snapshot."
+    },
+    {
+     "name": "attach_fresh",
+     "kind": "function",
+     "line": 109,
+     "end": 120,
+     "doc": "Record the fresh tasks, their own snapshot, and their leakage check against it."
+    }
+   ],
+   "imports": [
+    "gitutil",
+    "tasks"
+   ],
+   "external": []
+  },
+  {
+   "name": "tasks",
+   "path": "src/uplift/tasks.py",
+   "lines": 171,
+   "doc": "Task records: a past bug fix turned into a test-graded task.",
+   "items": [
+    {
+     "name": "Task",
+     "kind": "class",
+     "line": 29,
+     "end": 60,
+     "doc": ""
+    },
+    {
+     "name": "files_in_patch",
+     "kind": "function",
+     "line": 63,
+     "end": 71,
+     "doc": "Paths touched by a unified git diff, in order, without duplicates."
+    },
+    {
+     "name": "_iso",
+     "kind": "function",
+     "line": 74,
+     "end": 81,
+     "doc": ""
+    },
+    {
+     "name": "_as_list",
+     "kind": "function",
+     "line": 84,
+     "end": 93,
+     "doc": ""
+    },
+    {
+     "name": "download",
+     "kind": "function",
+     "line": 96,
+     "end": 106,
+     "doc": "Download once into the cache; later calls reuse the file."
+    },
+    {
+     "name": "load_swe_rebench",
+     "kind": "function",
+     "line": 109,
+     "end": 157,
+     "doc": "Read SWE-rebench rows for one repo and turn them into Task records."
+    },
+    {
+     "name": "save_tasks",
+     "kind": "function",
+     "line": 160,
+     "end": 166,
+     "doc": ""
+    },
+    {
+     "name": "read_tasks",
+     "kind": "function",
+     "line": 169,
+     "end": 171,
+     "doc": ""
+    }
+   ],
+   "imports": [],
+   "external": [
+    "pyarrow"
+   ]
+  },
+  {
+   "name": "tune",
+   "path": "src/uplift/tune.py",
+   "lines": 145,
+   "doc": "Tuned arm: Muse Spark reads what happened on dev and rewrites the setup. It writes an AGENTS.md",
+   "items": [
+    {
+     "name": "assert_dev_only",
+     "kind": "function",
+     "line": 39,
+     "end": 44,
+     "doc": "No test or fresh task may reach the model, by id or as a fresh-style name."
+    },
+    {
+     "name": "_reason",
+     "kind": "function",
+     "line": 47,
+     "end": 53,
+     "doc": ""
+    },
+    {
+     "name": "_hook_messages",
+     "kind": "function",
+     "line": 56,
+     "end": 63,
+     "doc": ""
+    },
+    {
+     "name": "run_summary",
+     "kind": "function",
+     "line": 66,
+     "end": 75,
+     "doc": "One failed run: kept tests that failed and why, regressions, files changed, hooks that fired."
+    },
+    {
+     "name": "collect_inputs",
+     "kind": "function",
+     "line": 78,
+     "end": 104,
+     "doc": ""
+    },
+    {
+     "name": "build_messages",
+     "kind": "function",
+     "line": 107,
+     "end": 109,
+     "doc": ""
+    },
+    {
+     "name": "parse",
+     "kind": "function",
+     "line": 112,
+     "end": 140,
+     "doc": "(renderable spec, checks to enable, problems). Problems make the output unusable."
+    },
+    {
+     "name": "render",
+     "kind": "function",
+     "line": 143,
+     "end": 145,
+     "doc": ""
+    }
+   ],
+   "imports": [
+    "batch",
+    "generate",
+    "screen"
+   ],
+   "external": []
+  },
+  {
+   "name": "webaudit",
+   "path": "src/uplift/webaudit.py",
+   "lines": 163,
+   "doc": "What did each run reach on the network? Free and offline: reads the saved traces.",
+   "items": [
+    {
+     "name": "fix_pr",
+     "kind": "function",
+     "line": 46,
+     "end": 51,
+     "doc": "SWE-rebench ids end in the PR number; mined tasks have it at the end of the commit subject."
+    },
+    {
+     "name": "tool_calls",
+     "kind": "function",
+     "line": 54,
+     "end": 71,
+     "doc": "Every tool call in the run: {\"name\", \"args\", \"output\"}. Requests repeat the conversation, so"
+    },
+    {
+     "name": "url_tier",
+     "kind": "function",
+     "line": 74,
+     "end": 81,
+     "doc": ""
+    },
+    {
+     "name": "classify",
+     "kind": "function",
+     "line": 84,
+     "end": 102,
+     "doc": "{\"tier\", \"ran_tests\", \"urls\": [(tier, url)]}. `is_future(sha)`: not in the task's base history."
+    },
+    {
+     "name": "_audit_one",
+     "kind": "function",
+     "line": 105,
+     "end": 111,
+     "doc": ""
+    },
+    {
+     "name": "audit",
+     "kind": "function",
+     "line": 114,
+     "end": 121,
+     "doc": ""
+    },
+    {
+     "name": "path_for",
+     "kind": "function",
+     "line": 124,
+     "end": 125,
+     "doc": ""
+    },
+    {
+     "name": "load",
+     "kind": "function",
+     "line": 128,
+     "end": 132,
+     "doc": ""
+    },
+    {
+     "name": "by_run",
+     "kind": "function",
+     "line": 135,
+     "end": 136,
+     "doc": ""
+    },
+    {
+     "name": "exposed_tasks",
+     "kind": "function",
+     "line": 139,
+     "end": 140,
+     "doc": ""
+    },
+    {
+     "name": "trust_summary",
+     "kind": "function",
+     "line": 143,
+     "end": 149,
+     "doc": "What the site's trust card says about the web, from the audit."
+    },
+    {
+     "name": "sensitivity",
+     "kind": "function",
+     "line": 152,
+     "end": 163,
+     "doc": "The arm comparison again, under ways of removing what the web gave."
+    }
+   ],
+   "imports": [
+    "analysis",
+    "batch",
+    "gitutil"
+   ],
+   "external": []
+  },
+  {
+   "name": "workspace",
+   "path": "src/uplift/workspace.py",
+   "lines": 121,
+   "doc": "Task workspaces: the repo exactly as it was before the fix, and nothing else.",
+   "items": [
+    {
+     "name": "_sh",
+     "kind": "function",
+     "line": 24,
+     "end": 25,
+     "doc": ""
+    },
+    {
+     "name": "create",
+     "kind": "function",
+     "line": 28,
+     "end": 49,
+     "doc": "Fresh, history-free repo at `dest` containing the tree of `commit`."
+    },
+    {
+     "name": "install_env",
+     "kind": "function",
+     "line": 52,
+     "end": 65,
+     "doc": "Create .venv inside the workspace with uv and install the package + pytest."
+    },
+    {
+     "name": "extras_from_install",
+     "kind": "function",
+     "line": 68,
+     "end": 72,
+     "doc": "'pip install -e .[dev]' -> 'dev'."
+    },
+    {
+     "name": "install_arm",
+     "kind": "function",
+     "line": 82,
+     "end": 109,
+     "doc": "Strip the repo's own agent files, copy an arm's files (AGENTS.md, .muse/...) into the"
+    },
+    {
+     "name": "agent_diff",
+     "kind": "function",
+     "line": 112,
+     "end": 117,
+     "doc": "Everything changed since the last commit, including new files, except arm/agent files"
+    },
+    {
+     "name": "apply_patch",
+     "kind": "function",
+     "line": 120,
+     "end": 121,
+     "doc": ""
+    }
+   ],
+   "imports": [
+    "gitutil"
+   ],
+   "external": []
+  },
+  {
+   "name": "uplift_hook",
+   "path": "src/uplift/arm_hooks/uplift_hook.py",
+   "lines": 173,
+   "doc": "Uplift sensor hooks for Muse Code (stdlib only; installed as .muse/uplift_hooks/uplift_hook.py).",
+   "items": [
+    {
+     "name": "log",
+     "kind": "function",
+     "line": 27,
+     "end": 34,
+     "doc": ""
+    },
+    {
+     "name": "load",
+     "kind": "function",
+     "line": 37,
+     "end": 41,
+     "doc": ""
+    },
+    {
+     "name": "changed_files",
+     "kind": "function",
+     "line": 44,
+     "end": 52,
+     "doc": ""
+    },
+    {
+     "name": "tool",
+     "kind": "function",
+     "line": 55,
+     "end": 57,
+     "doc": ""
+    },
+    {
+     "name": "lint",
+     "kind": "function",
+     "line": 60,
+     "end": 78,
+     "doc": ""
+    },
+    {
+     "name": "cochange",
+     "kind": "function",
+     "line": 81,
+     "end": 88,
+     "doc": ""
+    },
+    {
+     "name": "related_tests",
+     "kind": "function",
+     "line": 91,
+     "end": 101,
+     "doc": ""
+    },
+    {
+     "name": "pytest_config",
+     "kind": "function",
+     "line": 104,
+     "end": 110,
+     "doc": ""
+    },
+    {
+     "name": "verify",
+     "kind": "function",
+     "line": 113,
+     "end": 131,
+     "doc": ""
+    },
+    {
+     "name": "respond",
+     "kind": "function",
+     "line": 134,
+     "end": 142,
+     "doc": ""
+    },
+    {
+     "name": "main",
+     "kind": "function",
+     "line": 145,
+     "end": 169,
+     "doc": ""
+    }
+   ],
+   "imports": [],
+   "external": []
+  }
+ ]
+}

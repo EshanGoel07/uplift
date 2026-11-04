@@ -7,6 +7,8 @@ export type Group = 'always' | 'mixed' | 'never';
 export interface Arm {
   id: ArmId;
   label: string;
+  /** One-line description written by `uplift export`; the site shows it as is. */
+  description: string;
   solved: number;
   attempts: number;
   rate: number;

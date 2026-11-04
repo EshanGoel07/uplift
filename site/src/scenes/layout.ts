@@ -43,9 +43,5 @@ export const smooth = (a: number, b: number, x: number): number => {
 export const damp = (cur: number, target: number, lambda: number, dt: number): number =>
   MathUtils.damp(cur, target, lambda, dt);
 
-/** Pointer position on the z = 0 plane, updated by the Driver each frame. */
-export const pointerWorld = new Vector3(999, 999, 0);
-export const pointerState = { strength: 0 };
-
 /** Debug switch for profiling: ?off=fill,lines,core,strands,dust,streams,bloom */
 export const OFF: Set<string> = new Set(typeof window !== 'undefined' ? (new URLSearchParams(window.location.search).get('off') ?? '').split(',').filter(Boolean) : []);
