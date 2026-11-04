@@ -37,3 +37,6 @@ CLAUDE.md
 
 # --- Local credentials file (never commit) ---
 /.credentials.json
+
+# demo video clips (large)
+video/

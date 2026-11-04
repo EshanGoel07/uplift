@@ -1,8 +1,9 @@
 # Uplift
 
-**Track:** Indie Developer · **Theme:** Push the Frontier
-**Meta models used:** Muse Code is the agent under test. Muse Spark screens tasks, writes and tunes the setups, and labels failed runs. No other models are called at runtime.
-**Built:** Oct 27 – Nov 4, 2026, during the Meta Global AI Developer Hackathon. The git history is unsquashed. [PHASE_LOG.md](PHASE_LOG.md) is the engineering journal.
+**Track:** Indie Developer · **Theme:** Push the Frontier  
+**Meta models used:** Muse Code is the agent under test. Muse Spark screens tasks, writes and tunes the setups, and labels failed runs. No other models are called at runtime.  
+**Built:** Oct 27 – Nov 4, 2026, during the Meta Global AI Developer Hackathon. The git history is unsquashed. [PHASE_LOG.md](PHASE_LOG.md) is the engineering journal.  
+**Demo video (2:50):** [youtube.com/watch?v=O268gneTJJo](https://www.youtube.com/watch?v=O268gneTJJo) · **Results site:** [uplift-sandy-mu.vercel.app](https://uplift-sandy-mu.vercel.app/)
 
 ---
 
