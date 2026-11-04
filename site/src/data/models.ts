@@ -143,6 +143,19 @@ export function workspaceModel(arm: ArmId, task?: Task | null): Model {
   }));
   return {
     parts: [repo, history, cleanup, issue, agents, hooks, core, patch, spine], links, views, lights,
+    plan: (id, s) => {
+      const open = apart(s);
+      const flat: Record<string, [number, number, number, number]> = {
+        snapshot: open ? [130, 284, 380, 100] : [90, 170, 460, 214],
+        history: [14, 300, 100, 40], cleanup: [530, 296, 80, 80],
+        issue: open ? [40, 126, 160, 130] : [116, 278, 120, 86],
+        agents: open ? [230, 126, 130, 130] : [256, 278, 96, 86],
+        hooks: open ? [390, 126, 200, 130] : [372, 278, 150, 86],
+        agent: open ? [260, 8, 120, 100] : s === RUNNING ? [230, 40, 180, 120] : [270, 80, 100, 80],
+        patch: [420, 16, 200, 140],
+      };
+      return flat[id] ?? null;
+    },
     steps: [['snapshot', 'agent'], ['snapshot', 'history', 'cleanup'], ['issue'], ['agents', 'hooks'], ['agent'], ['patch', 'snapshot']],
   };
 }
@@ -253,6 +266,16 @@ export function cutawayModel(arm: ArmId = 'both', task?: Task | null): Model {
   return {
     parts, views, lights,
     links: [feed('snapshot'), feed('issue'), feed('agents'), feed('hooks')],
+    plan: (id, s) => {
+      const rail = (i: number) => 40 + i * 140;
+      const flat: Record<string, [number, number, number, number]> = {
+        room: [20, 12, 600, 310], timeline: [40, 358, 560, 16], playhead: [rail(Math.max(0, s - 1)) + (s === RECEIVED ? -6 : s === WORKING ? 50 : -6), 332, 14, 18],
+        snapshot: [60, 214, 330, 96], issue: [56, 36, 110, 96], agents: [334, 36, 96, 96], hooks: [442, 36, 150, 96],
+        muse: [190, 70, 120, 96], patch: [420, 200, 170, 104], verdict: [470, 140, 56, 56],
+        hidden: s >= HIDDEN ? [130, 226, 60, 40] : [rail(2) - 34, 340, 68, 40], pytest: [340, 214, 4, 96],
+      };
+      return flat[id] ?? null;
+    },
     steps: [['snapshot', 'issue', 'agents', 'hooks'], ['muse', 'hidden'], ['muse', 'patch'], ['hidden', 'timeline'], ['pytest'], ['verdict']],
   };
 }

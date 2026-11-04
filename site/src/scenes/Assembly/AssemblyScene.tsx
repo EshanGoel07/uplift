@@ -29,7 +29,7 @@ function PartMesh({ part, id, entries, keyL }: { part: Part; id: AssemblyId; ent
     const pose = part.poses[assemblies[id].state] ?? part.poses[0];
     live.current = { pos: new Vector3(...pose.p), rot: new Vector3(...(pose.rot ?? [0, 0, 0])), on: 0, glow: 0, pick: 0, reveal: pose.reveal ?? 0, scale: pose.scale ?? 1, dim: 1 };
   }
-  const key = part.form?.key ?? `${part.shape}:${part.size.join()}`;
+  const key = part.form.key;
   const built = useMemo(() => buildForm(part), [key]);   // eslint-disable-line react-hooks/exhaustive-deps
   const mat = useMemo(() => graphiteMaterial(part.accent, keyL), [part.accent, keyL]);
   const edge = useMemo(() => edgeMaterial(part.accent), [part.accent]);
@@ -139,14 +139,13 @@ export default function AssemblyScene({ id }: { id: AssemblyId }) {
       }
       if (e.turn) e.turn.rotation.set(l.rot.x, l.rot.y, l.rot.z);
       const u = e.mat.uniforms;
-      u.uFade.value = l.on * (part.glass ? 0.18 + 0.5 * l.glow : 1);
+      u.uFade.value = l.on;
       u.uGlow.value = l.glow;
       u.uSelect.value = l.pick;
       u.uDim.value = l.dim;
       u.uReveal.value = l.reveal;
       u.uInkRest.value = part.inkRest ?? 0.6;
-      e.mat.transparent = !!part.glass || l.on < 0.995;
-      e.mat.depthWrite = !part.glass;
+      e.mat.transparent = l.on < 0.995;
       e.edge.uniforms.uFade.value = l.on * l.dim * (0.5 + 0.5 * l.glow);
       e.edge.uniforms.uSelect.value = l.pick;
       if (e.haloMat) e.haloMat.uniforms.uAmount.value = l.on * l.dim * l.glow * 0.55;

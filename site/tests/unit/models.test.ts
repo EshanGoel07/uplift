@@ -5,7 +5,7 @@ import { resolve } from 'node:path';
 import { changedFiles, CUTAWAY_ROOM, CUTAWAY_STATES, cutawayModel, diffStrokes, issueStrokes, TEST_FILE_TILE, workspaceModel } from '../../src/data/models';
 import { repoLayout, type RepoFile } from '../../src/data/repoLayout';
 import tree from '../../src/data/repoTree.json';
-import { gradingModel } from '../../src/data/gradingModel';
+import { GRADING_CAPTION, GRADING_STATES, gradingModel } from '../../src/data/gradingModel';
 import { CONDITIONS, GRADING_STEPS, workspaceLayers } from '../../src/data/method';
 import type { ArmId } from '../../src/data/types';
 
@@ -96,7 +96,6 @@ describe('cutaway model', () => {
   });
   it('has no wall, barrier or second side', () => {
     expect(m.parts.map((p) => p.id).join()).not.toMatch(/barrier|wall|floor|side/);
-    expect(m.parts.some((p) => p.shape === 'wall')).toBe(false);
   });
   it('keeps the hidden tests out of the workspace until after the agent has exited', () => {
     const h = part('hidden');
@@ -136,20 +135,49 @@ describe('cutaway model', () => {
 
 describe('grading model', () => {
   const m = gradingModel();
-  it('has one gate per real step, in order, each explained in the text', () => {
-    const gates = m.parts.filter((p) => p.id.startsWith('gate-'));
-    expect(gates.map((g) => g.title)).toEqual(GRADING_STEPS.map((s) => s.title));
-    expect(m.views).toHaveLength(GRADING_STEPS.length);
+  const read = (f: string) => readFileSync(resolve(root, f), 'utf-8').split('\n');
+  const part = (id: string) => m.parts.find((p) => p.id === id)!;
+
+  it('has a state for the overview and one for each real step', () => {
+    expect(GRADING_STATES).toHaveLength(GRADING_STEPS.length + 1);
+    expect(GRADING_STEPS).toHaveLength(9);
+    expect(m.views).toHaveLength(GRADING_STATES.length);
+    expect(m.steps).toHaveLength(GRADING_STATES.length);
+    expect(m.lights).toHaveLength(GRADING_STATES.length);
+    for (const p of m.parts) expect(p.poses, p.id).toHaveLength(GRADING_STATES.length);
   });
-  it('moves the run forward through the gates, and lights only the current one', () => {
-    const run = m.parts.find((p) => p.id === 'run')!;
-    const xs = run.poses.map((q) => q.p[0]);
-    expect([...xs].sort((a, b) => a - b)).toEqual(xs);
-    const gates = m.parts.filter((p) => p.id.startsWith('gate-'));
-    GRADING_STEPS.forEach((_, at) => expect(gates.filter((g) => g.poses[at].glow).map((g) => g.id)).toEqual([`gate-${at}`]));
+  it.each(GRADING_STEPS.map((s) => [s.title, s.source] as const))('%s points at the real lines, in the repo and the published copy', (_, s) => {
+    const repo = read(s.file);
+    const excerpt = repo.slice(s.start - 1, s.end).join('\n');
+    expect(excerpt).toContain(s.anchor);
+    const site = readFileSync(resolve(__dirname, '../../public/data/source', s.file.split('/').pop()!), 'utf-8').split('\n');
+    expect(site.slice(s.start - 1, s.end).join('\n').replace(/\r/g, '')).toBe(excerpt.replace(/\r/g, ''));
   });
-  it('reaches a verdict only at the last step', () => {
-    const v = m.parts.find((p) => p.id === 'verdict')!;
-    expect(v.poses.map((q) => q.on)).toEqual(GRADING_STEPS.map((_, i) => (i === GRADING_STEPS.length - 1 ? 1 : 0)));
+  it('has the steps in the order the code calls them', () => {
+    const at = (f: string, text: string) => read(f).findIndex((l) => l.includes(text));
+    const grade = 'src/uplift/grade.py', runner = 'src/uplift/runner.py';
+    const inGrade = ['    reset_test_files(workspace, base_commit', 'gitutil.git_ok(workspace, "apply"', 'results, text = run_tests(', 'problem = check_output(text)', 'f2p_ok = ['].map((t) => at(grade, t));
+    expect([...inGrade].sort((a, b) => a - b)).toEqual(inGrade);
+    expect(inGrade.every((i) => i >= 0)).toBe(true);
+    const inRun = ['    clear_bytecode(workspace)', 'proc = subprocess.run(cmd', 'return parse_pytest(text), text'].map((t) => at(grade, t));
+    expect([...inRun].sort((a, b) => a - b)).toEqual(inRun);
+    const outer = ['why = infra_failure(', 'g = grade_mod.grade(ws, py, start', 'screen.resolved(g.to_dict()'].map((t) => at(runner, t));
+    expect([...outer].sort((a, b) => a - b)).toEqual(outer);
+    expect(GRADING_STEPS.map((s) => s.title)).toEqual(['Check the run finished', 'Reset the test files', 'Apply the hidden tests', 'Clear stale bytecode', 'Run pytest', 'Parse each test', 'Cross-check the counts', 'Check both test lists', 'Record the verdict']);
   });
+  it('gives every operation a form of its own', () => {
+    const kinds = ['record', 'stack', 'hidden', 'bytecode', 'pytest', 'tape', 'tally', 'cells-f2p', 'verdict'].map((id) => part(id).form.kind);
+    expect(new Set(kinds).size).toBe(kinds.length);
+  });
+  it('lands the hidden tests at step three and not before', () => {
+    const y = part('hidden').poses.map((q) => q.p[1]);
+    const at = GRADING_STATES.indexOf('apply-the-hidden-tests');
+    expect(y.findIndex((v) => v === y[y.length - 1])).toBe(at);
+  });
+  it('reaches a verdict only at the last step, and splits the lists only at the step before', () => {
+    expect(part('verdict').poses.map((q) => q.on)).toEqual(GRADING_STATES.map((_, i) => (i === GRADING_STATES.length - 1 ? 1 : 0)));
+    const moved = part('cells-f2p').poses.findIndex((q) => q.p[1] < 0);
+    expect(GRADING_STATES[moved]).toBe('check-both-test-lists');
+  });
+  it('says the cells are illustrative', () => expect(GRADING_CAPTION).toMatch(/illustrative/i));
 });

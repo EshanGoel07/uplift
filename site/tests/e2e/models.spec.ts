@@ -6,7 +6,7 @@ interface Spec { section: string; id: string; states: string[] }
 const MODELS: Spec[] = [
   { section: 'workspace', id: 'workspace', states: ['assembled', 'exploded', 'issue', 'setup', 'running', 'patch'] },
   { section: 'cutaway', id: 'cutaway', states: ['received', 'working', 'exit', 'hidden', 'grading', 'result'] },
-  { section: 'grading', id: 'grading', states: ['check-the-run-finished', 'reset-the-test-files', 'apply-the-hidden-tests', 'clear-stale-bytecode', 'run-pytest', 'parse-each-test', 'cross-check-the-counts', 'check-both-test-lists', 'record-the-verdict'] },
+  { section: 'grading', id: 'grading', states: ['overview', 'check-the-run-finished', 'reset-the-test-files', 'apply-the-hidden-tests', 'clear-stale-bytecode', 'run-pytest', 'parse-each-test', 'cross-check-the-counts', 'check-both-test-lists', 'record-the-verdict'] },
 ];
 
 const go = (page: Page, section: string, i: number) => page.locator(`#${section} .story__step[data-step="${i}"]`).evaluate((el) => el.scrollIntoView({ behavior: 'instant', block: 'center' }));
@@ -120,17 +120,99 @@ test('cutaway: one workspace in two phases, and the hidden tests arrive only aft
   await expect(page.locator('#cutaway .assembly__detail')).toContainText('tests/test_parser.py');
 });
 
-test('grading: the verdict appears only at the last step, and any gate can be inspected', async ({ page }) => {
+test('grading: the verdict appears only at the end, and each step opens its real source', async ({ page }) => {
   await page.goto('./?diag', { waitUntil: 'networkidle' });
   const parts = page.locator('#grading .assembly__parts button');
-  await go(page, 'grading', 2);
+  await go(page, 'grading', 3);
+  await expect(page.locator('#grading .story')).toHaveAttribute('data-state', 'apply-the-hidden-tests');
   await expect(parts.filter({ hasText: /^Verdict$/ })).toHaveCount(0);
-  await parts.filter({ hasText: 'Cross-check the counts' }).click();
-  await expect(page.locator('#grading .assembly__detail')).toContainText('every test counts as failed');
-  await expect(page.locator('#grading .assembly__source')).toContainText('src/uplift/grade.py');
-  await go(page, 'grading', 8);
+  await parts.filter({ hasText: 'Apply the hidden tests' }).first().evaluate((b: HTMLElement) => b.click());
+  await expect(page.locator('#grading .assembly__detail')).toContainText('never in the agent');
+  await expect(page.locator('#grading .assembly__source')).toContainText('src/uplift/grade.py:175');
+  await go(page, 'grading', 7);
+  const step = page.locator('#grading .story__step[data-step="7"]');
+  await step.locator('summary').click();
+  await expect(step.locator('pre')).toContainText('problem = check_output(text)');
+  await expect(step).toContainText('If this fails');
+  await go(page, 'grading', 9);
   await expect(parts.filter({ hasText: /^Verdict$/ })).toHaveCount(1);
 });
+
+test.describe('selection and motion', () => {
+  test.use({ viewport: { width: 1440, height: 900 } });
+
+  test('rapid selection, condition changes and scrolling leave a settled, drawn model', async ({ page }) => {
+    test.setTimeout(120_000);
+    const errors: string[] = [];
+    page.on('pageerror', (e) => errors.push(String(e)));
+    await page.goto('./?diag', { waitUntil: 'networkidle' });
+    await go(page, 'workspace', 3);
+    await expect.poll(async () => (await assembly(page, 'workspace')).settledAt, { timeout: 15_000 }).toBe(3);
+    const pick = page.getByRole('group', { name: 'Condition shown in this model' });
+    for (let n = 0; n < 4; n++) {
+      for (const name of ['No setup', 'Tips + hooks', 'Tuned by Muse Spark', 'Generic tips file']) await pick.getByRole('button', { name }).click();
+      await page.locator('#workspace .assembly__parts button').first().evaluate((b: HTMLElement) => b.click());
+      await go(page, 'workspace', n % 2 ? 2 : 4);
+      await page.waitForTimeout(50);
+      await go(page, 'workspace', 3);
+    }
+    await expect.poll(async () => (await assembly(page, 'workspace')).settledAt, { timeout: 15_000 }).toBe(3);
+    await expect.poll(() => litPixels(page, 'workspace'), { timeout: 6000 }).toBeGreaterThan(1.5);
+    expect(errors).toEqual([]);
+  });
+
+  test('selecting an object focuses it, and dragging turns the model until reset', async ({ page }) => {
+    await page.goto('./?diag', { waitUntil: 'networkidle' });
+    await go(page, 'cutaway', 1);
+    await expect.poll(async () => (await assembly(page, 'cutaway')).settledAt, { timeout: 15_000 }).toBe(1);
+    await page.locator('#cutaway .assembly__parts button').filter({ hasText: 'Muse Code' }).click();
+    await expect(page.locator('#cutaway .assembly__detail')).toContainText('exits');
+    await expect.poll(async () => (await assembly(page, 'cutaway')).selected).toBe('muse');
+    await page.locator('#cutaway').getByRole('button', { name: 'Reset view' }).click();
+    await expect(page.locator('#cutaway').getByRole('button', { name: 'Reset view' })).toHaveCount(0);
+    const box = (await page.locator('#cutaway .story__canvas').boundingBox())!;
+    await page.mouse.move(box.x + box.width * 0.3, box.y + box.height * 0.08);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width * 0.42, box.y + box.height * 0.12, { steps: 6 });
+    await page.mouse.up();
+    await expect(page.locator('#cutaway').getByRole('button', { name: 'Reset view' })).toBeVisible();
+  });
+
+  test('reduced motion lands on each state at once', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto('./?diag', { waitUntil: 'networkidle' });
+    for (const [section, i] of [['workspace', 4], ['cutaway', 3], ['grading', 5]] as const) {
+      await go(page, section, i);
+      await expect.poll(async () => (await assembly(page, section)).settledAt, { timeout: 8000 }).toBe(i);
+      await expect.poll(() => litPixels(page, section), { timeout: 6000 }).toBeGreaterThan(1.5);
+    }
+  });
+
+  test('uses one Canvas for all three models', async ({ page }) => {
+    await page.goto('./?diag', { waitUntil: 'networkidle' });
+    for (const section of ['workspace', 'cutaway', 'grading']) {
+      await go(page, section, 1);
+      await page.waitForTimeout(600);
+      await expect(page.locator('canvas')).toHaveCount(1);
+    }
+  });
+
+  test('a failed scene chunk falls back to the 2D figures', async ({ page }) => {
+    await page.route('**/assets/AssemblyScene*', (r) => r.abort());
+    await page.goto('./', { waitUntil: 'networkidle' });
+    await go(page, 'grading', 2);
+    await expect(page.locator('#grading .story__canvas .story__figure')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('#grading .story__step.is-active')).toContainText('Reset the test files');
+  });
+});
+
+for (const [section, step, shown] of [['workspace', 3, /AGENTS\.md/], ['cutaway', 3, /Hidden tests/], ['grading', 7, /Cross-check/]] as const) {
+  test(`${section} tells its story with no WebGL`, async ({ page }) => {
+    await page.goto('./?nowebgl', { waitUntil: 'networkidle' });
+    await go(page, section, step);
+    await expect(page.locator(`#${section} .story__canvas .story__figure`)).toHaveAttribute('aria-label', shown);
+  });
+}
 
 test('models carry their full story with no WebGL, and on phones', async ({ page }) => {
   await page.goto('./?nowebgl', { waitUntil: 'networkidle' });

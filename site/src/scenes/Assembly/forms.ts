@@ -341,17 +341,114 @@ function seal(f: Extract<Form, { kind: 'seal' }>): Built {
   return k.done();
 }
 
-function solid(p: Part): Built {
+/** One deck of the instrument: a plate with fine traces, so its objects read as parts of one machine. */
+function deck(f: Extract<Form, { kind: 'deck' }>): Built {
   const k = new Kit();
-  const [w, h, d] = p.size;
-  if (p.shape === 'column') return k.add(new CylinderGeometry(w / 2, w / 2, h, 40, 1), { edged: true }).done();
-  if (p.shape === 'wall') return k.add(new BoxGeometry(w, h, d), { edged: true }).done();
-  return k.add(plate((s) => rounded(s, w, d, Math.min(0.14, Math.min(w, d) / 5)), h), { edged: true }).done();
+  const w = f.width, d = f.depth, top = 0.072;
+  k.add(plate((s) => rounded(s, w, d, 0.16), 0.14), { edged: true });
+  for (const z of [-d / 2 + 0.2, d / 2 - 0.2]) k.quad(0, top, z, w - 0.5, 0.01, { ink: [SPECTRAL.blue, 0.3] });
+  for (let x = -w / 2 + 0.4; x < w / 2 - 0.2; x += 0.4) k.quad(x, top, d / 2 - 0.2, 0.012, 0.09, { ink: [INTERFACE.text3, 0.3] });
+  return k.done();
+}
+
+/** The run's record: a capsule whose status ring closes once the run is known to have finished. */
+function record(): Built {
+  const k = new Kit();
+  k.add(plate((s) => rounded(s, 1.9, 0.9, 0.44), 0.32), { m: at(0, 0.16, 0), edged: true });
+  const n = 28, r = 0.3;
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2;
+    k.box(-0.5 + Math.cos(a) * r, 0.33, Math.sin(a) * r, 0.05, 0.012, 0.05, { ink: [OUTCOME.solved, 1.2], gate: [0.1 + (0.85 * i) / n, 0] });
+  }
+  for (let i = 0; i < 3; i++) k.quad(0.3 + (i === 1 ? -0.05 : 0), 0.324, -0.2 + i * 0.2, i === 1 ? 0.6 : 0.7, 0.035, { ink: [INTERFACE.text2, 0.7] });
+  return k.done();
+}
+
+/** The test files: a stack of sheets. The agent's edits, in Ember, are wiped line by line back to the base commit. */
+function stack(): Built {
+  const k = new Kit();
+  const w = 2.3, d = 1.6;
+  for (let i = 0; i < 3; i++) k.add(plate((s) => rounded(s, w, d, 0.06), 0.06), { m: at(0, 0.05 + i * 0.13, 0), edged: true });
+  const top = 0.05 + 2 * 0.13 + 0.033;
+  for (let i = 0; i < 8; i++) {
+    const z = -0.6 + i * 0.17, len = 1 + ((i * 5) % 7) * 0.13;
+    k.quad(-w / 2 + 0.2 + len / 2, top, z, len, 0.03, { ink: [SPECTRAL.blue, 0.8] });
+    if (i % 3 === 1) k.quad(-w / 2 + 0.2 + len / 2 + 0.04, top + 0.001, z, len + 0.08, 0.075, { ink: [INTERFACE.ember, 1], gate: [-(0.15 + 0.1 * i), 0] });
+  }
+  return k.done();
+}
+
+/** Compiled leftovers, each gone in turn, beside the .venv enclosure that is left alone. */
+function bytecode(): Built {
+  const k = new Kit();
+  const cube = 0.13, pitch = 0.235, cols = 7, rows = 6;
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+    k.box(-1.5 + c * pitch, cube / 2 + (((c * 3 + r * 5) % 4) * 0.012), -0.6 + r * pitch, cube, cube, cube, { ink: [SPECTRAL.violet, 0.3], gate: [-(0.1 + (0.85 * (c * rows + r)) / (rows * cols)), 1] });
+  }
+  const x = 1.2;
+  for (const [dx, dz] of [[-0.5, -0.7], [0.5, -0.7], [-0.5, 0.7], [0.5, 0.7]]) k.box(x + dx, 0.3, dz, 0.03, 0.6, 0.03, { ink: [SPECTRAL.blue, 0.8] });
+  for (const y of [0.01, 0.6]) {
+    k.bar(x - 0.5, -0.7, x + 0.5, -0.7, y, 0.025, { ink: [SPECTRAL.blue, 0.8] }); k.bar(x - 0.5, 0.7, x + 0.5, 0.7, y, 0.025, { ink: [SPECTRAL.blue, 0.8] });
+    k.bar(x - 0.5, -0.7, x - 0.5, 0.7, y, 0.025, { ink: [SPECTRAL.blue, 0.8] }); k.bar(x + 0.5, -0.7, x + 0.5, 0.7, y, 0.025, { ink: [SPECTRAL.blue, 0.8] });
+  }
+  for (let r = 0; r < 4; r++) for (let c = 0; c < 3; c++) k.box(x - 0.24 + c * 0.24, 0.1, -0.42 + r * 0.28, 0.14, 0.14, 0.14, { edged: true });
+  return k.done();
+}
+
+/** The 900-second limit: a ring of ninety ticks, ten seconds each, around the tests. */
+function limit(f: Extract<Form, { kind: 'limit' }>): Built {
+  const k = new Kit();
+  const r = f.radius, n = 90;
+  k.add(new TorusGeometry(r, 0.012, 8, 160), { m: at(0, 0, 0, Math.PI / 2), ink: [SPECTRAL.cyan, 0.6] });
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2, major = i % 10 === 0;
+    k.add(new BoxGeometry(major ? 0.16 : 0.08, 0.012, 0.016), { m: at(Math.cos(a) * (r + 0.1), 0, Math.sin(a) * (r + 0.1), 0, -a), ink: [SPECTRAL.cyan, major ? 0.9 : 0.5] });
+  }
+  return k.done();
+}
+
+/** Tests as cells: unlit, then lit in row order as pytest reaches them, then in their parsed outcome. */
+function cells(f: Extract<Form, { kind: 'cells' }>): Built {
+  const k = new Kit();
+  const s = 0.2, p = 0.27, w = (f.cols - 1) * p, d = (f.rows - 1) * p;
+  for (let r = 0; r < f.rows; r++) for (let c = 0; c < f.cols; c++) {
+    const x = -w / 2 + c * p, z = -d / 2 + r * p, n = r * f.cols + c, all = f.rows * f.cols;
+    k.box(x, 0.05, z, s, 0.1, s, { edged: true });
+    k.quad(x, 0.102, z, s * 0.86, s * 0.86, { ink: [INTERFACE.text2, 0.35], gate: [0.06 + (0.42 * r) / f.rows, 0] });
+    k.quad(x, 0.104, z, s * 0.9, s * 0.9, { ink: [f.color, 0.95], gate: [0.55 + (0.42 * n) / all, 0] });
+  }
+  return k.done();
+}
+
+/** Pytest's output: a tape of result lines, a mark and a test id on each. */
+function tape(f: Extract<Form, { kind: 'tape' }>): Built {
+  const k = new Kit();
+  const w = 1.7, pitch = 0.118, d = 0.3 + f.lines * pitch, top = 0.032;
+  k.add(plate((s) => rounded(s, w, d, 0.05), 0.06), { edged: true });
+  for (let i = 0; i < f.lines; i++) {
+    const z = -d / 2 + 0.2 + i * pitch, len = 0.5 + ((i * 7) % 9) * 0.07, seq = 0.05 + (0.9 * i) / f.lines;
+    k.quad(-w / 2 + 0.2, top, z, 0.2, 0.036, { ink: [OUTCOME.solved, 1], gate: [seq, 0] });
+    k.quad(-w / 2 + 0.36 + len / 2, top, z, len, 0.026, { ink: [INTERFACE.text2, 0.7], gate: [seq, 0] });
+  }
+  return k.done();
+}
+
+/** Two independent counts, drawn outward from one baseline: the parsed lines and pytest's summary must match. */
+function tally(): Built {
+  const k = new Kit();
+  k.add(plate((s) => rounded(s, 2.6, 1.7, 0.08), 0.06), { edged: true });
+  k.quad(0, 0.034, 0, 0.03, 1.5, { ink: [INTERFACE.text, 1] });
+  [[0.95, OUTCOME.solved], [0.38, OUTCOME.failed], [0.14, OUTCOME.mixed]].forEach(([len, color], i) => {
+    const z = -0.48 + i * 0.48, l = len as number, c = color as string, seq = 0.2 + i * 0.22;
+    k.quad(-l / 2 - 0.05, 0.034, z, l, 0.26, { ink: [c, 0.8], gate: [seq, 0] });
+    k.quad(l / 2 + 0.05, 0.034, z, l, 0.26, { ink: [c, 0.8], gate: [seq + 0.12, 0] });
+    for (const x of [-l - 0.09, l + 0.09]) k.quad(x, 0.036, z, 0.02, 0.36, { ink: [INTERFACE.text, 1], gate: [seq + 0.14, 0] });
+  });
+  return k.done();
 }
 
 export function buildForm(p: Part): Built {
   const f = p.form;
-  if (!f) return solid(p);
   switch (f.kind) {
     case 'repo': return repo(f);
     case 'sheet': return sheet(f);
@@ -367,5 +464,13 @@ export function buildForm(p: Part): Built {
     case 'sealed': return sealed(f);
     case 'scan': return scan(f);
     case 'seal': return seal(f);
+    case 'deck': return deck(f);
+    case 'record': return record();
+    case 'stack': return stack();
+    case 'bytecode': return bytecode();
+    case 'limit': return limit(f);
+    case 'cells': return cells(f);
+    case 'tape': return tape(f);
+    case 'tally': return tally();
   }
 }

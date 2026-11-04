@@ -31,16 +31,61 @@ export const WORKSPACE_STEPS: { title: string; detail: string }[] = [
 ];
 
 /** src/uplift/grade.py (grade, reset_test_files, check_output) and screen.py (resolved). */
-export const GRADING_STEPS: { title: string; detail: string }[] = [
-  { title: 'Check the run finished', detail: 'A run that hit an infrastructure failure is kept out of grading. It is not scored as a failed attempt.' },
-  { title: 'Reset the test files', detail: 'The files in the task\'s test patch go back to the base commit. Grading runs in the agent\'s own workspace, after it has exited.' },
-  { title: 'Apply the hidden tests', detail: 'The real fix\'s test patch, which was never in the agent\'s workspace, is applied now. If it cannot apply, the run is not resolved.' },
-  { title: 'Clear stale bytecode', detail: 'Every __pycache__ folder outside .venv is deleted, so old compiled code cannot answer for the new source.' },
-  { title: 'Run pytest', detail: 'The test files run with the workspace\'s own interpreter and an isolated pytest config, with a 900-second limit.' },
-  { title: 'Parse each test', detail: 'Per-test results are read from pytest\'s -rA output.' },
-  { title: 'Cross-check the counts', detail: 'Parsed passed, failed and error counts must match pytest\'s own summary line. On any mismatch every test counts as failed.' },
-  { title: 'Check both test lists', detail: 'Every FAIL_TO_PASS test must now pass, and every PASS_TO_PASS test must still pass.' },
-  { title: 'Record the verdict', detail: 'Resolved or not resolved, ignoring FAIL_TO_PASS tests that screening excluded before any result was seen.' },
+export interface GradingStep {
+  title: string;
+  detail: string;
+  before: string;
+  after: string;
+  fails?: string;
+  /** The real lines, checked against the code by tests/unit/models.test.ts. */
+  source: { file: string; start: number; end: number; anchor: string };
+}
+export const GRADING_STEPS: GradingStep[] = [
+  {
+    title: 'Check the run finished', detail: 'A run that hit an infrastructure failure is kept out of grading. It is not scored as a failed attempt.',
+    before: 'The agent has exited and its patch is recorded.', after: 'The run goes on to grading.', fails: 'The run is recorded as an error and is never graded.',
+    source: { file: 'src/uplift/runner.py', start: 231, end: 239, anchor: 'why = infra_failure(' },
+  },
+  {
+    title: 'Reset the test files', detail: 'The files in the task\'s test patch go back to the base commit. Grading runs in the agent\'s own workspace, after it has exited.',
+    before: 'The agent may have edited test files.', after: 'Those files match the starting commit again.',
+    source: { file: 'src/uplift/grade.py', start: 161, end: 169, anchor: 'def reset_test_files(' },
+  },
+  {
+    title: 'Apply the hidden tests', detail: 'The real fix\'s test patch, which was never in the agent\'s workspace, is applied now. If it cannot apply, the run is not resolved.',
+    before: 'Test files as they were at the start.', after: 'The hidden tests are in the workspace.', fails: 'The run is not resolved.',
+    source: { file: 'src/uplift/grade.py', start: 175, end: 177, anchor: 'gitutil.git_ok(workspace, "apply"' },
+  },
+  {
+    title: 'Clear stale bytecode', detail: 'Every __pycache__ folder outside .venv is deleted, so old compiled code cannot answer for the new source.',
+    before: 'Compiled files from the agent\'s run may remain.', after: 'Only source remains. The .venv is left alone.',
+    source: { file: 'src/uplift/grade.py', start: 116, end: 122, anchor: 'def clear_bytecode(' },
+  },
+  {
+    title: 'Run pytest', detail: 'The test files run with the workspace\'s own interpreter and an isolated pytest config, with a 900-second limit.',
+    before: 'No test has run against the final code.', after: 'Raw pytest output exists for these test files.', fails: 'A timeout leaves no summary line, which step 7 fails closed.',
+    source: { file: 'src/uplift/grade.py', start: 147, end: 152, anchor: 'cmd = [str(python), "-m", "pytest"' },
+  },
+  {
+    title: 'Parse each test', detail: 'Per-test results are read from pytest\'s -rA output, and the raw output is saved. A failing sub-test marks its parent test as failed.',
+    before: 'One block of raw text.', after: 'One result for each test.',
+    source: { file: 'src/uplift/grade.py', start: 67, end: 74, anchor: 'def parse_pytest(' },
+  },
+  {
+    title: 'Cross-check the counts', detail: 'Parsed passed, failed and error counts must match pytest\'s own summary line. On any mismatch every test counts as failed.',
+    before: 'Parsed results that are not yet trusted.', after: 'Two independent counts agree.', fails: 'Every test counts as failed.',
+    source: { file: 'src/uplift/grade.py', start: 182, end: 185, anchor: 'problem = check_output(text)' },
+  },
+  {
+    title: 'Check both test lists', detail: 'Every FAIL_TO_PASS test must now pass, and every PASS_TO_PASS test must still pass.',
+    before: 'One result per test.', after: 'The fix and any regressions are known.',
+    source: { file: 'src/uplift/grade.py', start: 186, end: 190, anchor: 'f2p_ok = [' },
+  },
+  {
+    title: 'Record the verdict', detail: 'Resolved or not resolved, ignoring FAIL_TO_PASS tests that screening excluded before any result was seen.',
+    before: 'Results for every test that ran.', after: 'One recorded outcome for the run.',
+    source: { file: 'src/uplift/screen.py', start: 245, end: 252, anchor: 'def resolved(' },
+  },
 ];
 
 /** screen.resolved: the definition of a solved run. */

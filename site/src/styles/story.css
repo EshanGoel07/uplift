@@ -53,6 +53,16 @@
 .story__body p { margin: 0; }
 .story__body code { color: var(--text); }
 .story__action { margin-top: 20px !important; }
+.story__facts { display: grid; gap: 4px; margin: 12px 0 0; font-size: 0.86rem; line-height: 1.45; }
+.story__facts div { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 8px; }
+.story__facts dt { color: var(--text-3); }
+.story__facts dd { margin: 0; color: var(--text-2); }
+.story__source { margin-top: 10px; font-size: 0.8rem; }
+.story__source summary { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; color: var(--text-2); cursor: pointer; }
+.story__source summary:hover { color: var(--text); }
+.story__source summary:focus-visible { outline: 2px solid var(--ember); outline-offset: 2px; }
+.story__source pre { max-height: 180px; margin: 8px 0; padding: 10px; overflow: auto; border-radius: var(--radius); background: var(--carbon); font-size: 0.72rem; line-height: 1.5; color: var(--text); }
+.story__source a { color: var(--text-2); }
 .story__body .story__note { margin-top: 10px; font-size: 0.86rem; line-height: 1.5; color: var(--text-3); }
 
 .story__figure { display: block; width: 100%; height: auto; margin-bottom: 16px; }

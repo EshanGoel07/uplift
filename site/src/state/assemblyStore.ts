@@ -46,7 +46,15 @@ export type Form =
   | { kind: 'marker'; key: string }
   | { kind: 'sealed'; key: string; color: string }
   | { kind: 'scan'; key: string; depth: number }
-  | { kind: 'seal'; key: string; outcome: 'resolved' | 'unresolved' | 'unknown' };
+  | { kind: 'seal'; key: string; outcome: 'resolved' | 'unresolved' | 'unknown' }
+  | { kind: 'deck'; key: string; width: number; depth: number }
+  | { kind: 'record'; key: string }
+  | { kind: 'stack'; key: string }
+  | { kind: 'bytecode'; key: string }
+  | { kind: 'limit'; key: string; radius: number }
+  | { kind: 'cells'; key: string; rows: number; cols: number; color: string }
+  | { kind: 'tape'; key: string; lines: number }
+  | { kind: 'tally'; key: string };
 
 export interface Part {
   id: string;
@@ -54,11 +62,8 @@ export interface Part {
   detail: string;
   /** Repository path this part comes from, where there is one. */
   source?: string;
-  /** Bespoke geometry, built by scenes/Assembly/forms.ts. Without one the part is a plain solid of `shape`. */
-  form?: Form;
-  shape?: 'slab' | 'column' | 'wall';
-  /** Smoked glass: a boundary to see through, not a solid. */
-  glass?: boolean;
+  /** Its bespoke geometry, built by scenes/Assembly/forms.ts. */
+  form: Form;
   /** Width, height, depth. */
   size: Vec3;
   accent: string;
@@ -86,6 +91,8 @@ export interface Model {
   lights?: Light[];
   /** The objects each state is about, which are the only ones listed on the stage. */
   steps?: string[][];
+  /** Where each object sits in the flat 2D figure (640 by 400), by state. */
+  plan?: (id: string, state: number) => [number, number, number, number] | null;
 }
 
 export interface Assembly {
