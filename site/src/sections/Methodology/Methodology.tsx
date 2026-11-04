@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, type ReactNode } from 'react';
 import type { Summary } from '../../data/types';
 import { loadTask } from '../../data/load';
 import { shortId } from '../../data/classify';
-import { FEATURED_TASK } from '../../data/reportFigures';
+import { atlas, useAtlas } from '../../state/atlasStore';
 import { scenes, useUi } from '../../state/sceneStore';
 import { sideOf, wb, wbLabels, useWb } from '../../state/workbenchStore';
 import { useMedia, WIDE } from '../../hooks/useMedia';
@@ -48,11 +48,12 @@ export function Methodology({ summary, onOpenTask }: Props) {
 
   // 3D on wide screens with WebGL; the diagram on phones and without WebGL.
   useEffect(() => { wb.set({ view: webgl && wide ? '3d' : '2d' }); }, [webgl, wide]);
-  // Start on the featured bug.
+  // The Bench shows the site-wide selected bug.
+  const selected = useAtlas((s) => s.task);
   useEffect(() => {
     if (!tasks.length) return;
-    wb.set({ task: Math.max(0, tasks.findIndex((t) => t.id === FEATURED_TASK)) });
-  }, [tasks]);
+    wb.set({ task: Math.max(0, tasks.findIndex((t) => t.id === selected)) });
+  }, [tasks, selected]);
   // Real per-run outcomes of the selected bug, from its task file.
   useEffect(() => {
     if (!summary || !tasks[idx] || !near) return;
@@ -71,7 +72,7 @@ export function Methodology({ summary, onOpenTask }: Props) {
     return scenes.request('workbench', stage.current, { reducedMotion: 'full', lowTier: false });
   }, [use3d, summary]);
 
-  const step = (d: number) => wb.set({ task: (idx + d + tasks.length) % tasks.length });
+  const step = (d: number) => atlas.set({ task: tasks[(idx + d + tasks.length) % tasks.length].id });
   const label = (k: string, i?: number) => (i !== undefined ? `${i + 1} ${summary?.arms[i].label ?? ''}` : MODULE_TEXT[k]);
   const pressed = (k: string) => {
     const def = MODULE_LABELS.find((l) => l.key === k)?.focus;
@@ -96,7 +97,7 @@ export function Methodology({ summary, onOpenTask }: Props) {
               <div className="wb__task">
                 <label htmlFor="wb-task" className="wb__tlabel">Bug</label>
                 <button type="button" className="wb__step" aria-label="Previous bug" onClick={() => step(-1)}>←</button>
-                <select id="wb-task" value={idx} onChange={(e) => wb.set({ task: Number(e.target.value) })}>
+                <select id="wb-task" value={idx} onChange={(e) => atlas.set({ task: tasks[Number(e.target.value)].id })}>
                   <optgroup label={`Test (SWE-rebench) · ${tasks.filter((t) => t.set === 'test').length}`}>
                     {tasks.map((t, i) => t.set === 'test' && <option key={t.id} value={i}>{shortId(t.id)} · {t.title.slice(0, 60)}</option>)}
                   </optgroup>

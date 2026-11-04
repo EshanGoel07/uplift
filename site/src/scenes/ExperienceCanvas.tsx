@@ -5,6 +5,7 @@ import { invalidations, requestFrame, scenes, setInvalidator, ui, useScenes, use
 import { workbenchBounds } from '../state/workbenchStore';
 import { useNear } from '../hooks/useNear';
 import { OFF } from './layout';
+import { NebulaScene } from './Nebula/NebulaScene';
 import { RunLatticeScene } from './RunLattice/RunLattice';
 import { StageView } from './StageView';
 
@@ -43,6 +44,7 @@ export const frameCount = { n: 0 };
 if (typeof window !== 'undefined') (window as unknown as { __upliftFrames: typeof frameCount }).__upliftFrames = frameCount;
 
 const LATTICE_CAMERA = { fov: 34, near: 0.1, far: 120, position: [0, 4, 10] as [number, number, number] };
+const NEBULA_CAMERA = { fov: 34, near: 0.1, far: 60, position: [0, 0, 8.4] as [number, number, number] };
 
 /** Wires on-demand frames and counts them. */
 function FrameDriver() {
@@ -91,6 +93,7 @@ export default function ExperienceCanvas({ summary }: { summary: Summary | null 
   // Scenes mount as their sections approach, so start-up work is split into small pieces. Phones and
   // no-WebGL browsers never request the workbench, so it never loads into the renderer there.
   const wantLattice = useScenes(() => scenes.get('lattice').requested);
+  const wantNebula = useScenes(() => scenes.get('nebula').requested);
   const wantWorkbench = useScenes(() => scenes.get('workbench').requested);
   const nearWorkbench = useNear('#method', '120% 0px');
   const workbenchShown = useScenes(() => scenes.get('workbench').visible);
@@ -127,6 +130,7 @@ export default function ExperienceCanvas({ summary }: { summary: Summary | null 
             </Suspense>
           </WorkbenchBoundary>
         )}
+        {wantNebula && <StageView id="nebula" camera={NEBULA_CAMERA}><NebulaScene /></StageView>}
         {wantLattice && <StageView id="lattice" camera={LATTICE_CAMERA}><RunLatticeScene /></StageView>}
       </Canvas>
     </div>

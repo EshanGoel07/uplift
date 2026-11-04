@@ -1,7 +1,11 @@
 import { Component, lazy, Suspense, useCallback, useEffect, useState, type ReactNode } from 'react';
 import type { Summary } from '../data/types';
 import { loadSummary } from '../data/load';
-import { FEATURED_TASK } from '../data/reportFigures';
+import { atlas, selectTask, useAtlas } from '../state/atlasStore';
+import { CommandPalette } from '../components/atlas/CommandPalette';
+import { ComparisonTray, InspectorPanel } from '../components/atlas/Inspector';
+import { SectionProgress } from '../components/atlas/SectionProgress';
+import { nebulaDom } from '../state/nebulaStore';
 import { BackToTop, Nav, jumpTo } from '../components/navigation/Nav';
 import { scenes, ui, useScenes, useUi } from '../state/sceneStore';
 import { Hero } from '../sections/Hero/Hero';
@@ -30,7 +34,9 @@ class WebGLBoundary extends Component<{ children: ReactNode }, { failed: boolean
 export function App() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [taskId, setTaskId] = useState<string>(FEATURED_TASK);
+  const taskId = useAtlas((s) => s.task);
+  const view = useAtlas((s) => s.view);
+  useEffect(() => { document.documentElement.dataset.view = view; }, [view]);
   const webgl = useUi((s) => s.webgl);
   // The one canvas mounts when a section first requests a scene, and stays: it is a single persistent
   // renderer, and scenes come and go inside it.
@@ -43,13 +49,14 @@ export function App() {
   }, []);
 
   const openTask = useCallback((id: string) => {
-    setTaskId(id);
+    atlas.set({ task: id }, 'push');
     requestAnimationFrame(() => jumpTo('explorer-all'));
   }, []);
 
   return (
     <>
       <Nav />
+      <SectionProgress />
       {webgl && mount3d && (
         <WebGLBoundary>
           <Suspense fallback={null}>
@@ -58,13 +65,13 @@ export function App() {
         </WebGLBoundary>
       )}
       <main id="main">
-        <Hero summary={summary} onOpenTask={openTask} />
+        <Hero summary={summary} />
         {error && <p className="pub-container load-error" role="alert">Could not load the study data ({error}). The raw file is at <a href="./data/results.json">data/results.json</a>.</p>}
         <Results summary={summary} />
         <Methodology summary={summary} onOpenTask={openTask} />
         <WorkedExample summary={summary} />
         <BugMatrix summary={summary} onOpenTask={openTask} selectedTask={taskId} />
-        <BugExplorer summary={summary} taskId={taskId} onSelectTask={setTaskId} />
+        <BugExplorer summary={summary} taskId={taskId} onSelectTask={selectTask} />
         <Trust summary={summary} />
         <BuiltVsUsed />
         <Limitations />
@@ -72,6 +79,10 @@ export function App() {
       </main>
       <Footer />
       <BackToTop />
+      <InspectorPanel summary={summary} />
+      <ComparisonTray summary={summary} />
+      <CommandPalette summary={summary} />
+      <svg className="thread" aria-hidden="true"><line ref={(el) => { nebulaDom.thread = el; }} visibility="hidden" /></svg>
     </>
   );
 }

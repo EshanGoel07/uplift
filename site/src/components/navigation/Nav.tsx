@@ -1,15 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
-import { DEMO_VIDEO_URL, REPO_URL } from '../../data/links';
+import { REPO_URL } from '../../data/links';
+import { atlas, useAtlas } from '../../state/atlasStore';
+import { Icon } from '../atlas/Icon';
 
 /** Section order on the page. Labels are the reader's words; ids stay stable for links and tests. */
 export const NAV_ITEMS = [
   { id: 'overview', label: 'Overview' },
   { id: 'results', label: 'Findings' },
   { id: 'method', label: 'Experiment' },
-  { id: 'explorer', label: 'Worked example' },
-  { id: 'matrix', label: 'Explore runs' },
+  { id: 'explorer', label: 'Investigation' },
+  { id: 'matrix', label: 'Bug Atlas' },
+  { id: 'architecture', label: 'Architecture' },
   { id: 'trust', label: 'Integrity' },
-  { id: 'limitations', label: 'Limitations' },
 ] as const;
 
 const headerHeight = (): number => (document.querySelector('.nav') as HTMLElement | null)?.offsetHeight ?? 64;
@@ -19,7 +21,7 @@ export function jumpTo(id: string): void {
   if (!el) return;
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
-  history.replaceState(null, '', `#${id}`);
+  history.replaceState(null, '', `${location.pathname}${location.search}#${id}`);
   // Content above can grow while we scroll (a bug loading in the explorer): re-aim once it settles,
   // so the heading always lands just below the sticky header.
   let tries = 0;
@@ -37,15 +39,29 @@ export function jumpTo(id: string): void {
   if (heading) { heading.setAttribute('tabindex', '-1'); heading.focus({ preventScroll: true }); }
 }
 
+/** Explore is spacious and visual; Investigate is dense, with source paths and full metadata. Same data, same dark theme. */
+function ViewToggle() {
+  const view = useAtlas((s) => s.view);
+  return (
+    <div className="viewtog" role="group" aria-label="Page density">
+      {(['explore', 'investigate'] as const).map((v) => (
+        <button key={v} type="button" aria-pressed={view === v} onClick={() => atlas.set({ view: v }, 'push')}>{v === 'explore' ? 'Explore' : 'Investigate'}</button>
+      ))}
+    </div>
+  );
+}
+
 function ExternalLinks({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <>
+      <button type="button" className="nav__search" onClick={() => { onNavigate?.(); atlas.set({ palette: true }, 'none'); }} aria-label="Search the study (Control K)">
+        <Icon name="search" /><span>Search</span><kbd aria-hidden="true">Ctrl K</kbd>
+      </button>
+      <ViewToggle />
       <a className="nav__ext" href={REPO_URL} target="_blank" rel="noopener noreferrer" onClick={onNavigate}>
         GitHub<span aria-hidden="true"> ↗</span>
       </a>
-      {DEMO_VIDEO_URL
-        ? <a className="nav__ext" href={DEMO_VIDEO_URL} target="_blank" rel="noopener noreferrer" onClick={onNavigate}>Demo video<span aria-hidden="true"> ↗</span></a>
-        : <span className="nav__ext nav__ext--pending" title="The demo video is not published yet">Demo video <span className="nav__soon">soon</span></span>}
+      <span className="nav__status" title="All 924 runs finished. The results below are final."><i aria-hidden="true" />Study complete</span>
     </>
   );
 }
@@ -99,7 +115,7 @@ export function Nav() {
     <header className={`nav${open ? ' is-open' : ''}`}>
       <div className="nav__inner">
         <a className="nav__brand" href="#overview" onClick={(e) => { e.preventDefault(); go('overview'); }} aria-label="Uplift, back to the top">
-          Uplift
+          UPLIFT <span aria-hidden="true">/</span>
         </a>
         <nav className="nav__primary" aria-label="Sections">{links('nav__links')}</nav>
         <div className="nav__externals"><ExternalLinks /></div>

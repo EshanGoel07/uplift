@@ -4,44 +4,42 @@ import { DETECTABLE_MAX, DETECTABLE_MIN } from '../../data/reportFigures';
 import { jumpTo } from '../../components/navigation/Nav';
 import { HeroStage } from '../../components/figures/HeroStage';
 
-interface Props { summary: Summary | null; onOpenTask: (id: string) => void }
+interface Props { summary: Summary | null }
 
 /** Opening of the publication: the question, the answer, and all 924 runs as a 3D lattice. */
-export function Hero({ summary, onOpenTask }: Props) {
+export function Hero({ summary }: Props) {
   const s = summary?.summary;
   const runs = s ? int(s.runs) : '924';
   const tasks = s ? String(s.tasks) : '77';
   const stats = [
-    { value: runs, label: 'experimental runs' },
-    { value: tasks, label: 'real bugs from sqlglot' },
-    { value: summary ? String(summary.arms.length) : '6', label: 'experimental conditions' },
+    { value: tasks, label: 'real sqlglot bugs' },
+    { value: summary ? String(summary.arms.length) : '6', label: 'conditions' },
+    { value: '2', label: 'repeats' },
+    { value: runs, label: 'runs' },
     { value: s ? usd(s.total_cost_usd, 2) : '$21.31', label: 'main experiment cost' },
   ];
 
   return (
     <section id="overview" className="pub hero" aria-labelledby="hero-title">
       <div className="pub-container">
-        <p className="hero__kicker">A measured study of coding-agent setups on <span className="hero__repo">{s?.repo ?? 'tobymao/sqlglot'}</span></p>
-        <h1 id="hero-title" className="hero__title">Do coding‑agent setups actually help?</h1>
         <div className="hero__grid">
           <div className="hero__main">
+            <p className="pub-eyebrow">An experiment in agent configuration</p>
+            <h1 id="hero-title" className="hero__title">Do coding‑agent setups actually make agents better at fixing real bugs?</h1>
             <p className="hero__lead">
-              We built an experimental system to investigate whether instructions and runtime hooks improve an AI coding
-              agent's ability to fix real software bugs.
+              We tested six experimental conditions on {tasks} real sqlglot bugs, running Meta's Muse Code agent twice under every condition.
             </p>
             <div className="hero__finding" role="note" aria-label="Central finding">
-              <p className="hero__finding-k">Central finding</p>
-              <p className="hero__finding-text">
-                Across {runs} runs on {tasks} real bugs, no setup was shown to differ from no setup.
-              </p>
+              <p className="hero__finding-k">Research conclusion</p>
+              <p className="hero__finding-text">No setup was shown to differ from no setup.</p>
               <p className="hero__finding-q">
-                This does not establish that the effects are zero. The study could reliably detect effects of
-                approximately {DETECTABLE_MIN}–{DETECTABLE_MAX} percentage points at 80% power.
+                The study could reliably detect differences of approximately {DETECTABLE_MIN}–{DETECTABLE_MAX} percentage
+                points at 80% power. Smaller effects remain unresolved.
               </p>
             </div>
             <div className="hero__actions">
-              <a className="pbtn pbtn--primary" href="#results" onClick={(e) => { e.preventDefault(); jumpTo('results'); }}>Read the findings</a>
-              <a className="pbtn" href="#explorer" onClick={(e) => { e.preventDefault(); jumpTo('explorer'); }}>See the worked example</a>
+              <a className="pbtn pbtn--primary" href="#method" onClick={(e) => { e.preventDefault(); jumpTo('method'); }}>Explore the experiment</a>
+              <a className="pbtn" href="#explorer" onClick={(e) => { e.preventDefault(); jumpTo('explorer'); }}>Investigate the WINDOW bug</a>
             </div>
             <dl className="hero__stats" aria-label="The study at a glance">
               {stats.map((x) => (
@@ -55,7 +53,7 @@ export function Hero({ summary, onOpenTask }: Props) {
 
           <div className="hero__figure">
             {summary
-              ? <HeroStage summary={summary} onOpenTask={onOpenTask} />
+              ? <HeroStage summary={summary} />
               : <div className="lattice lattice--loading" role="status" aria-busy="true" aria-label="Loading the run lattice" />}
           </div>
         </div>

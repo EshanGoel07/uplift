@@ -8,6 +8,7 @@ import './styles/publication.css';
 import './styles/workbench.css';
 import './styles/explorer.css';
 import './styles/sections.css';
+import './styles/atlas.css';
 import { App } from './app/App';
 
 createRoot(document.getElementById('root')!).render(
