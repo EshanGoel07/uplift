@@ -214,7 +214,7 @@ export default function AssemblyScene({ id }: { id: AssemblyId }) {
     <>
       <mesh ref={haze} geometry={quad} material={hazeMat} renderOrder={0} raycast={() => null} />
       {model.parts.map((p) => <PartMesh key={p.id} part={p} id={id} entries={entries} keyL={keyL} />)}
-      {model.links.map((l, i) => <LinkLine key={`${l.from}-${l.to}`} link={l} geometry={unit} onRef={(m) => { links.current[i] = m; }} />)}
+      {model.links.map((l, i) => <LinkLine key={`${l.from}-${l.to}-${i}`} link={l} geometry={unit} onRef={(m) => { links.current[i] = m; }} />)}
     </>
   );
 }

@@ -150,3 +150,26 @@ The owner's recording shows the failure: scenes blank after a scene switch, DOM 
 Workspace, cutaway and grader share one data-driven scene (`src/scenes/Assembly/AssemblyScene.tsx`), with models in `src/data/models.ts` and `src/data/gradingModel.ts`. Each model is held to the code by `tests/unit/models.test.ts`, and each story is tested by `tests/e2e/models.spec.ts`.
 
 The apparatus reskin changes colours, one material recipe and lights only. Its geometry, presets and behaviour are unchanged.
+
+## Gate 3.1
+The owner rejected the look of the three Gate 3 models. See `docs/M15_GATE31_DESIGN_MAP.md` for the design. The first draft of each model was revised after inspecting real screenshots, because the shared lighting and the cool rim were too saturated.
+
+**Kept schematic on purpose.** Per-test results are not published, so the grader's cells are illustrative and the stage says so. Generated AGENTS.md text is not published, so its strokes show only its real line count. Everything else is real: the sqlglot tree at `7e7cf8b`, the WINDOW issue, each condition's diff and outcome, and the source lines for each grading step.
+
+## Gate 4
+- **Source:** opens on five stages grouped from `LINEAGE`. The ten-stage ribbon is kept behind a disclosure. The graph defaults to one module's verified neighbourhood. `uplift_hook` is drawn as a dashed file copy, because `generate.py:279` copies it.
+- **Findings:** the chart stays beside four short explanations. Every interval crosses zero in all four sensitivity views, which a unit test reads from the report's figures.
+- **WINDOW:** eight numbered chapters. The full issue and the two-run comparison open on request, and the `TRACE` list is gone because the chapters replace it.
+- **Bug Atlas:** opens on the task list with one filter row. The matrix keeps all its tools behind Matrix and More filters.
+- **Finish:** one spacing scale (`--s-1` to `--s-9`, 4 to 112 px, already in use, so no new scale was added), the order-dependent `.runs + .explorer` rule removed, two inline icons moved to `Icon.tsx`, and the apparatus label check fixed: it measured a zero-size anchor, not the visible button.
+
+## Gate 5: first hover
+Cold browser, four trials each, readout visible.
+
+| Build | 0 ms contact | 250 ms contact | 500 ms contact | 1000 ms contact |
+|---|---:|---:|---:|---:|
+| Gate 3 | 4/4 stall, worst 166.6 ms | 4/4, 200 ms | 0/4, 16.8 ms | 0/4, 16.8 ms |
+| Gate 4, merged | 4/4, 150 ms | 4/4, 150 ms | 0/4, 33.4 ms | 0/4, 16.8 ms |
+| With `contain: layout paint` and a promoted readout | 4/4, 166.7 ms | 4/4, 183.3 ms | 0/4, 16.8 ms | not run |
+
+Containment did not help and was reverted. The stall inside the first 500 ms is still open. It lines up with startup long tasks of about 85 ms each, on the main thread, so it is not a raster problem. The human first-visit test is still to be run: `docs/M15_FIRST_VISIT.md`.
