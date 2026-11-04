@@ -1,58 +1,69 @@
 /* ==========================================================================
-   Vertical stories: a stage held by CSS sticky beside steps in normal flow.
-   Nothing here pins the page or changes how it scrolls.
+   Vertical stories: a full-width stage held by CSS sticky, with steps in normal
+   flow over its right side. Nothing here pins the page or changes how it scrolls.
    ========================================================================== */
 
-.onebug { padding: 96px 0 64px; border-top: 1px solid var(--border-soft); }
+.onebug { padding: 96px 0 0; border-top: 1px solid var(--border-soft); }
 .onebug__skip { margin: 16px 0 0; font-size: 0.95rem; }
 .onebug__skip a { color: var(--text-2); }
 .onebug__skip a:hover { color: var(--text); }
 
-.story { margin-top: 48px; }
-.story--sticky { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 64px; align-items: start; }
+.story { margin-top: 32px; padding: 0 var(--gutter); }
+.story--sticky { display: grid; grid-template-columns: minmax(0, 1fr); margin-top: 16px; padding: 0; }
+.story--sticky > .story__stage, .story--sticky > .story__steps { grid-area: 1 / 1; }
 
-.story__stage {
-  position: sticky; top: calc(var(--nav-h) + 24px); display: grid; align-content: start; gap: 12px;
-  height: calc(100vh - var(--nav-h) - 48px); min-height: 420px; max-height: 760px;
-}
-.story__canvas { position: relative; min-height: 0; flex: 1; height: 100%; grid-row: 1; }
-.story__stage { grid-template-rows: minmax(0, 1fr) auto auto; }
-.story__canvas .story__figure { position: absolute; inset: 0; width: 100%; height: 100%; }
+.story__stage { position: sticky; top: var(--nav-h); height: calc(100vh - var(--nav-h)); min-height: 480px; }
+.story__canvas { position: absolute; inset: 0; }
+.story__canvas .story__figure { position: absolute; top: 8%; bottom: 8%; left: 8%; width: calc(84% - 420px); height: 84%; margin: 0; }
 
-.story__rail {
-  position: absolute; top: 0; right: 0; display: grid; gap: 2px; list-style: none; margin: 0; padding: 0; z-index: 1;
+.story__labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.story__labels.is-waiting { visibility: hidden; }
+.story__label {
+  position: absolute; top: 0; left: 0; margin-top: -9px; font-size: 0.86rem; line-height: 18px; color: var(--text); white-space: nowrap;
+  opacity: 0; transition: opacity .35s; will-change: transform;
 }
+.story__label::before { content: ''; display: inline-block; width: 12px; height: 2px; margin: 0 8px 3px 0; border-radius: 1px; background: var(--cond, var(--ember)); }
+.story__label.is-on { opacity: 1; }
+.story__label--bug { margin-left: -56px; font-family: var(--font-mono, monospace); color: var(--apricot); }
+.story__label--bug::before { display: none; }
+
+.story__formula {
+  position: absolute; left: clamp(72px, 8vw, 128px); bottom: 32px; margin: 0; font-size: clamp(1.05rem, 0.8rem + 0.7vw, 1.5rem); font-weight: 500;
+  font-variant-numeric: tabular-nums; letter-spacing: -0.01em; color: var(--text);
+}
+
+.story__rail { position: absolute; top: 50%; left: 24px; transform: translateY(-50%); display: grid; gap: 4px; list-style: none; margin: 0; padding: 0; z-index: 2; }
 .story__rail button {
-  display: block; width: 24px; height: 18px; padding: 0; border: 0; background: none; cursor: pointer; position: relative;
+  display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 1px solid transparent; border-radius: 50%; background: none;
+  font-size: 0.8rem; font-variant-numeric: tabular-nums; color: var(--text-3); cursor: pointer; transition: color .2s, border-color .2s;
 }
-.story__rail button::after {
-  content: ''; position: absolute; top: 8px; right: 0; width: 12px; height: 2px; border-radius: 1px; background: var(--border-strong);
-  transition: width .2s, background .2s;
-}
-.story__rail button:hover::after { background: var(--text-2); }
-.story__rail button[aria-current]::after { width: 20px; background: var(--ember); }
-.story__rail button:focus-visible { outline: 2px solid var(--ember); outline-offset: 1px; border-radius: 2px; }
-
-.story__legend { display: flex; flex-wrap: wrap; gap: 4px 16px; min-height: 22px; list-style: none; margin: 0; padding: 0; font-size: 0.8rem; color: var(--text-2); }
-.story__legend li { display: inline-flex; align-items: center; gap: 6px; }
-.story__legend i { width: 12px; height: 2px; border-radius: 1px; background: var(--cond); }
-.story__formula { margin: 0; font-family: var(--font-mono, monospace); font-size: 0.9rem; font-variant-numeric: tabular-nums; color: var(--text); }
+.story__rail button:hover { color: var(--text); }
+.story__rail button[aria-current] { border-color: var(--ember); color: var(--text); }
+.story__rail button:focus-visible { outline: 2px solid var(--ember); outline-offset: 2px; }
 
 .story__steps { list-style: none; margin: 0; padding: 0; }
 .story__step { padding: 24px 0; }
-.story--sticky .story__step { min-height: 62vh; display: flex; flex-direction: column; justify-content: center; opacity: 0.38; transition: opacity .3s; }
+.story--sticky .story__steps { z-index: 1; justify-self: end; width: min(400px, 36vw); margin-right: clamp(24px, 4vw, 64px); pointer-events: none; }
+.story--sticky .story__step { min-height: calc(100vh - var(--nav-h)); padding: 0; opacity: 0.32; transition: opacity .3s; }
 .story--sticky .story__step.is-active { opacity: 1; }
-.story--sticky .story__step:first-child { min-height: 40vh; justify-content: flex-start; }
+.story--sticky .story__card { position: sticky; top: calc(var(--nav-h) + 24vh); padding: 24px; border-left: 2px solid var(--ember); border-radius: 0 var(--radius) var(--radius) 0; background: rgba(9, 10, 12, 0.82); pointer-events: auto; }
+
 .story__title { margin: 0; font-size: var(--fs-h3, 1.4rem); font-weight: 600; letter-spacing: -0.02em; line-height: 1.2; color: var(--text); }
-.story__body { margin-top: 12px; max-width: 46ch; color: var(--text-2); line-height: 1.6; }
+.story__body { margin-top: 12px; color: var(--text-2); line-height: 1.6; }
 .story__body p { margin: 0; }
 .story__body code { color: var(--text); }
-.story__cond { display: inline-block; width: 14px; height: 2px; margin: 0 8px 4px 0; border-radius: 1px; background: var(--cond); }
-.story__end { padding: 24px 0 64px; }
+.story__action { margin-top: 20px !important; }
 
 .story__figure { display: block; width: 100%; height: auto; margin-bottom: 16px; }
+.sf__path { stroke-dasharray: 1; stroke-dashoffset: 0; }
+.story__step.is-active .sf__path, .story__canvas .sf__path { animation: sf-draw .9s var(--ease-out, ease-out) backwards; }
+@keyframes sf-draw { from { stroke-dashoffset: 1; } }
 
 @media (prefers-reduced-motion: reduce) {
-  .story--sticky .story__step { transition: none; }
-  .story__rail button::after { transition: none; }
+  .story--sticky .story__step, .story__label, .story__rail button { transition: none; }
+  .story__step.is-active .sf__path, .story__canvas .sf__path { animation: none; }
 }
+
+/* While the study data loads, keep the story at about its real height, so the sections below do not look
+   near the viewport and start fetching. */
+.onebug[aria-busy] { min-height: 300vh; }

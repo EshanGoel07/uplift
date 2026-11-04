@@ -2,6 +2,7 @@ import type { MouseEvent as ReactMouseEvent } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ArmId, Summary } from '../../data/types';
 import { GROUP_LABEL, groupCounts, groupOf, shortId } from '../../data/classify';
+import { FEATURED_TASK } from '../../data/reportFigures';
 import { useMedia } from '../../hooks/useMedia';
 import { scenes, useScenes, useUi } from '../../state/sceneStore';
 import { atlas, closeInspector, openCondition, openTask, useAtlas } from '../../state/atlasStore';
@@ -52,6 +53,7 @@ export function HeroStage({ summary }: Props) {
 
   const [mode, setMode] = useState<LatticeMode>(reduced ? 'outcomes' : 'design');
   const [touched, setTouched] = useState(false);
+  const [engaged, setEngaged] = useState(false);
   const [ready, setReady] = useState(false);
   const selected = useAtlas((s) => s.task);
   const condition = useAtlas((s) => s.condition);
@@ -119,10 +121,11 @@ export function HeroStage({ summary }: Props) {
     const id = window.setTimeout(() => setRead(hovered), 160);
     return () => window.clearTimeout(id);
   }, [hovered]);
+  useEffect(() => { if (hovered !== null || selected !== FEATURED_TASK) setEngaged(true); }, [hovered, selected]);
   const shown = read ?? focus;
   const t = tasks[shown];
   const choose = (m: LatticeMode) => { setTouched(true); setMode(m); };
-  const step = (d: number) => { setHovered(null); atlas.set({ task: tasks[(focus + d + tasks.length) % tasks.length].id }); };
+  const step = (d: number) => { setEngaged(true); setHovered(null); atlas.set({ task: tasks[(focus + d + tasks.length) % tasks.length].id }); };
   const setLens = (l: NebulaLens) => {
     nebula.set({ lens: l });
     if (l === 'condition' && !atlas.get().condition) atlas.set({ condition: arms[0].id as ArmId });
@@ -261,7 +264,7 @@ export function HeroStage({ summary }: Props) {
           </div>
         )}
 
-        <div className="lattice__readout">
+        <div className={`lattice__readout${heroMode === 'bugs' && !engaged ? ' is-compact' : ''}`}>
           <div className="lattice__bug">
             <span className="lattice__bug-id">{shortId(t.id)}</span>
             <span className="lattice__bug-title">{t.title}</span>

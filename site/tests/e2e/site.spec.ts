@@ -166,6 +166,11 @@ test('search palette: keyboard open, real records, no invented results', async (
 test('comparison tray: runs of different bugs are refused as a matched pair', async ({ page }) => {
   await page.goto('./?nowebgl&task=4347&cond=none&rep=1&panel=run', { waitUntil: 'networkidle' });
   await page.getByRole('button', { name: 'Add to comparison' }).click();
+  // Beside the open inspector, never under it.
+  const inspector = (await page.locator('.insp').boundingBox())!;
+  const pill = (await page.locator('.tray__pill').boundingBox())!;
+  expect(pill.x + pill.width).toBeLessThan(inspector.x);
+  await page.locator('.tray__pill').click();
   await expect(page.locator('.tray')).toContainText('Add one more');
   await page.goto('./?nowebgl&cmp=4347~none~0,fresh-63296846~none~0&panel=compare', { waitUntil: 'networkidle' });
   await expect(page.locator('.insp')).toContainText('not a matched pair');
@@ -198,6 +203,7 @@ test('conditions: real artifacts, honest gaps, and the paired explorer', async (
   await c.locator('.cc__pick', { hasText: 'Tips file (generated)' }).click();
   await c.locator('.cc__files button', { hasText: 'AGENTS.md' }).click();
   await expect(c.locator('.artifact')).toContainText('NOT INCLUDED IN PUBLISHED EXPORT');
+  await c.getByRole('button', { name: 'Compare conditions' }).click();
   await c.getByLabel('Compare with').selectOption('sensors');
   await expect(c.locator('.cc__col')).toHaveCount(2);
   await expect(c.locator('.paired__rows li')).toHaveCount(6);
@@ -488,43 +494,67 @@ test('moving between destinations is browser history, and old section links stil
   await expect.poll(() => page.locator('#trust').evaluate((el) => Math.abs(el.getBoundingClientRect().top)), { timeout: 6000 }).toBeLessThan(120);
 });
 
-test('the one-bug story reads in full without WebGL, as text and figures', async ({ page }) => {
+const storyStep = (page: Page) => page.locator('.story__step.is-active').getAttribute('data-step');
+const toStep = (page: Page, i: number) => page.locator(`.story__step[data-step="${i}"]`).evaluate((el) => el.scrollIntoView({ behavior: 'instant', block: 'center' }));
+
+test('the story reads in full without WebGL, as text and figures', async ({ page }) => {
   await page.goto(NOGL, { waitUntil: 'networkidle' });
-  await expect(page.locator('.story__step')).toHaveCount(10);
-  await expect(page.locator('#story')).toContainText('Six arms, not six stages.');
+  await expect(page.locator('.story__step')).toHaveCount(5);
+  await expect(page.locator('.story__title')).toHaveText(['One real bug.', 'Six conditions.', 'Two repeats.', 'Now every bug.', '924 runs.']);
+  await expect(page.locator('.story__canvas .story__figure')).toHaveCount(1);
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.locator('.story__stage')).toHaveCount(0);
-  await expect(page.locator('.story__step .story__figure')).toHaveCount(10);
+  await expect(page.locator('.story__step .story__figure')).toHaveCount(5);
 });
 
-test('the story follows native scrolling forward, backward and through a skipped jump', async ({ page }) => {
+test('the story follows native scrolling forward, backward and through skipped steps', async ({ page }) => {
   await page.goto(NOGL, { waitUntil: 'networkidle' });
-  const active = () => page.locator('.story__step.is-active').getAttribute('data-step');
-  const before = await page.evaluate(() => { const c: string[] = []; for (const t of ['wheel']) window.addEventListener(t, (e) => c.push(String(e.defaultPrevented))); return c.length; });
-  const goTo = (i: number) => page.locator(`.story__step[data-step="${i}"]`).evaluate((el) => el.scrollIntoView({ behavior: 'instant', block: 'center' }));
-  await goTo(3);
-  await expect.poll(active).toBe('3');
-  await goTo(9);
-  await expect.poll(active).toBe('9');
-  await expect(page.locator('.story__formula')).toContainText('= 924 runs');
-  await goTo(1);
-  await expect.poll(active).toBe('1');
+  await toStep(page, 1);
+  await expect.poll(() => storyStep(page)).toBe('1');
+  await toStep(page, 4);
+  await expect.poll(() => storyStep(page)).toBe('4');
+  await expect(page.locator('.story__formula')).toContainText('77 bugs × 6 conditions × 2 repeats = 924 runs');
+  await toStep(page, 0);
+  await expect.poll(() => storyStep(page)).toBe('0');
   await expect(page.locator('.story__formula')).toHaveCount(0);
-  // A step can be chosen directly, and the page itself stays free to scroll.
-  await page.getByRole('button', { name: /^Step 9:/ }).click();
-  await expect.poll(active).toBe('8');
+  await page.getByRole('button', { name: /^Step 3:/ }).click();
+  await expect.poll(() => storyStep(page)).toBe('2');
   await expect(page.locator('.story__formula')).toContainText('= 12 attempts');
   const y = await page.evaluate(() => window.scrollY);
+  await page.mouse.move(300, 400);
   await page.mouse.wheel(0, 300);
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(y);
-  expect(before).toBe(0);
 });
 
 test('resizing inside the story keeps its place', async ({ page }) => {
   await page.goto(NOGL, { waitUntil: 'networkidle' });
-  await page.locator('.story__step[data-step="4"]').evaluate((el) => el.scrollIntoView({ behavior: 'instant', block: 'center' }));
+  await toStep(page, 3);
+  await expect.poll(() => storyStep(page)).toBe('3');
   await page.setViewportSize({ width: 1100, height: 700 });
-  await expect.poll(() => page.locator('.story__step.is-active').getAttribute('data-step')).toBe('4');
+  await expect.poll(() => storyStep(page)).toBe('3');
+});
+
+test('a clean first load opens no inspector and keeps the Nebula clear, and deep links still open one', async ({ browser }) => {
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const page = await ctx.newPage();
+  await page.goto('./?nowebgl', { waitUntil: 'networkidle' });
+  await expect(page.locator('.insp')).toHaveCount(0);
+  await expect(page.locator('.tray')).toHaveCount(0);
+  await page.goto('./?nowebgl&task=4347&panel=task', { waitUntil: 'networkidle' });
+  await expect(page.locator('.insp')).toContainText('Task passport');
+  await ctx.close();
+});
+
+test('comparison tray: a small pill that opens only on request', async ({ page }) => {
+  await page.goto('./?nowebgl&cmp=4347~none~0,4347~tuned~1', { waitUntil: 'networkidle' });
+  const pill = page.locator('.tray__pill');
+  await expect(pill).toContainText('2');
+  await expect(page.locator('.tray__go')).toHaveCount(0);
+  await pill.click();
+  await expect(page.locator('.tray__go')).toHaveText('Compare');
+  await page.getByRole('button', { name: 'Collapse the comparison tray' }).click();
+  await expect(page.locator('.tray__go')).toHaveCount(0);
+  await expect(page).toHaveURL(/cmp=/);
 });
 
 test('small-screen menu works with pointer and keyboard', async ({ page }) => {
@@ -919,6 +949,45 @@ test.describe('WebGL', () => {
     await expect.poll(async () => (await diag<{ id: string; mounted: boolean }[]>(page, 'scenes')).find((s) => s.id === 'workbench')?.mounted).toBe(true);
     expect(await page.locator('canvas').count()).toBe(1);
     expect(await diag(page, 'contexts')).toBe(1);
+  });
+
+  test('the 3D story stage: large, drawn in the one canvas, correct under reversal and interruption', async ({ page }) => {
+    await page.goto('./?diag', { waitUntil: 'networkidle' });
+    await toStep(page, 0);
+    await expect.poll(async () => (await diag<{ id: string; mounted: boolean }[]>(page, 'scenes')).find((s) => s.id === 'cohort')?.mounted, { timeout: 15_000 }).toBe(true);
+    expect(await diag<number>(page, 'canvases')).toBe(1);
+    const box = (await page.locator('.story__stage').boundingBox())!;
+    expect((box.width * box.height) / (1440 * 900)).toBeGreaterThan(0.6);
+    await expect(page.locator('.story__canvas .story__figure')).toHaveCount(0);
+    // Fast through every step, then straight back: the labels and state follow the last position only.
+    for (const i of [1, 2, 3, 4, 2]) await toStep(page, i);
+    await expect.poll(() => storyStep(page)).toBe('2');
+    await expect(page.locator('.story__label.is-on')).toHaveCount(6);
+    await toStep(page, 0);
+    await expect.poll(() => storyStep(page)).toBe('0');
+    await expect(page.locator('.story__label--bug.is-on')).toHaveCount(1);
+  });
+
+  test('a failed story chunk leaves its 2D figure and the rest of the 3D running', async ({ page }) => {
+    await page.route(/CohortScene/, (r) => r.abort());
+    await page.goto('./?diag&hero=runs', { waitUntil: 'networkidle' });
+    await toStep(page, 0);
+    await expect(page.locator('.story__canvas .story__figure')).toHaveCount(1);
+    await page.waitForTimeout(600);
+    await expect(page.locator('.story__canvas .story__figure')).toHaveCount(1);
+    expect(await diag<number>(page, 'contexts')).toBe(1);
+  });
+
+  test('reduced motion: the story reaches each state at once', async ({ browser }) => {
+    const ctx = await browser.newContext({ reducedMotion: 'reduce', viewport: { width: 1440, height: 900 } });
+    const page = await ctx.newPage();
+    await page.goto('./?diag', { waitUntil: 'networkidle' });
+    await toStep(page, 4);
+    await expect.poll(() => storyStep(page)).toBe('4');
+    await expect(page.locator('.story__formula')).toContainText('924 runs');
+    await settled(page);
+    expect(await diag<boolean>(page, 'animating')).toBe(false);
+    await ctx.close();
   });
 
   test('a failed Workbench chunk falls back to the 2D diagram and leaves the lattice running', async ({ page }) => {

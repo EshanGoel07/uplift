@@ -197,6 +197,7 @@ a.nav__ext:hover { color: var(--text); }
 .lattice__open { padding: 0 12px; font-weight: 500; }
 .lattice__step:hover, .lattice__open:hover { border-color: var(--border-strong); background: var(--elevated); }
 .lattice__pos { min-width: 6.5em; text-align: center; font-size: 0.82rem; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.lattice__readout.is-compact .lattice__runs { display: none; }
 .lattice__grammar { display: flex; flex-wrap: wrap; gap: 6px 20px; list-style: none; margin: 10px 0 0; padding: 0; font-size: 0.8rem; color: var(--text-2); }
 .lattice__grammar li { display: inline-flex; align-items: center; gap: 6px; }
 .lattice__grammar b { font-weight: 500; color: var(--text); }

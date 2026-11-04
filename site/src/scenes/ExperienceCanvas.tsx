@@ -10,7 +10,10 @@ import { NebulaScene } from './Nebula/NebulaScene';
 import { RunLatticeScene } from './RunLattice/RunLattice';
 import { StageView } from './StageView';
 
-const CohortScene = lazy(() => import('./Cohort/CohortScene'));
+const CohortScene = lazy(() => import('./Cohort/CohortScene').catch(() => {
+  ui.set({ cohort3dFailed: true });
+  return { default: (() => null) as unknown as typeof import('./Cohort/CohortScene').default };
+}));
 
 // Workbench-only code (the scene and postprocessing) lives behind this one dynamic import. It renders
 // into this canvas: no second renderer, just a later chunk. Do not import it statically.
@@ -25,6 +28,14 @@ class WorkbenchBoundary extends Component<{ children: ReactNode }, { failed: boo
   state = { failed: false };
   static getDerivedStateFromError() { return { failed: true }; }
   componentDidCatch() { ui.set({ workbench3dFailed: true }); }
+  render() { return this.state.failed ? null : this.props.children; }
+}
+
+/** If the story's scene fails, its section stays on the 2D figure; everything else carries on. */
+class CohortBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  componentDidCatch() { ui.set({ cohort3dFailed: true }); }
   render() { return this.state.failed ? null : this.props.children; }
 }
 
@@ -139,7 +150,7 @@ export default function ExperienceCanvas({ summary }: { summary: Summary | null 
         )}
         {wantNebula && <StageView id="nebula" camera={NEBULA_CAMERA}><NebulaScene /></StageView>}
         {wantLattice && <StageView id="lattice" camera={LATTICE_CAMERA}><RunLatticeScene /></StageView>}
-        {wantCohort && <Suspense fallback={null}><StageView id="cohort" camera={COHORT_CAMERA}><CohortScene /></StageView></Suspense>}
+        {wantCohort && <CohortBoundary><Suspense fallback={null}><StageView id="cohort" camera={COHORT_CAMERA}><CohortScene /></StageView></Suspense></CohortBoundary>}
       </Canvas>
     </div>
   );

@@ -99,6 +99,7 @@ function PairedExplorer({ summary }: { summary: Summary }) {
 export function Conditions({ summary }: { summary: Summary | null }) {
   const selected = useAtlas((s) => s.condition);
   const a: ArmId = selected ?? 'both';
+  const [comparing, setComparing] = useState(false);
   const [b, setB] = useState<ArmId | null>(null);
   const [lens, setLens] = useState<'all' | 'changed' | 'common'>('all');
   const [file, setFile] = useState<string | null>(null);
@@ -158,9 +159,9 @@ export function Conditions({ summary }: { summary: Summary | null }) {
     <section id="conditions" className="pub about conditions" aria-labelledby="conditions-title">
       <div className="pub-container">
         <header className="pub-head">
-          <p className="pub-eyebrow">Six conditions</p>
-          <h2 id="conditions-title" className="pub-title">What actually changed between the setups.</h2>
-          <p className="pub-lead">Each run started from the same repository snapshot and the same prompt. A condition changes only what is installed around them. Pick one, then compare it with another.</p>
+          <p className="pub-eyebrow">Conditions</p>
+          <h2 id="conditions-title" className="pub-title">What changes between configurations.</h2>
+          <p className="pub-lead">Every run started from the same snapshot and the same prompt. Choose a condition to see what it installs around them.</p>
         </header>
 
         <div className="cc">
@@ -172,6 +173,8 @@ export function Conditions({ summary }: { summary: Summary | null }) {
             ))}
           </div>
           <div className="cc__tools">
+            <ToolButton icon="compare" pressed={comparing} onClick={() => { if (comparing) { setB(null); setLens('all'); } setComparing(!comparing); }}>{comparing ? 'Close comparison' : 'Compare conditions'}</ToolButton>
+            {comparing && <>
             <label className="cc__against">Compare with
               <select value={b ?? ''} onChange={(e) => setB((e.target.value || null) as ArmId | null)}>
                 <option value="">Nothing</option>
@@ -183,6 +186,7 @@ export function Conditions({ summary }: { summary: Summary | null }) {
               <ToolButton pressed={lens === 'changed'} onClick={() => setLens('changed')} disabled={!b}>Show what changed</ToolButton>
               <ToolButton pressed={lens === 'common'} onClick={() => setLens('common')}>Show common structure</ToolButton>
             </div>
+            </>}
           </div>
 
           <div className="cc__common">
@@ -205,7 +209,7 @@ export function Conditions({ summary }: { summary: Summary | null }) {
           {fa && ff && <ArtifactViewer arm={fa} file={ff} />}
         </div>
 
-        <PairedExplorer summary={summary} />
+        {comparing && <PairedExplorer summary={summary} />}
       </div>
     </section>
   );

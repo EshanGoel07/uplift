@@ -105,3 +105,25 @@ Headed runs were taken on an interim Gate 1 build: 3 of 3 trials stalled at 0 ms
 
 ## Lattice hover
 `tests/e2e/site.spec.ts` sweeps all 77 columns, 25 points each (1,925 points), and requires the exact bug at every point. It first found 715 misses. Causes fixed: `out` and `move` fire together when crossing tiles, and the old handler compared against a stale store value, clearing hover inside one bug (carried over from the old Lattice); a 0.022 gap between neighbouring rows' pointer targets; and tiles overlapping too much where the camera angle squeezed columns at the far right. Result: 0 misses.
+
+## Gate 2 correction
+**Story stage, measured with real wheel scrolling** (`scripts/qa/m15-story-review.mjs`):
+
+| Measure | Before | After |
+|---|---:|---:|
+| Stage share of viewport, 1440×900 | 39.4% | 92.9% |
+| Stage share of viewport, 1920×1080 | 24.6% | 94.1% |
+| Lit share of stage across the story, 1440×900 | 2.2 to 4.1%, then 13.6% | 7.2 to 18.3% |
+
+**First hover, cold browser, readout visible:**
+
+| Contact | Trials with a frame over 50 ms | Worst frame |
+|---:|---:|---:|
+| 0 ms | 4 of 4 | 216.7 ms |
+| 250 ms | 4 of 4 | 250.0 ms |
+| 500 ms | 0 of 4 | 33.4 ms |
+| 1000 ms | 0 of 4 | 16.8 ms |
+
+**Still open.** The stall inside the first 500 ms remains, and a still pointer shows it too, so it is page startup. The worst frames here are higher than the 150 to 167 ms measured at Gate 2, on few trials. Deferring the renderer to idle was tried and rejected: it reached a 233 ms worst frame and stalled at 500 ms in 4 of 4 trials.
+
+The first probe of this correction caught a regression: the story's scene was loading during page startup, because `useInView` reports true when its element has not rendered. The story now uses its own observer on the stage, and the chunk no longer loads at start-up.

@@ -254,14 +254,26 @@ export function InspectorPanel({ summary }: { summary: Summary | null }) {
 /** The comparison tray: quiet until something is added. */
 export function ComparisonTray({ summary }: { summary: Summary | null }) {
   const items = useAtlas((s) => s.compare);
+  const inspecting = useAtlas((s) => !!s.inspector);
+  const [open, setOpen] = useState(false);
+  useEffect(() => { if (!items.length) setOpen(false); }, [items.length]);
   if (!items.length || !summary) return null;
+  if (!open) {
+    return (
+      <div className={`tray tray--pill${inspecting ? ' tray--beside' : ''}`} role="region" aria-label="Comparison tray">
+        <button type="button" className="tray__pill" aria-expanded="false" onClick={() => setOpen(true)}>
+          <Icon name="compare" size={14} />Compare<b>{items.length}</b>
+        </button>
+      </div>
+    );
+  }
   const check = pairCheck(items);
   const name = (c: CompareItem) => {
     const label = summary.arms.find((a) => a.id === c.arm)?.label ?? c.arm;
     return c.kind === 'run' ? `${shortId(c.task)} · ${label} · R${c.repeat + 1}` : label;
   };
   return (
-    <div className="tray" role="region" aria-label="Comparison tray">
+    <div className={`tray${inspecting ? ' tray--beside' : ''}`} role="region" aria-label="Comparison tray">
       <Kicker>Compare</Kicker>
       <ul>
         {items.map((c) => (
@@ -273,6 +285,7 @@ export function ComparisonTray({ summary }: { summary: Summary | null }) {
       <button type="button" className="pbtn pbtn--primary tray__go" onClick={() => atlas.set({ inspector: { kind: 'compare' } }, 'push')} disabled={items.length < 2}>
         {items.length < 2 ? 'Add one more' : check.ok ? 'Compare' : 'Why not?'}
       </button>
+      <button type="button" className="tray__close" aria-expanded="true" aria-label="Collapse the comparison tray" onClick={() => setOpen(false)}><Icon name="minus" size={13} /></button>
     </div>
   );
 }

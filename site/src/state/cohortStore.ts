@@ -4,26 +4,19 @@
 import type { Arm, TaskMeta } from '../data/types';
 import { requestFrame } from './sceneStore';
 
-export interface CohortStep {
-  /** How many of the six conditions have been introduced. */
-  lanes: number;
-  /** Every condition shown with its two repeat markers. */
-  repeats: boolean;
-  /** The view has pulled back to all 77 bugs. */
-  cohort: boolean;
-}
-
 export const cohort = {
   tasks: [] as TaskMeta[],      // test bugs first, then fresh, as in the lattice
   arms: [] as Arm[],
   focus: 0,                     // index of the bug the story follows
   reduced: false,
-  step: { lanes: 0, repeats: false, cohort: false } as CohortStep,
+  /** 0 one bug, 1 six conditions, 2 two repeats, 3 all 77 bugs, 4 all 924 runs. */
+  stage: 0,
+  /** DOM labels the scene positions: one per condition, then the bug's own. */
+  labels: [] as (HTMLElement | null)[],
 };
 
-export function setCohortStep(step: CohortStep): void {
-  const s = cohort.step;
-  if (s.lanes === step.lanes && s.repeats === step.repeats && s.cohort === step.cohort) return;
-  cohort.step = step;
+export function setCohortStage(stage: number): void {
+  if (cohort.stage === stage) return;
+  cohort.stage = stage;
   requestFrame('state');
 }

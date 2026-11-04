@@ -32,6 +32,8 @@ export interface UiState {
   lowTier: boolean;
   /** The Workbench's lazy 3D layer failed; its section stays on the 2D diagram. Other scenes are unaffected. */
   workbench3dFailed: boolean;
+  /** The story's 3D scene could not load or run: it stays on its 2D figure. */
+  cohort3dFailed: boolean;
 }
 
 const prefersReduced = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
@@ -58,6 +60,7 @@ let state: UiState = {
   activeScene: null,
   lowTier: detectLowTier(),
   workbench3dFailed: false,
+  cohort3dFailed: false,
 };
 
 const listeners = new Set<() => void>();

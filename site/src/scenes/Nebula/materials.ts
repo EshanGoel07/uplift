@@ -1,4 +1,4 @@
-import { AdditiveBlending, Color, ShaderMaterial, Vector3 } from 'three';
+import { AdditiveBlending, Color, ShaderMaterial, Vector2, Vector3 } from 'three';
 import { SIMPLEX_3D, SPECTRAL_RAMP } from '../shaders/noise';
 import { SPECTRAL } from '../palette';
 import { spectralUniforms } from '../materials/shared';
@@ -10,6 +10,8 @@ export interface MembraneOpts {
   bias: number;      // shifts the spectral ramp: 0 = cyan/blue, 1 = magenta
   opacity: number;
   lines: boolean;
+  /** Camera distances where the shell is fully lit and fully gone. */
+  depth?: [number, number];
 }
 
 /** Shared vertex logic: multi-frequency noise displacement, rim folds, breathing, pointer bump. */
@@ -67,6 +69,7 @@ uniform float uBias;
 uniform float uOpacity;
 uniform float uIntensity;
 uniform float uLines;
+uniform vec2 uDepth;
 uniform vec3 uAmber;
 varying float vRim;
 varying float vDisp;
@@ -83,7 +86,7 @@ void main() {
   c = mix(c, uAmber, smoothstep(0.35, 0.0, vRim) * 0.35); // warm light near the core-facing pole
   // Meridians converge at the pole: fade them there so the mesh stays legible around the core.
   float edge = smoothstep(0.1, 0.62, vRim) * (0.5 + 0.5 * smoothstep(0.55, 1.0, vRim));
-  float depthFade = smoothstep(16.0, 7.0, vDepth);
+  float depthFade = smoothstep(uDepth.y, uDepth.x, vDepth);
   float a = uOpacity * edge * depthFade;
   if (uLines < 0.5) a *= 0.1;
   c *= uIntensity * (1.0 + vHot * 1.6);
@@ -110,6 +113,7 @@ export function membraneMaterial(o: MembraneOpts): ShaderMaterial {
       uOpacity: { value: o.opacity },
       uIntensity: { value: 1 },
       uLines: { value: o.lines ? 1 : 0 },
+      uDepth: { value: new Vector2(...(o.depth ?? [7, 16])) },
     },
     transparent: true,
     depthWrite: false,
