@@ -194,6 +194,31 @@ export function HeroStage({ summary }: Props) {
           </div>
         )}
 
+        <div className="lattice__canvas-wrap" aria-hidden="true" ref={stage} onClick={clickStage}>
+          {!sceneMounted && <p className="lattice__loading">{heroMode === 'bugs' ? `Mapping ${tasks.length} bugs…` : `Placing ${summary.summary.runs} runs…`}</p>}
+          <span className="neb-tag" ref={(el) => { nebulaDom.tag = el; }} />
+          {heroMode === 'runs' && (
+            <div className="lattice__labels">
+              {arms.map((a, r) => (
+                <span key={a.id} className="lattice__lane" style={condStyle(a.id)} ref={(el) => { latticeLabels[r] = el; }}>
+                  <b>{r + 1}</b><span className="lattice__lane-name">{a.label}</span>
+                </span>
+              ))}
+              <span className="lattice__group" ref={(el) => { latticeLabels[arms.length] = el; }}>{nTest} test bugs</span>
+              <span className="lattice__group" ref={(el) => { latticeLabels[arms.length + 1] = el; }}>{tasks.length - nTest} fresh bugs</span>
+            </div>
+          )}
+        </div>
+
+        {heroMode === 'runs' && (
+          <ul className="lattice__grammar">
+            <li><i className="g-col" aria-hidden="true" /><b>Column</b> one bug</li>
+            <li><i className="g-row" aria-hidden="true" /><b>Row</b> one condition</li>
+            <li><i className="g-pair" aria-hidden="true" /><b>Pair</b> its two repeats</li>
+            <li><i className="g-out" aria-hidden="true" /><b>Colour</b> {mode === 'outcomes' ? 'the outcome' : 'neutral until outcomes show'}</li>
+          </ul>
+        )}
+
         {heroMode === 'runs' && (
           <div className="iso" >
             <div className="lens-conds" role="group" aria-label="Isolate a condition">
@@ -212,27 +237,6 @@ export function HeroStage({ summary }: Props) {
             </div>
           </div>
         )}
-
-        <div className="lattice__canvas-wrap" aria-hidden="true" ref={stage} onClick={clickStage}>
-          {!sceneMounted && <p className="lattice__loading">{heroMode === 'bugs' ? `Mapping ${tasks.length} bugs…` : `Placing ${summary.summary.runs} runs…`}</p>}
-          <span className="neb-tag" ref={(el) => { nebulaDom.tag = el; }} />
-          {heroMode === 'runs' && (
-            <div className="lattice__labels">
-              {arms.map((a, r) => (
-                <span key={a.id} className="lattice__lane" style={condStyle(a.id)} ref={(el) => { latticeLabels[r] = el; }}>
-                  <b>{r + 1}</b><span className="lattice__lane-name">{a.label}</span>
-                </span>
-              ))}
-              <span className="lattice__group" ref={(el) => { latticeLabels[arms.length] = el; }}>{nTest} test bugs</span>
-              <span className="lattice__group" ref={(el) => { latticeLabels[arms.length + 1] = el; }}>{tasks.length - nTest} fresh bugs</span>
-              {arms.map((a, r) => (
-                <span key={'back-' + a.id} className="lattice__lane lattice__lane--num" style={condStyle(a.id)} ref={(el) => { latticeLabels[arms.length + 2 + r] = el; }}>
-                  <b>{r + 1}</b>
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
 
         {heroMode === 'bugs' && (
           <div className="dock" role="toolbar" aria-label="Nebula view controls">
@@ -294,10 +298,11 @@ export function HeroStage({ summary }: Props) {
           ? <>Each node is one of the {tasks.length} real bugs. A node's position carries no meaning. Hover, drag to turn, or step through the bugs; select one to open its record.</>
           : mode === 'design'
             ? <>All {summary.summary.runs} runs. Six lanes, one per condition, run through the same {tasks.length} bugs; each bug is a
-              band across the lanes with one cube per repeat. Every condition is compared with No setup on exactly these bugs.</>
+              column across the lanes with one tile per repeat. Every condition is compared with No setup on exactly these bugs.</>
             : <>The same {summary.summary.runs} runs, coloured by their real result. In <strong>{agree} of {tasks.length}</strong> bugs all
               {' '}{arms.length * repeats} runs agree, so a run's outcome depended far more on the bug than on the setup. Only
-              the {groups.mixed} mixed bugs can tell setups apart.</>}
+              the {groups.mixed} mixed bugs can tell setups apart, so they burn brighter. Position on the sheet carries no
+              meaning, and neither does the order within a pair.</>}
         {heroMode === 'runs' && ' Hover or step through the bugs; click one to open its runs.'}
       </figcaption>
     </figure>

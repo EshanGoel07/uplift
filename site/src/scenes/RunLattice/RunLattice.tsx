@@ -1,44 +1,150 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
-import { BoxGeometry, Color, InstancedBufferAttribute, InstancedMesh, MeshStandardMaterial, Object3D, PerspectiveCamera, PlaneGeometry, ShaderChunk, Vector3 } from 'three';
-import type { Arm } from '../../data/types';
+import { BufferAttribute, BufferGeometry, Color, DoubleSide, InstancedBufferAttribute, InstancedMesh, Object3D, PerspectiveCamera, PlaneGeometry, Quaternion, ShaderMaterial, Vector2, Vector3 } from 'three';
+import { groupOf } from '../../data/classify';
 import { atlas } from '../../state/atlasStore';
 import { lattice, latticeHandlers, latticeLabels, latticeScroll, useLattice } from '../../state/latticeStore';
 import { requestFrame, scenes } from '../../state/sceneStore';
-import { CONDITION_COLOR, INTERFACE, OUTCOME, SPECTRAL } from '../palette';
-import { CUBE, LANE, instanceIndex, latticeLayout, outcomeAt } from './layout';
+import { ADDITIVE, HALO_FALLOFF, hazeMaterial } from '../materials/shared';
+import { CONDITION_COLOR, INTERFACE, OUTCOME } from '../palette';
+import { LANE, TILE_H, TILE_VISIBLE, TILE_W, instanceIndex, latticeLayout, outcomeAt, type LatticeLayout, type Vec3 } from './layout';
 
 /**
- * The run lattice: every one of the 924 runs as an object. Six lanes (the conditions) run through
- * all 77 bugs; each bug crosses the six lanes, with one cube per repeat. In "outcomes" mode each cube
- * takes its run's real result. Position, count and colour all come from summary.json.
- *
- * Landscape frames show two blocks, test bugs in front and fresh bugs behind, each crossing the six
- * lanes; portrait frames look down the lanes with the bugs receding. A fitted camera frames either.
+ * The run lattice: every one of the 924 runs as a point of light on one curved sheet in the Nebula's
+ * atmosphere. A column is one bug, a row is one condition, a stacked pair is the two repeats, and colour
+ * is the outcome. Each condition's identity is one fine filament along its row. The 23 mixed bugs burn
+ * brighter than the rest, because they are the only bugs that can tell the setups apart.
  *
  * This is scene content only: it renders inside the one shared canvas through a StageView, so here
  * `useThree` reports the stage's size and the lattice's own camera. Nothing is written per frame at
  * rest. Matrices change only during the bounded build-in, and the camera fit and labels only when
  * the camera moved.
  *
- * After the build-in no instance data is uploaded at all. Instance colours hold each run's real
- * outcome and never change. Hover, focus and the design/outcomes view are per-bug uniform arrays read
- * by the vertex shader. Writing the instance buffers after they had been drawn from stalled the GPU
- * process for 100-750 ms. Picking uses the resting matrices.
+ * After the build-in no instance data is uploaded at all. Outcomes are static attributes; hover, focus
+ * and the design/outcomes view are per-bug uniform arrays read by the vertex shader. Writing instance
+ * buffers after they had been drawn stalled the GPU process for 100-750 ms. Picking
+ * uses the resting matrices.
+ *
+ * Two meshes share one geometry and one matrix buffer: the crisp tile, which takes the pointer, and a
+ * wider soft halo that stands in for bloom, which cannot reach a StageView.
  */
 const COLORS = {
   design: new Color(INTERFACE.text2),   // neutral warm grey: the design view, before outcomes
   solved: new Color(OUTCOME.solved),
   failed: new Color(OUTCOME.failed),
-  focus: new Color(INTERFACE.ember),    // the paired bug is a selection, not an outcome
+  focus: new Color(INTERFACE.ember),    // selection, never an outcome
 };
-/** Lane strip: graphite with a trace of the condition's spectral identity. */
-const laneColor = (armId: Arm['id']): Color => new Color(INTERFACE.graphite).lerp(new Color(CONDITION_COLOR[armId]), 0.16);
 
 /** The hover cursor, set on the stage only: cursor is inherited, so setting it on <body> restyles the page. */
 const setCursor = (c: string): void => { const el = scenes.get('lattice').stage; if (el && el.style.cursor !== c) el.style.cursor = c; };
 
-const BUILD_DELAY = 0.15, BUILD_STAGGER = 0.018, BUILD_LENGTH = 0.55;
+const BUILD_DELAY = 0.15, BUILD_STAGGER = 0.012, BUILD_LENGTH = 0.55;
+/** Intensity of a bug whose twelve runs all agree, against a mixed bug at 1. */
+const AGREED = 0.34;
+const HALO_GROW = [3.6, 1.7] as const;
+const SURFACE: Vector3 = new Vector3(0, 0, 1);
+
+const tileVertex = (bugs: number) => /* glsl */ `
+attribute float aBug;
+attribute float aLane;
+attribute float aRep;
+attribute float aWeight;
+attribute vec3 aOutcome;
+attribute vec3 aDir;
+uniform vec3 uIso;
+uniform float uFade;
+uniform vec2 uGrow;
+uniform float uLift[${bugs}];
+uniform float uDesign[${bugs}];
+uniform float uGlow[${bugs}];
+uniform vec3 uDesignColor;
+varying vec2 vUv;
+varying vec3 vColor;
+varying float vStrength;
+varying float vFocus;
+
+void main() {
+  int i = int(aBug + 0.5);
+  float design = uDesign[i], lift = uLift[i], glow = uGlow[i];
+  bool inside = (uIso.x < 0.0 || abs(aBug - uIso.x) < 0.5) && (uIso.y < 0.0 || abs(aLane - uIso.y) < 0.5) && (uIso.z < 0.0 || abs(aRep - uIso.z) < 0.5);
+  float strength = mix(aWeight, 0.46, design) * (1.0 + lift * 2.0) + glow * 0.12;
+  if (!inside) strength *= 1.0 - uFade;
+  vUv = uv;
+  vColor = mix(aOutcome, uDesignColor, design);
+  vStrength = strength;
+  vFocus = glow;
+  vec4 world = modelMatrix * instanceMatrix * vec4(position.xy * uGrow, 0.0, 1.0);
+  world.xyz += aDir * lift + vec3(0.0, lift * 0.3, 0.0);
+  gl_Position = projectionMatrix * viewMatrix * world;
+}`;
+
+/** A rounded tile with a brighter top edge, inset from its quad so neighbours stay apart. */
+const TILE_FRAGMENT = /* glsl */ `
+uniform vec3 uFocusColor;
+varying vec2 vUv;
+varying vec3 vColor;
+varying float vStrength;
+varying float vFocus;
+void main() {
+  vec2 q = abs(vUv - 0.5) * 2.0 / vec2(1.0, ${TILE_VISIBLE.toFixed(4)});
+  vec2 d = max(q - vec2(0.42, 0.56), 0.0) / vec2(0.34, 0.26);
+  float edge = smoothstep(1.0, 0.8, length(d));
+  float sheen = 0.78 + 0.32 * vUv.y;
+  vec3 c = mix(vColor, uFocusColor, vFocus * 0.85) * sheen;
+  gl_FragColor = vec4(c, 1.0);
+  #include <colorspace_fragment>
+  float a = edge * vStrength;
+  gl_FragColor = vec4(gl_FragColor.rgb * a, a);
+}`;
+
+const HALO_FRAGMENT = /* glsl */ `
+${HALO_FALLOFF}
+uniform vec3 uFocusColor;
+varying vec2 vUv;
+varying vec3 vColor;
+varying float vStrength;
+varying float vFocus;
+void main() {
+  float f = haloFalloff(length((vUv - 0.5) * 2.0));
+  vec3 c = mix(vColor, uFocusColor, vFocus);
+  gl_FragColor = vec4(c, 1.0);
+  #include <colorspace_fragment>
+  float a = f * (0.1 * vStrength + 0.32 * vFocus);
+  gl_FragColor = vec4(gl_FragColor.rgb * a, a);
+}`;
+
+/** One fine ribbon per condition along its row, in one geometry and one draw call. */
+function filamentGeometry(L: LatticeLayout, colors: Color[]): BufferGeometry {
+  const SEGMENTS = 96, THICK = 0.016, LEAD = 2;
+  const n = (SEGMENTS + 1) * 2 * L.lanes;
+  const position = new Float32Array(n * 3), color = new Float32Array(n * 3), along = new Float32Array(n), lane = new Float32Array(n);
+  const index: number[] = [];
+  const p: Vec3 = [0, 0, 0];
+  let v = 0;
+  for (let r = 0; r < L.lanes; r++) {
+    for (let s = 0; s <= SEGMENTS; s++) {
+      const col = -LEAD + (s / SEGMENTS) * (L.columns - 1 + LEAD * 2);
+      for (const side of [-1, 1]) {
+        position.set(L.at(col, L.laneAt(r) + side * THICK, p), v * 3);
+        colors[r].toArray(color, v * 3);
+        along[v] = s / SEGMENTS;
+        lane[v] = r;
+        v++;
+      }
+      if (s < SEGMENTS) {
+        const a = v - 2, b = v - 1, c = v, d = v + 1;
+        index.push(a, b, c, b, d, c);
+      }
+    }
+  }
+  const g = new BufferGeometry();
+  g.setAttribute('position', new BufferAttribute(position, 3));
+  g.setAttribute('aColor', new BufferAttribute(color, 3));
+  g.setAttribute('aAlong', new BufferAttribute(along, 1));
+  g.setAttribute('aLane', new BufferAttribute(lane, 1));
+  g.setIndex(index);
+  return g;
+}
 
 export function RunLatticeScene() {
   const tasks = useLattice((s) => s.tasks);
@@ -46,39 +152,48 @@ export function RunLatticeScene() {
   const mode = useLattice((s) => s.mode);
   const reduced = useLattice((s) => s.reduced);
   const mesh = useRef<InstancedMesh>(null);
+  const halo = useRef<InstancedMesh>(null);
   const camera = useThree((s) => s.camera) as PerspectiveCamera;
   const size = useThree((s) => s.size);
   const wide = size.width / Math.max(1, size.height) >= 0.95;
 
   const L = useMemo(() => latticeLayout(tasks, arms, wide), [tasks, arms, wide]);
-  const { count, lanes, repeats, perBug, blockW, blockSep, span, nTest, laneAt, bugAt } = L;
+  const { count, lanes, repeats, perBug, nTest, columns, laneAt, at, colAt } = L;
 
+  // Everything an instance needs is static: which bug, lane and repeat it is, its real outcome, and how
+  // bright its bug burns. Written once per data set, and read by both meshes.
   const geo = useMemo(() => {
-    const g = new BoxGeometry(CUBE, CUBE, CUBE);
-    // Which bug each instance belongs to: static, and read by the vertex shader to apply the lift.
-    const bug = new Float32Array(count), lane = new Float32Array(count), rep = new Float32Array(count);
-    for (let n = 0; n < count; n++) {
-      bug[n] = Math.floor(n / perBug);
-      lane[n] = Math.floor((n % perBug) / repeats);
-      rep[n] = n % repeats;
-    }
+    const g = new PlaneGeometry(1, 1);
+    const bug = new Float32Array(count), lane = new Float32Array(count), rep = new Float32Array(count), weight = new Float32Array(count);
+    const outcome = new Float32Array(count * 3);
+    tasks.forEach((t, i) => {
+      const w = groupOf(t.solved) === 'mixed' ? 1 : AGREED;
+      arms.forEach((a, r) => {
+        for (let q = 0; q < repeats; q++) {
+          const n = instanceIndex(L, i, r, q);
+          bug[n] = i; lane[n] = r; rep[n] = q; weight[n] = w;
+          (outcomeAt(t, a.id, q) ? COLORS.solved : COLORS.failed).toArray(outcome, n * 3);
+        }
+      });
+    });
     g.setAttribute('aBug', new InstancedBufferAttribute(bug, 1));
     g.setAttribute('aLane', new InstancedBufferAttribute(lane, 1));
     g.setAttribute('aRep', new InstancedBufferAttribute(rep, 1));
+    g.setAttribute('aWeight', new InstancedBufferAttribute(weight, 1));
+    g.setAttribute('aOutcome', new InstancedBufferAttribute(outcome, 3));
+    g.setAttribute('aDir', new InstancedBufferAttribute(L.dir, 3));
     return g;
-  }, [count, perBug, repeats]);
-  const laneGeo = useMemo(() => new PlaneGeometry(LANE - 0.1, span + 0.5), [span]);
-  const laneGeoW = useMemo(() => new PlaneGeometry(LANE - 0.1, blockW + 0.45), [blockW]);
-  const laneColors = useMemo(() => arms.map((a) => laneColor(a.id)), [arms]);
-  useEffect(() => () => { geo.dispose(); laneGeo.dispose(); laneGeoW.dispose(); }, [geo, laneGeo, laneGeoW]);
+  }, [L, tasks, arms, count, repeats]);
+  const filaments = useMemo(() => filamentGeometry(L, arms.map((a) => new Color(CONDITION_COLOR[a.id]))), [L, arms]);
+  const hazePlane = useMemo(() => new PlaneGeometry(1, 1), []);
+  useEffect(() => () => { geo.dispose(); filaments.dispose(); hazePlane.dispose(); }, [geo, filaments, hazePlane]);
 
   // Per-bug animation state, kept outside React so animation never re-renders. `lift`, `design` and
   // `glow` are the uniform arrays themselves: easing a value writes straight into what the shader reads.
   const st = useMemo(() => ({
-    outcome: new Float32Array(count * 3),
     lift: new Float32Array(tasks.length),     // how far the bug has risen
     design: new Float32Array(tasks.length),   // 1 = neutral design colour, 0 = the run's real outcome
-    glow: new Float32Array(tasks.length),     // 1 = the focused bug in ember
+    glow: new Float32Array(tasks.length),     // 1 = the selected bug
     switchAt: new Float32Array(tasks.length),
     designTarget: 1,
     iso: new Vector3(-1, -1, -1),
@@ -89,64 +204,67 @@ export function RunLatticeScene() {
     colorBusy: false,
     matricesDirty: true,
     camDirty: true,
-    yaw: 0, pitch: 0, el: 0,
-    pointer: { x: 0, y: 0 },
-  }), [count, tasks.length]);
+    el: 0,
+  }), [tasks.length]);
 
-  const mat = useMemo(() => {
-    const m = new MeshStandardMaterial({ roughness: 0.5, metalness: 0.08 });
-    const bugs = st.lift.length;
-    m.onBeforeCompile = (shader) => {
-      shader.uniforms.uLift = { value: st.lift };
-      shader.uniforms.uDesign = { value: st.design };
-      shader.uniforms.uGlow = { value: st.glow };
-      shader.uniforms.uDesignColor = { value: COLORS.design };
-      shader.uniforms.uFocusColor = { value: COLORS.focus };
-      shader.uniforms.uIso = { value: st.iso };
-      shader.uniforms.uFade = st.fade;
-      shader.vertexShader = `attribute float aBug;
-attribute float aLane;
-attribute float aRep;
-uniform vec3 uIso;
-uniform float uFade;
-uniform float uLift[${bugs}];
-uniform float uDesign[${bugs}];
-uniform float uGlow[${bugs}];
-uniform vec3 uDesignColor;
-uniform vec3 uFocusColor;
-` + shader.vertexShader
-        .replace('#include <color_vertex>', `#include <color_vertex>
-	int bugIndex = int(aBug + 0.5);
-	vColor.xyz = mix(mix(vColor.xyz, uDesignColor, uDesign[bugIndex]), uFocusColor, uGlow[bugIndex]);
-	bool isoIn = (uIso.x < 0.0 || abs(aBug - uIso.x) < 0.5) && (uIso.y < 0.0 || abs(aLane - uIso.y) < 0.5) && (uIso.z < 0.0 || abs(aRep - uIso.z) < 0.5);
-	if (!isoIn) vColor.xyz = mix(vColor.xyz, vec3(0.012), uFade);`)
-        .replace('#include <project_vertex>', ShaderChunk.project_vertex.replace(
-          'mvPosition = instanceMatrix * mvPosition;',
-          'mvPosition = instanceMatrix * mvPosition;\n\tmvPosition.y += uLift[bugIndex];',
-        ));
+  const materials = useMemo(() => {
+    const shared = {
+      uLift: { value: st.lift },
+      uDesign: { value: st.design },
+      uGlow: { value: st.glow },
+      uDesignColor: { value: COLORS.design },
+      uFocusColor: { value: COLORS.focus },
+      uIso: { value: st.iso },
+      uFade: st.fade,
     };
-    m.customProgramCacheKey = () => `lattice-lift-${bugs}`;
-    return m;
+    const tile = (grow: readonly [number, number], fragmentShader: string) => new ShaderMaterial({
+      ...ADDITIVE,
+      depthTest: false,
+      side: DoubleSide,
+      uniforms: { ...shared, uGrow: { value: new Vector2(grow[0], grow[1]) } },
+      vertexShader: tileVertex(st.lift.length),
+      fragmentShader,
+    });
+    const filament = new ShaderMaterial({
+      ...ADDITIVE,
+      depthTest: false,
+      side: DoubleSide,
+      uniforms: { uIso: { value: st.iso }, uFade: st.fade },
+      vertexShader: /* glsl */ `
+        attribute vec3 aColor;
+        attribute float aAlong;
+        attribute float aLane;
+        uniform vec3 uIso;
+        uniform float uFade;
+        varying vec3 vColor;
+        varying float vA;
+        void main() {
+          bool inside = uIso.y < 0.0 || abs(aLane - uIso.y) < 0.5;
+          float ends = smoothstep(0.0, 0.05, aAlong) * smoothstep(1.0, 0.92, aAlong);
+          vA = ends * (0.5 + (inside ? 0.5 * uFade : -0.42 * uFade));
+          vColor = aColor;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }`,
+      fragmentShader: /* glsl */ `
+        varying vec3 vColor;
+        varying float vA;
+        void main() {
+          gl_FragColor = vec4(vColor, 1.0);
+          #include <colorspace_fragment>
+          gl_FragColor = vec4(gl_FragColor.rgb * vA, vA);
+        }`,
+    });
+    return { tile: tile([1, 1], TILE_FRAGMENT), halo: tile(HALO_GROW, HALO_FRAGMENT), filament, haze: hazeMaterial({ seed: 3.7, intensity: 0.62, warmth: 0.4 }) };
   }, [st]);
-  useEffect(() => () => mat.dispose(), [mat]);
+  useEffect(() => () => { Object.values(materials).forEach((m) => m.dispose()); }, [materials]);
 
   // Scratch objects: no allocation inside the frame callback.
-  const scratch = useMemo(() => ({ dummy: new Object3D(), v: new Vector3() }), []);
+  const scratch = useMemo(() => ({ dummy: new Object3D(), v: new Vector3(), n: new Vector3(), q: new Quaternion(), p: [0, 0, 0] as Vec3 }), []);
 
-  // Instance colours: each run's real outcome, written once per data set and never again.
-  useEffect(() => {
-    const m = mesh.current;
-    if (!m) return;
-    const c = new Color();
-    tasks.forEach((t, i) => arms.forEach((a, r) => {
-      for (let k = 0; k < repeats; k++) {
-        c.copy(outcomeAt(t, a.id, k) ? COLORS.solved : COLORS.failed);
-        c.toArray(st.outcome, instanceIndex(L, i, r, k) * 3);
-      }
-    }));
-    m.instanceColor = new InstancedBufferAttribute(st.outcome, 3);
-    m.instanceColor.needsUpdate = true;
-  }, [tasks, arms, repeats, L, st]);
+  // The halo is the same instances: it draws from the tile's own matrix buffer, never a copy.
+  useLayoutEffect(() => {
+    if (mesh.current && halo.current) halo.current.instanceMatrix = mesh.current.instanceMatrix;
+  });
 
   // The view: neutral in design mode, the real result in outcomes mode. Results sweep along the bugs.
   useEffect(() => {
@@ -157,18 +275,6 @@ uniform vec3 uFocusColor;
     st.colorBusy = true;
     requestFrame('state');
   }, [mode, reduced, st]);
-
-  // The pointer turns the camera slightly, but only while the lattice is on screen.
-  useEffect(() => {
-    if (reduced) return;
-    const onMove = (e: PointerEvent) => {
-      st.pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
-      st.pointer.y = (e.clientY / window.innerHeight) * 2 - 1;
-      if (scenes.isVisible('lattice')) requestFrame('pointer');
-    };
-    window.addEventListener('pointermove', onMove, { passive: true });
-    return () => window.removeEventListener('pointermove', onMove);
-  }, [st, reduced]);
 
   // Hover and focus change which bug lifts: wake the renderer for them.
   useEffect(() => {
@@ -205,46 +311,37 @@ uniform vec3 uFocusColor;
     const since = now - st.t0;
     let busy = false;
 
-    // Camera: orbits the lattice centre. It rises toward a plan view as the hero scrolls away, and the
-    // pointer turns it slightly. Wide frames use a three-quarter view from the front right.
-    const k = 1 - Math.exp(-dt * 5);
-    const yawT = (wide ? -0.22 : 0) + (reduced ? 0 : st.pointer.x * 0.16);
-    const pitchT = reduced ? 0 : -st.pointer.y * 0.05;
-    const elT = (wide ? 0.86 : 0.62) + latticeScroll.value * 0.38;
-    if (st.el === 0) { st.el = elT; st.yaw = yawT; st.camDirty = true; }
-    const camOff = Math.abs(yawT - st.yaw) + Math.abs(pitchT - st.pitch) + Math.abs(elT - st.el);
-    if (camOff > 1e-4) {
-      st.yaw += (yawT - st.yaw) * k;
-      st.pitch += (pitchT - st.pitch) * k;
-      st.el += (elT - st.el) * k;
+    // Camera: a fixed three-quarter view of the sheet, rising a little as the hero scrolls away. It
+    // never follows the pointer.
+    const elT = (wide ? 0.13 : 0.1) + latticeScroll.value * 0.1;
+    if (st.el === 0) { st.el = elT; st.camDirty = true; }
+    if (Math.abs(elT - st.el) > 1e-4) {
+      st.el += (elT - st.el) * (1 - Math.exp(-dt * 5));
       st.camDirty = true;
       busy = true;
     }
 
     if (st.camDirty) {
       st.camDirty = false;
-      const v = scratch.v;
-      const el = st.el + st.pitch;
-      const R = wide ? blockW * 1.5 : span * 0.72;
-      camera.position.set(Math.sin(st.yaw) * Math.cos(el) * R, Math.sin(el) * R, Math.cos(st.yaw) * Math.cos(el) * R);
-      camera.lookAt(0, 0, 0);
+      const { v, p } = scratch;
+      const yaw = wide ? -0.3 : 0, R = 20;
+      camera.position.set(Math.sin(yaw) * Math.cos(st.el) * R, Math.sin(st.el) * R, Math.cos(yaw) * Math.cos(st.el) * R);
+      camera.lookAt(0, 0, -0.9);
 
-      // Fit: project the lattice's corners and choose a view window that frames them, leaving room for
-      // the labels (left of the lanes when wide, below them when tall).
+      // Fit: project the sheet's outline and choose a view window that frames it, leaving room for the
+      // condition names (left of the rows when wide, below them when tall).
       camera.clearViewOffset();
       camera.updateMatrixWorld();
-      const halfL = (lanes * LANE) / 2;
-      const halfB = wide ? blockW / 2 + 0.1 : span / 2 + 0.1;
-      const halfA = wide ? blockSep / 2 + halfL : halfL;
+      const halfV = (lanes * LANE) / 2;
       let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
-      for (const b of [-halfB, halfB]) for (const l of [-halfA, halfA]) for (const y of [0, CUBE + 0.32]) {
-        if (wide) v.set(b, y, l); else v.set(l, y, -b);
-        v.project(camera);
+      for (let c = 0; c <= 8; c++) for (const s of [-1, 1]) {
+        v.fromArray(at((c / 8) * (columns - 1), s * halfV, p)).project(camera);
         x0 = Math.min(x0, v.x); x1 = Math.max(x1, v.x); y0 = Math.min(y0, v.y); y1 = Math.max(y1, v.y);
       }
       const W = size.width, H = size.height;
-      const fx = wide ? 0.72 : 0.94, cxF = wide ? 0.6 : 0.5;
-      const fy = wide ? 0.84 : 0.8, cyF = wide ? 0.52 : 0.44;
+      const narrow = W < 640;
+      const fx = !wide ? 0.94 : narrow ? 0.86 : 0.74, cxF = !wide ? 0.5 : narrow ? 0.54 : 0.615;
+      const fy = wide ? 0.78 : 0.8, cyF = wide ? 0.52 : 0.44;
       const s = Math.min((2 * fx) / (x1 - x0), (2 * fy) / (y1 - y0));
       const w = W / s, h = H / s;
       const cxPx = (((x0 + x1) / 2 + 1) / 2) * W;
@@ -252,33 +349,25 @@ uniform vec3 uFocusColor;
       camera.setViewOffset(W, H, cxPx - w * cxF, cyPx - h * cyF, w, h);
 
       // Project the DOM labels.
-      const labels = latticeLabels;
-      const place = (node: HTMLElement | null | undefined, x: number, y: number, zz: number) => {
+      const place = (node: HTMLElement | null | undefined, col: number, across: number) => {
         if (!node) return;
-        v.set(x, y, zz).project(camera);
+        v.fromArray(at(col, across, p)).project(camera);
         node.style.transform = `translate(${((v.x + 1) / 2) * W}px, ${((1 - v.y) / 2) * H}px)`;
         node.style.opacity = v.z < 1 ? '' : '0';
       };
-      const back = lanes + 2;
-      if (wide) {
-        const left = -blockW / 2 - 0.26;
-        for (let r = 0; r < lanes; r++) place(labels[r], left, 0, blockSep / 2 + laneAt(r));
-        for (let r = 0; r < lanes; r++) place(labels[back + r], left, 0, -blockSep / 2 + laneAt(r));
-        place(labels[lanes], -blockW / 2, 0, blockSep / 2 + laneAt(0) - LANE * 1.25);
-        place(labels[lanes + 1], -blockW / 2, 0, -blockSep / 2 + laneAt(0) - LANE * 1.25);
-      } else {
-        for (let r = 0; r < lanes; r++) place(labels[r], laneAt(r), 0, -bugAt(0) + 0.42);
-        for (let r = 0; r < lanes; r++) { const n = labels[back + r]; if (n) n.style.opacity = '0'; }
-        place(labels[lanes], laneAt(lanes - 1) + LANE * 0.7, 0, -bugAt(0) - 0.6);
-        place(labels[lanes + 1], laneAt(lanes - 1) + LANE * 0.7, 0, -bugAt(nTest));
+      for (let r = 0; r < lanes; r++) {
+        if (wide) place(latticeLabels[r], -2.4, laneAt(r)); else place(latticeLabels[r], columns + 1, laneAt(r));
       }
+      const edge = laneAt(0) + LANE * 0.72;
+      place(latticeLabels[lanes], colAt(0), edge);
+      place(latticeLabels[lanes + 1], colAt(nTest), edge);
     }
 
     // Isolation: everything outside the chosen bug, condition and repeat recedes. Uniforms only.
     {
-      const at = atlas.get(), lat = lattice.get();
-      const lane = at.condition ? arms.findIndex((a) => a.id === at.condition) : -1;
-      const rep = at.repeat ?? -1, bug = lat.isolateBug ? focused : -1;
+      const at0 = atlas.get(), lat = lattice.get();
+      const lane = at0.condition ? arms.findIndex((a) => a.id === at0.condition) : -1;
+      const rep = at0.repeat ?? -1, bug = lat.isolateBug ? focused : -1;
       if (lane >= 0 || rep >= 0 || bug >= 0) st.iso.set(bug, lane, rep);
       const want = lane >= 0 || rep >= 0 || bug >= 0 ? 0.9 : 0;
       const d = want - st.fade.value;
@@ -290,22 +379,24 @@ uniform vec3 uFocusColor;
     // The last build-in frame stops just short of rest: write the settled state once.
     if (!building && !st.built) { st.built = true; st.matricesDirty = true; }
 
-    /** Writes one bug's contiguous block of matrices. `b` is its build-in progress. */
+    /** Writes one bug's contiguous block of matrices. `e` is its build-in progress. */
     const writeBug = (i: number, e: number) => {
-      const { dummy } = scratch;
+      const { dummy, n: normal, q } = scratch;
       for (let n = i * perBug, end = n + perBug; n < end; n++) {
-        dummy.position.set(L.xz[n * 2], CUBE / 2 + (1 - e) * 2.2, L.xz[n * 2 + 1]);
-        dummy.scale.setScalar(0.001 + e);
+        normal.fromArray(L.dir, n * 3);
+        dummy.position.fromArray(L.pos, n * 3).addScaledVector(normal, (1 - e) * 1.6);
+        dummy.quaternion.copy(q.setFromUnitVectors(SURFACE, normal));
+        dummy.scale.set(TILE_W * (0.001 + e), TILE_H * (0.001 + e), 1);
         dummy.updateMatrix();
         m.setMatrixAt(n, dummy.matrix);
       }
     };
 
-    // Lift and focus: the hovered or focused bug rises out of the lattice, across all six lanes at once,
-    // and in design mode the focused bug turns ember. Only uniform arrays change.
+    // Lift and focus: the hovered or selected bug comes forward across all six rows at once, and the
+    // selected bug carries an ember halo in either view. Only uniform arrays change.
     const glowRate = 1 - Math.exp(-dt * (reduced ? 1000 : 9));
     for (let i = 0; i < tasks.length; i++) {
-      const glowWant = st.designTarget === 1 && i === focused ? 1 : 0;
+      const glowWant = i === focused ? 1 : 0;
       const g = glowWant - st.glow[i];
       if (Math.abs(g) >= 1e-6) {
         if (Math.abs(g) > 2e-3) { st.glow[i] += g * glowRate; busy = true; } else st.glow[i] = glowWant;
@@ -350,25 +441,14 @@ uniform vec3 uFocusColor;
   });
 
   const bugOf = (e: ThreeEvent<PointerEvent | MouseEvent>) =>
-    e.instanceId === undefined ? null : Math.floor(e.instanceId / (lanes * repeats));
+    e.instanceId === undefined ? null : Math.floor(e.instanceId / perBug);
 
   return (
     <>
-      <ambientLight intensity={0.55} />
-      <directionalLight position={[3, 7, 5]} intensity={1.5} />
-      <directionalLight position={[-4, 3, -6]} intensity={0.45} color={SPECTRAL.amber} />
-      {wide
-        ? [blockSep / 2, -blockSep / 2].flatMap((zb) => arms.map((a, r) => (
-          <mesh key={a.id + String(zb)} geometry={laneGeoW} rotation={[-Math.PI / 2, 0, Math.PI / 2]} position={[0, -0.002, zb + laneAt(r)]}>
-            <meshBasicMaterial color={laneColors[r]} />
-          </mesh>
-        )))
-        : arms.map((a, r) => (
-          <mesh key={a.id} geometry={laneGeo} rotation={[-Math.PI / 2, 0, 0]} position={[laneAt(r), -0.002, 0]}>
-            <meshBasicMaterial color={laneColors[r]} />
-          </mesh>
-        ))}
-      <instancedMesh ref={mesh} args={[geo, mat, count]}
+      <mesh geometry={hazePlane} material={materials.haze} position={[0, 0, -3.4]} scale={[21, 14, 1]} renderOrder={0} raycast={() => null} />
+      <mesh geometry={filaments} material={materials.filament} renderOrder={1} raycast={() => null} />
+      <instancedMesh ref={halo} args={[geo, materials.halo, count]} renderOrder={2} frustumCulled={false} raycast={() => null} />
+      <instancedMesh ref={mesh} args={[geo, materials.tile, count]} renderOrder={3}
         onPointerMove={(e) => { e.stopPropagation(); const i = bugOf(e); if (i !== lattice.get().hovered) latticeHandlers.onHover(i); setCursor('pointer'); }}
         onPointerOut={() => { latticeHandlers.onHover(null); setCursor(''); }}
         onClick={(e) => { e.stopPropagation(); const i = bugOf(e); if (i !== null) latticeHandlers.onPick(i); }} />

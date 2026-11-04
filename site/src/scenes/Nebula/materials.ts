@@ -1,13 +1,7 @@
 import { AdditiveBlending, Color, ShaderMaterial, Vector3 } from 'three';
 import { SIMPLEX_3D, SPECTRAL_RAMP } from '../shaders/noise';
 import { SPECTRAL } from '../palette';
-
-const spectralUniforms = () => ({
-  uCyan: { value: new Color(SPECTRAL.cyan) },
-  uBlue: { value: new Color(SPECTRAL.blue) },
-  uViolet: { value: new Color(SPECTRAL.violet) },
-  uMagenta: { value: new Color(SPECTRAL.magenta) },
-});
+import { spectralUniforms } from '../materials/shared';
 
 export interface MembraneOpts {
   radius: number;
@@ -124,7 +118,7 @@ export function membraneMaterial(o: MembraneOpts): ShaderMaterial {
   });
 }
 
-/** The warm core: hot white centre falling to amber at the limb; values above 1 feed the bloom. */
+/** The warm core: hot white centre falling to amber at the limb. */
 export function coreMaterial(): ShaderMaterial {
   return new ShaderMaterial({
     uniforms: { uTime: { value: 0 }, uCore: { value: new Color(SPECTRAL.core) }, uAmber: { value: new Color(SPECTRAL.amber) }, uIntensity: { value: 1 } },

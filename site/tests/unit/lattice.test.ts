@@ -17,13 +17,22 @@ describe.each([['wide', true], ['tall', false]])('%s arrangement', (_, wide) => 
     expect(L.lanes).toBe(6);
     expect(L.repeats).toBe(2);
     expect(L.count).toBe(924);
-    expect(L.xz).toHaveLength(924 * 2);
+    expect(L.pos).toHaveLength(924 * 3);
+    expect(L.dir).toHaveLength(924 * 3);
   });
 
   it('gives every run its own position', () => {
     const seen = new Set<string>();
-    for (let n = 0; n < L.count; n++) seen.add(`${L.xz[n * 2].toFixed(4)},${L.xz[n * 2 + 1].toFixed(4)}`);
+    for (let n = 0; n < L.count; n++) seen.add(`${L.pos[n * 3].toFixed(4)},${L.pos[n * 3 + 1].toFixed(4)},${L.pos[n * 3 + 2].toFixed(4)}`);
     expect(seen.size).toBe(924);
+  });
+
+  it('keeps the two repeats of a pair closer together than two neighbouring conditions', () => {
+    const across = wide ? 1 : 0;
+    const v = (b: number, r: number, q: number) => L.pos[instanceIndex(L, b, r, q) * 3 + across];
+    for (let b = 0; b < L.bugs; b += 7) {
+      for (let r = 0; r < L.lanes - 1; r++) expect(Math.abs(v(b, r, 0) - v(b, r, 1))).toBeLessThan(Math.abs(v(b, r, 1) - v(b, r + 1, 0)));
+    }
   });
 
   it('keeps each bug a contiguous block of 12 instances, so one bug can update alone', () => {

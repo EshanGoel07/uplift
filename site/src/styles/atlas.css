@@ -183,7 +183,7 @@ html[data-view='investigate'] .pub-title { font-size: clamp(1.5rem, 1.1rem + 1.2
 .nebmap__group--never button { background: var(--fail-14); border-color: rgba(240, 120, 104, 0.5); }
 .nebmap button.is-sel { background: var(--ember); border-color: var(--ember); }
 
-.iso { display: grid; gap: 6px; margin-top: 8px; }
+.iso { display: grid; gap: 6px; margin-top: 12px; }
 .iso .lens-conds { margin-top: 0; }
 .iso__row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .iso__row .seg-dark button { min-height: 28px; padding: 0 10px; font-size: 0.8rem; }
