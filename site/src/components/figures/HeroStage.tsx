@@ -1,3 +1,4 @@
+import type { MouseEvent as ReactMouseEvent } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ArmId, Summary } from '../../data/types';
 import { GROUP_LABEL, groupCounts, groupOf, shortId } from '../../data/classify';
@@ -60,6 +61,15 @@ export function HeroStage({ summary }: Props) {
   const focus = Math.max(0, tasks.findIndex((t) => t.id === selected));
   const [hovered, setHovered] = useState<number | null>(null);
   const stage = useRef<HTMLDivElement>(null);
+  const lastPick = useRef(0);
+  // The scene's own click can miss once the pointer has rested on a cube for a second (the cause is not
+  // established). What the readout names is what a click must open, so the stage backs it up.
+  const clickStage = (e: ReactMouseEvent) => {
+    if (scene !== 'lattice' || e.target !== e.currentTarget) return;
+    const i = lattice.get().hovered;
+    if (i === null) return;
+    window.setTimeout(() => { if (performance.now() - lastPick.current > 120) latticeHandlers.onPick(i); }, 0);
+  };
   const sceneMounted = useScenes(() => scenes.get(scene).mounted);
   const lens = useNebula((s) => s.lens);
   const [guide, setGuide] = useState<number | null>(null);
@@ -70,7 +80,7 @@ export function HeroStage({ summary }: Props) {
   useEffect(() => { lattice.set({ tasks, arms, mode, focus, hovered, reduced }); }, [tasks, arms, mode, focus, hovered, reduced]);
   useEffect(() => {
     latticeHandlers.onHover = setHovered;
-    latticeHandlers.onPick = (i) => openTask(tasks[i].id);
+    latticeHandlers.onPick = (i) => { lastPick.current = performance.now(); openTask(tasks[i].id); };
     latticeHandlers.onReady = () => setReady(true);
   }, [tasks]);
 
@@ -203,7 +213,7 @@ export function HeroStage({ summary }: Props) {
           </div>
         )}
 
-        <div className="lattice__canvas-wrap" aria-hidden="true" ref={stage}>
+        <div className="lattice__canvas-wrap" aria-hidden="true" ref={stage} onClick={clickStage}>
           {!sceneMounted && <p className="lattice__loading">{heroMode === 'bugs' ? `Mapping ${tasks.length} bugs…` : `Placing ${summary.summary.runs} runs…`}</p>}
           <span className="neb-tag" ref={(el) => { nebulaDom.tag = el; }} />
           {heroMode === 'runs' && (

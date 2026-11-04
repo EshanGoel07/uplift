@@ -702,13 +702,13 @@ test.describe('WebGL', () => {
       await page.goto('./?diag&hero=runs', { waitUntil: 'networkidle' });
       await page.locator('#method .wb__stage').scrollIntoViewIfNeeded();
       await expect(page.locator('.wb-label').first()).toBeVisible({ timeout: 15_000 });
-      await settled(page);
-      const rects = await page.evaluate(() => [...document.querySelectorAll('.wb__labels .wb-label')].map((e) => e.getBoundingClientRect()).filter((r) => r.width).map((r) => ({ l: r.left, r: r.right, t: r.top, b: r.bottom })));
-      expect(rects.length).toBeGreaterThan(8);
-      for (let i = 0; i < rects.length; i++) for (let j = i + 1; j < rects.length; j++) {
-        const a = rects[i], b = rects[j];
-        expect(a.l < b.r && a.r > b.l && a.t < b.b && a.b > b.t, `labels ${i} and ${j}`).toBe(false);
-      }
+      // Labels stack at the origin until the Workbench chunk mounts and places them, so wait for that.
+      await expect.poll(() => page.evaluate(() => {
+        const r = [...document.querySelectorAll('.wb__labels .wb-label')].map((e) => e.getBoundingClientRect()).filter((b) => b.width);
+        let hits = r.length > 8 ? 0 : 99;
+        for (let i = 0; i < r.length; i++) for (let j = i + 1; j < r.length; j++) if (r[i].left < r[j].right && r[i].right > r[j].left && r[i].top < r[j].bottom && r[i].bottom > r[j].top) hits++;
+        return hits;
+      }), { timeout: 15_000 }).toBe(0);
     });
   }
 
@@ -718,6 +718,9 @@ test.describe('WebGL', () => {
     await settled(page);
     expect(await framesDuring(page, 1500)).toBe(0);
     await page.locator('#method .wb__stage').scrollIntoViewIfNeeded();
+    // Over a real network the Workbench chunk can arrive after a quiet moment, then play its build-in.
+    await expect.poll(async () => (await diag<{ id: string; mounts: number }[]>(page, 'scenes')).find((s) => s.id === 'workbench')?.mounts, { timeout: 15_000 }).toBe(1);
+    await page.waitForTimeout(600);
     await settled(page);
     expect(await framesDuring(page, 1500)).toBe(0);
     expect(await diag(page, 'frameloop')).toBe('demand');
@@ -759,9 +762,16 @@ test.describe('WebGL', () => {
     await page.mouse.move(box.x + box.width * 0.62, box.y + box.height * 0.68);
     await page.mouse.move(box.x + box.width * 0.64, box.y + box.height * 0.68);
     await expect(page.locator('.lattice__pos')).not.toHaveText(start!);
-    const id = await page.locator('.lattice__bug-id').textContent();
+    // The readout follows once the pointer pauses, and the lifted cube can move under a resting pointer.
+    let id = '', prev = '-';
+    await expect.poll(async () => {
+      prev = id;
+      await page.waitForTimeout(400);
+      id = (await page.locator('.lattice__bug-id').textContent())!;
+      return id === prev;
+    }, { timeout: 8000 }).toBe(true);
     await page.mouse.click(box.x + box.width * 0.64, box.y + box.height * 0.68);
-    await expect(page.locator('.insp .insp__id')).toContainText(id!);
+    await expect(page.locator('.insp .insp__id')).toContainText(id);
     await expect(page.locator('.insp')).toContainText('Task passport');
     expect(errors).toEqual([]);
   });

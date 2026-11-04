@@ -22,6 +22,7 @@ Plan: M0 to M13. All milestones ran. The items under "Cut or partial" were not b
 - Apparatus labels collided at 1024 px. Each label is now lifted clear of those already placed. Tests cover 1024, 1280, 1440 px.
 - The Conditions section fetched a task file on first paint. It now waits until it is near the viewport.
 - The evidence ledger was crushed at 768 px. Below 900 px it stacks.
+- A click did nothing if the pointer had rested on a lattice cube for about a second. Found by e2e against production. The stage now opens the bug the readout names. The cause inside the scene's click path is not established; this is a backstop, not a root-cause fix.
 - One intermittent e2e failure was a test race on the lazily loaded Workbench chunk; the test now waits for the mount.
 
 ## Measurements
